@@ -17,22 +17,22 @@ for details
 
 ## Running G2P
 
-A 2-layer LSTM with 64 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download)
-
-It is trained on [CMU English dictionary](http://github.com/cmusphinx/cmudict)
+A 2-layer LSTM with 64 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download).
+Unpack the model after download. It is trained on [CMU English dictionary](http://github.com/cmusphinx/cmudict)
 
 The easiest way to check how the tool works is to run it the interactive mode
 ```
-  python g2p.py --interactive --model [model_path]
+  python g2p.py --interactive --model [model_folder_path]
 
-  then type the words
 ```
+
+then type the words
 
 
 To generate pronunciations for an English word list with a trained model, run
 
 ```
-  python g2p.py --decode [your_wordlist] --model [model_path]
+  python g2p.py --decode [your_wordlist] --model [model_folder_path]
 
 ```
 The wordlist is a text file: one word per line
@@ -41,7 +41,7 @@ The wordlist is a text file: one word per line
 To count Word Error Rate  of the trained model, run
 
 ```
-  python g2p.py --count_wer [your_wordlist] --model [model_path]
+  python g2p.py --count_wer [your_wordlist] --model [model_folder_path]
 
 ```
 The wordlist is a text file: one word per line
@@ -53,7 +53,7 @@ To train G2P you need a dictionary (word and phone sequence per line).
 See an [example dictionary](http://github.com/cmusphinx/cmudict)
 
 ```
-  python g2p.py --train [train_dictionary.dic] --model [model_path]
+  python g2p.py --train [train_dictionary.dic] --model [model_folder_path]
 ```
 
 It is a good idea to play with the following parameters:
