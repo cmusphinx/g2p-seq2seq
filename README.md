@@ -16,7 +16,7 @@ It is trained on [CMU English dictionary](http://svn.code.sf.net/p/cmusphinx/cod
 
 The easiest way to check how the tool works is to run it the interactive mode
 ```
-  python g2p.py --interactive_mode --model_dir PATH_TO_G2P/mdl/cmu_en_2l64
+  python g2p.py --interactive --model [model_path]
 
   then type the words
 ```
@@ -25,11 +25,19 @@ The easiest way to check how the tool works is to run it the interactive mode
 To generate pronunciations for an English word list with a trained model, run
 
 ```
-  python g2p.py --decode_file [your_wordlist] --model_dir [path_to_g2p]/mdl/cmu_en_2l64
+  python g2p.py --decode [your_wordlist] --model [model_path]
 
 ```
 The wordlist is a text file: one word per line
 
+
+To count Word Error Rate  of the trained model, run
+
+```
+  python g2p.py --count_wer [your_wordlist] --model [model_path]
+
+```
+The wordlist is a text file: one word per line
 
 
 ## Training G2P system
@@ -37,7 +45,7 @@ The wordlist is a text file: one word per line
 To train G2P you need a dictionary (word and phone sequence per line). See an [example dictionary](http://svn.code.sf.net/p/cmusphinx/code/trunk/cmudict/cmudict-0.7b)
 
 ```
-  python g2p.py --train_dic [train_dictionary.dic] --model_dir [output_model_path]
+  python g2p.py --train [train_dictionary.dic] --model [model_path]
 ```
 
 It is a good idea to play with the following parameters:
@@ -45,14 +53,19 @@ It is a good idea to play with the following parameters:
   "--size" - Size of each model layer (Default: 64).
      We observed much better results with 512 units, but the training becomes slow
 
-  "--num_layers" - Number of layers in the model (Default: 2). 
+  "--num_layers" - Number of layers in the model (Default: 1). 
      For example, you can try 1 if the train set is not large enough, 
      or 3 to hopefully get better results
 
   "--learning_rate" - Initial Learning rate (Default: 0.5). 
 
-  "--learning_rate_decay_factor" - Learning rate decays by this much (Default: 0.95)
+  "--learning_rate_decay_factor" - Learning rate decays by this much (Default: 0.8)
+```
 
+You can manually point out Development and Test datasets:
+```
+  "--valid" - Development dictionary (Default: created from train_dictionary.dic)
+  "--test" - Test dictionary (Default: created from train_dictionary.dic)
 ```
 
 
@@ -61,7 +74,7 @@ It is a good idea to play with the following parameters:
 System | WER,%
 --- | --- 
 Baseline WFST (Phonetisaurus) | 28.0
-LSTM num_layers=2, size=64    | 31.9 
+LSTM num_layers=2, size=64    | 32.0
 LSTM num_layers=2, size=512   | **24.7**
 
 
