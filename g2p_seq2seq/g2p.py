@@ -297,16 +297,22 @@ def evaluate():
       if test_graphemes[i] not in duplicates:
         counter += 1
         word = " ".join(list(test_graphemes[i]))
-        model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab) 
-        if model_assumption != test_phonemes[i]:
-          errors += 1
+        if word == word.lower():
+          model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab) 
+          if model_assumption != test_phonemes[i]:
+            errors += 1
+        else: 
+          raise ValueError("All words in Test file must be in lower case.")
       elif test_graphemes[i] not in dupl_error_calculated:
         counter += 1
         dupl_error_calculated.append(test_graphemes[i])
         word = " ".join(list(test_graphemes[i]))
-        model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-        if model_assumption not in duplicates[test_graphemes[i]]:
-          errors += 1
+        if word == word.lower():
+          model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
+          if model_assumption not in duplicates[test_graphemes[i]]:
+            errors += 1
+        else:
+          raise ValueError("All words in Test file must be in lower case.")
 
     print("WER : ", errors/counter )
     print("Accuracy : ", (1-errors/counter) )
@@ -337,15 +343,21 @@ def decode():
       with gfile.GFile(output_file_path, mode="w") as output_file:
         for i in range(len(graphemes)-1):
           word = " ".join(list(graphemes[i]))
-          res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-          output_file.write(res_phoneme_seq)
-          output_file.write('\n')
+          if word == word.lower():
+            res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
+            output_file.write(res_phoneme_seq)
+            output_file.write('\n')
+          else:
+            raise ValueError("All words in Test file must be in lower case.")
     else:
       for i in range(len(graphemes)-1):
         word = " ".join(list(graphemes[i]))
-        res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-        print(res_phoneme_seq)
-        sys.stdout.flush()
+        if word == word.lower():
+          res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
+          print(res_phoneme_seq)
+          sys.stdout.flush()
+        else:
+          raise ValueError("All words in Test file must be in lower case.")
 
 
 def main(_):
