@@ -41,14 +41,14 @@ from tensorflow.models.rnn.translate import seq2seq_model
 
 
 tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate.")
-tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.8,
+tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.98,
                           "Learning rate decays by this much.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0,
                           "Clip gradients to this norm.")
 tf.app.flags.DEFINE_integer("batch_size", 64,
                             "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("size", 64, "Size of each model layer.")
-tf.app.flags.DEFINE_integer("num_layers", 1, "Number of layers in the model.")
+tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 tf.app.flags.DEFINE_string("model", "/tmp", "Training directory.")
 tf.app.flags.DEFINE_integer("max_train_data_size", 0,
                             "Limit on the size of training data (0: no limit).")
@@ -56,7 +56,7 @@ tf.app.flags.DEFINE_integer("steps_per_checkpoint", 200,
                             "How many training steps to do per checkpoint.")
 tf.app.flags.DEFINE_boolean("interactive", False,
                             "Set to True for interactive decoding.")
-tf.app.flags.DEFINE_string("count_wer", "","Count Word Error rate for file.")
+tf.app.flags.DEFINE_string("evaluate", "","Count Word Error rate for file.")
 tf.app.flags.DEFINE_string("decode", "", "Decode file.")
 tf.app.flags.DEFINE_string("output", "", "Decoding result file.")
 tf.app.flags.DEFINE_string("train", "", "Train dictionary.")
@@ -250,7 +250,7 @@ def interactive():
       word = " ".join(list(sys.stdin.readline()))
 
 
-def count_wer():
+def evaluate():
   with tf.Session() as sess:
     # Create model and load parameters.
     gr_vocab_path = os.path.join(FLAGS.model, "vocab.grapheme")
@@ -258,7 +258,7 @@ def count_wer():
     gr_vocab_size = data_utils.get_vocab_size(gr_vocab_path)
     ph_vocab_size = data_utils.get_vocab_size(ph_vocab_path)
     model = create_model(sess, True, gr_vocab_size, ph_vocab_size)
-    model.batch_size = 1  # We decode one sentence at a time.
+    model.batch_size = 1  # We decode one word at a time.
 
     # Load vocabularies.
     gr_vocab_path = os.path.join(FLAGS.model, "vocab.grapheme")
@@ -267,11 +267,7 @@ def count_wer():
     _, rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path)
 
     # Decode from input file.
-    test = open(FLAGS.count_wer).read().split('\n')
-    #test_gr_path = os.path.join(FLAGS.model, "test.grapheme")
-    #test_ph_path = os.path.join(FLAGS.model, "test.phoneme")
-    #test_graphemes = open(test_gr_path).read().split('\n')
-    #test_phonemes = open(test_ph_path).read().split('\n')
+    test = open(FLAGS.evaluate).read().split('\n')
     test_graphemes = []
     test_phonemes = []
 
@@ -291,7 +287,6 @@ def count_wer():
         else:
           duplicates[gr] = [test_phonemes[i]]
 
-
     errors = 0
     counter = 0
     dupl_error_calculated = []
@@ -309,7 +304,6 @@ def count_wer():
         model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
         if model_assumption not in duplicates[test_graphemes[i]]:
           errors += 1
-          print(test_graphemes[i], " : ", model_assumption, "->", duplicates[test_graphemes[i]])
 
     print("WER : ", errors/counter )
     print("Accuracy : ", (1-errors/counter) )
@@ -356,8 +350,8 @@ def main(_):
     decode()
   elif FLAGS.interactive:
     interactive()
-  elif FLAGS.count_wer:
-    count_wer()
+  elif FLAGS.evaluate:
+    evaluate()
   else:
     if FLAGS.train:
       source_dic = open(FLAGS.train).readlines()
