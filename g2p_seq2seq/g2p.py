@@ -41,7 +41,7 @@ from tensorflow.models.rnn.translate import seq2seq_model
 
 
 tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate.")
-tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.98,
+tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.8,
                           "Learning rate decays by this much.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0,
                           "Clip gradients to this norm.")
@@ -218,7 +218,7 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab):
   # If there is an EOS symbol in outputs, cut them at that point.
   if data_utils.EOS_ID in outputs:
     outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-  # Print out French sentence corresponding to outputs.
+  # Print out phoneme corresponding to outputs.
   res_phoneme_seq = " ".join([rev_ph_vocab[output] for output in outputs])
   return res_phoneme_seq
 
@@ -243,8 +243,11 @@ def interactive():
     sys.stdout.flush()
     word = " ".join(list(sys.stdin.readline()))
     while word:
-      res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-      print(res_phoneme_seq)
+      if word == word.lower():
+        res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
+        print(res_phoneme_seq)
+      else:
+        print("Write word in lower case.")
       print("> ", end="")
       sys.stdout.flush()
       word = " ".join(list(sys.stdin.readline()))
