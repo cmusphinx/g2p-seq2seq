@@ -1,18 +1,25 @@
 # Sequence-to-Sequence G2P toolkit
 
-The tool does Grapheme-to-Phoneme (G2P) conversion using recurrent neural network (RNN) with long short-term memory units (LSTM).
-LSTM sequence-to-sequence models were successfully applied in various tasks, including machine translation [1] and grapheme-to-phoneme [2].
+The tool does Grapheme-to-Phoneme (G2P) conversion using recurrent
+neural network (RNN) with long short-term memory units (LSTM). LSTM
+sequence-to-sequence models were successfully applied in various tasks,
+including machine translation [1] and grapheme-to-phoneme [2].
 
-This implementation is based on python [TensorFlow](https://www.tensorflow.org/versions/r0.8/tutorials/seq2seq/index.html), which allows an efficient training on both CPU and GPU.
+This implementation is based on python
+[TensorFlow](https://www.tensorflow.org/versions/r0.8/tutorials/seq2seq/index.html),
+which allows an efficient training on both CPU and GPU.
 
 ## Requirements
 
-The tool requires TensorFlow. Please see the installation [guide](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/g3doc/get_started/os_setup.md) for details
+The tool requires TensorFlow. Please see the installation
+[guide](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/g3doc/get_started/os_setup.md)
+for details
 
 ## Running G2P
 
-A 2-layer LSTM with 64 hidden units is already included in the package.
-It is trained on [CMU English dictionary](http://svn.code.sf.net/p/cmusphinx/code/trunk/cmudict/cmudict-0.7b)
+A 2-layer LSTM with 64 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download)
+
+It is trained on [CMU English dictionary](http://github.com/cmusphinx/cmudict)
 
 The easiest way to check how the tool works is to run it the interactive mode
 ```
@@ -42,7 +49,8 @@ The wordlist is a text file: one word per line
 
 ## Training G2P system
 
-To train G2P you need a dictionary (word and phone sequence per line). See an [example dictionary](http://svn.code.sf.net/p/cmusphinx/code/trunk/cmudict/cmudict-0.7b)
+To train G2P you need a dictionary (word and phone sequence per line).
+See an [example dictionary](http://github.com/cmusphinx/cmudict)
 
 ```
   python g2p.py --train [train_dictionary.dic] --model [model_path]
@@ -78,10 +86,14 @@ LSTM num_layers=2, size=64    | 32.0
 LSTM num_layers=2, size=512   | **24.7**
 
 
-
 ## References
 ---------------------------------------
-[1] Ilya Sutskever, Vinyals Oriol and V. Le Quoc. "Sequence to sequence learning with neural networks." In Advances in neural information processing systems, pp. 3104-3112. 2014.
 
-[2] Yao, Kaisheng, and Geoffrey Zweig. "Sequence-to-sequence neural net models for grapheme-to-phoneme conversion." arXiv preprint arXiv:1506.00196, 2015.
+[1] Ilya Sutskever, Vinyals Oriol and V. Le Quoc. "Sequence to sequence
+learning with neural networks." In Advances in neural information
+processing systems, pp. 3104-3112. 2014.
+
+[2] Yao, Kaisheng, and Geoffrey Zweig. "Sequence-to-sequence neural net
+models for grapheme-to-phoneme conversion." arXiv preprint
+arXiv:1506.00196, 2015.
 

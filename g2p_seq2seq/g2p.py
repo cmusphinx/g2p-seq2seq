@@ -120,6 +120,8 @@ def create_model(session, forward_only, gr_vocab_size, ph_vocab_size):
   if ckpt and tf.gfile.Exists(ckpt.model_checkpoint_path):
     print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
     model.saver.restore(session, ckpt.model_checkpoint_path)
+  elif tf.gfile.Exists(os.path.join(FLAGS.model, "model")):
+    model.saver.restore(session, os.path.join(FLAGS.model, "model"))
   else:
     print("Created model with fresh parameters.")
     session.run(tf.initialize_all_variables())
