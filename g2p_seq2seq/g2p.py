@@ -243,16 +243,19 @@ def interactive():
     # Decode from standard input.
     sys.stdout.write("> ")
     sys.stdout.flush()
-    word = " ".join(list(sys.stdin.readline()))
+    w = sys.stdin.readline()
+    word = " ".join(list(w))
     while word:
-      if word == word.lower():
+      gr_absent = [gr for gr in w.replace('\n','') if gr not in gr_vocab]
+      if not gr_absent:
         res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
         print(res_phoneme_seq)
       else:
-        print("Write word in lower case.")
+        print("Symbols: %s not in trained model's vocabulary" % ",".join(gr_absent) )
       print("> ", end="")
       sys.stdout.flush()
-      word = " ".join(list(sys.stdin.readline()))
+      w = sys.stdin.readline()
+      word = " ".join(list(w))
 
 
 def evaluate():
@@ -277,7 +280,7 @@ def evaluate():
     test_phonemes = []
 
     for line in test:
-      lst = line.split('\t')
+      lst = line.split()
       if len(lst)>=2:
         test_graphemes.append(lst[0])
         test_phonemes.append(" ".join(lst[1:]))
@@ -295,26 +298,28 @@ def evaluate():
     errors = 0
     counter = 0
     dupl_error_calculated = []
-    for i in range(len(test_graphemes)-1):
-      if test_graphemes[i] not in duplicates:
+    for i, w in enumerate(test_graphemes):
+      if w not in duplicates:
         counter += 1
-        word = " ".join(list(test_graphemes[i]))
-        if word == word.lower():
+        word = " ".join(list(w))
+        gr_absent = [gr for gr in w.replace('\n','') if gr not in gr_vocab]
+        if not gr_absent:
           model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab) 
           if model_assumption != test_phonemes[i]:
             errors += 1
-        else: 
-          raise ValueError("All words in Test file must be in lower case.")
-      elif test_graphemes[i] not in dupl_error_calculated:
+        else:
+          raise ValueError("Symbols: %s not in trained model's vocabulary" % ",".join(gr_absent) ) 
+      elif w not in dupl_error_calculated:
         counter += 1
-        dupl_error_calculated.append(test_graphemes[i])
-        word = " ".join(list(test_graphemes[i]))
-        if word == word.lower():
+        dupl_error_calculated.append(w)
+        word = " ".join(list(w))
+        gr_absent = [gr for gr in w.replace('\n','') if gr not in gr_vocab]
+        if not gr_absent:
           model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-          if model_assumption not in duplicates[test_graphemes[i]]:
+          if model_assumption not in duplicates[w]:
             errors += 1
         else:
-          raise ValueError("All words in Test file must be in lower case.")
+          raise ValueError("Symbols: %s not in trained model's vocabulary" % ",".join(gr_absent) )
 
     print("WER : ", errors/counter )
     print("Accuracy : ", (1-errors/counter) )
@@ -345,22 +350,24 @@ def decode():
       with gfile.GFile(output_file_path, mode="w") as output_file:
         for w in graphemes:
           word = " ".join(list(w))
-          if word == word.lower():
+          gr_absent = [gr for gr in w if gr not in gr_vocab]
+          if not gr_absent:
             res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
             output_file.write(w.replace('\n',' '))
             output_file.write(res_phoneme_seq)
             output_file.write('\n')
           else:
-            raise ValueError("All words in Test file must be in lower case.")
+            raise ValueError("Symbols: %s not in trained model's vocabulary" % ",".join(gr_absent) )
     else:
       for w in graphemes:
         word = " ".join(list(w))
-        if word == word.lower():
+        gr_absent = [gr for gr in w.replace('\n','') if gr not in gr_vocab]
+        if not gr_absent:
           res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
           print(w.replace('\n',' ') + res_phoneme_seq)
           sys.stdout.flush()
         else:
-          raise ValueError("All words in Test file must be in lower case.")
+          raise ValueError("Symbols: %s not in trained model's vocabulary" % ",".join(gr_absent) )
 
 
 def main(_):
