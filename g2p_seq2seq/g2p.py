@@ -343,20 +343,21 @@ def decode():
 
     if output_file_path:
       with gfile.GFile(output_file_path, mode="w") as output_file:
-        for i in range(len(graphemes)-1):
-          word = " ".join(list(graphemes[i]))
+        for w in graphemes:
+          word = " ".join(list(w))
           if word == word.lower():
             res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
+            output_file.write(w.replace('\n',' '))
             output_file.write(res_phoneme_seq)
             output_file.write('\n')
           else:
             raise ValueError("All words in Test file must be in lower case.")
     else:
-      for i in range(len(graphemes)-1):
-        word = " ".join(list(graphemes[i]))
+      for w in graphemes:
+        word = " ".join(list(w))
         if word == word.lower():
           res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-          print(res_phoneme_seq)
+          print(w.replace('\n',' ') + res_phoneme_seq)
           sys.stdout.flush()
         else:
           raise ValueError("All words in Test file must be in lower case.")
