@@ -71,7 +71,7 @@ FLAGS = tf.app.flags.FLAGS
 _buckets = [(5, 10), (10, 15), (40, 50)]
 
 
-def read_data(source_path, target_path, max_size=None):
+def read_data(source, target, max_size=None):
   """Read data from source and target files and put into buckets.
 
   Args:
@@ -89,23 +89,14 @@ def read_data(source_path, target_path, max_size=None):
       len(target) < _buckets[n][1]; source and target are lists of token-ids.
   """
   data_set = [[] for _ in _buckets]
-  with tf.gfile.GFile(source_path, mode="r") as source_file:
-    with tf.gfile.GFile(target_path, mode="r") as target_file:
-      source, target = source_file.readline(), target_file.readline()
-      counter = 0
-      while source and target and (not max_size or counter < max_size):
-        counter += 1
-        if counter % 100000 == 0:
-          print("  reading data line %d" % counter)
-          sys.stdout.flush()
-        source_ids = [int(x) for x in source.split()]
-        target_ids = [int(x) for x in target.split()]
-        target_ids.append(data_utils.EOS_ID)
-        for bucket_id, (source_size, target_size) in enumerate(_buckets):
-          if len(source_ids) < source_size and len(target_ids) < target_size:
-            data_set[bucket_id].append([source_ids, target_ids])
-            break
-        source, target = source_file.readline(), target_file.readline()
+  for i in range(len(source)):
+    source_ids = [int(x) for x in source[i].split()]
+    target_ids = [int(x) for x in target[i].split()]
+    target_ids.append(data_utils.EOS_ID)
+    for bucket_id, (source_size, target_size) in enumerate(_buckets):
+      if len(source_ids) < source_size and len(target_ids) < target_size:
+        data_set[bucket_id].append([source_ids, target_ids])
+        break
   return data_set
 
 
@@ -128,13 +119,11 @@ def create_model(session, forward_only, gr_vocab_size, ph_vocab_size):
   return model
 
 
-def train():
+def train(train_gr, train_ph, valid_gr, valid_ph):
   """Train a gr->ph translation model using G2P data."""
   # Prepare G2P data.
   print("Preparing G2P data in %s" % FLAGS.model)
-  gr_train, ph_train, gr_dev, ph_dev, _, _, gr_vocab_size, ph_vocab_size = data_utils.prepare_g2p_data(
-      FLAGS.model)
-
+  train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, _, _, gr_vocab_size, ph_vocab_size = data_utils.prepare_g2p_data(FLAGS.model, train_gr, train_ph, valid_gr, valid_ph)
   with tf.Session() as sess:
     # Create model.
     print("Creating %d layers of %d units." % (FLAGS.num_layers, FLAGS.size))
@@ -143,8 +132,8 @@ def train():
     # Read data into buckets and compute their sizes.
     print ("Reading development and training data (limit: %d)."
            % FLAGS.max_train_data_size)
-    dev_set = read_data(gr_dev, ph_dev)
-    train_set = read_data(gr_train, ph_train, FLAGS.max_train_data_size)
+    valid_set = read_data(valid_gr_ids, valid_ph_ids)
+    train_set = read_data(train_gr_ids, train_ph_ids, FLAGS.max_train_data_size)
     train_bucket_sizes = [len(train_set[b]) for b in xrange(len(_buckets))]
     train_total_size = float(sum(train_bucket_sizes))
 
@@ -195,7 +184,7 @@ def train():
         # Run evals on development set and print their perplexity.
         for bucket_id in xrange(len(_buckets)):
           encoder_inputs, decoder_inputs, target_weights = model.get_batch(
-              dev_set, bucket_id)
+              valid_set, bucket_id)
           _, eval_loss, _ = model.step(sess, encoder_inputs, decoder_inputs,
                                        target_weights, bucket_id, True)
           eval_ppx = math.exp(eval_loss) if eval_loss < 300 else float('inf')
@@ -406,13 +395,9 @@ def main(_):
         train_dic = source_dic
     else:
       raise ValueError("Train dictionary absent.")
-    train_path = FLAGS.model + "train"
-    valid_path = FLAGS.model + "valid"
-    test_path = FLAGS.model + "test"
-    data_utils.split_to_grapheme_phoneme(train_dic, train_path)
-    data_utils.split_to_grapheme_phoneme(valid_dic, valid_path)
-    data_utils.split_to_grapheme_phoneme(test_dic, test_path)
-    train()
+    train_gr, train_ph = data_utils.split_to_grapheme_phoneme(train_dic)
+    valid_gr, valid_ph = data_utils.split_to_grapheme_phoneme(valid_dic)
+    train(train_gr, train_ph, valid_gr, valid_ph)
 
 if __name__ == "__main__":
   tf.app.run()

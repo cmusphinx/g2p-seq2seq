@@ -52,7 +52,7 @@ def basic_tokenizer(sentence):
   return [w for w in words if w]
 
 
-def create_vocabulary(vocabulary_path, data_path, tokenizer=None):
+def create_vocabulary(vocabulary_path, data, tokenizer=None):
   """Create vocabulary file (if it does not exist yet) from data file.
 
   Data file is assumed to contain one word per line. Each word is
@@ -69,24 +69,21 @@ def create_vocabulary(vocabulary_path, data_path, tokenizer=None):
 
   """
   if not gfile.Exists(vocabulary_path):
-    print("Creating vocabulary %s from data %s" % (vocabulary_path, data_path))
+    print("Creating vocabulary %s" % (vocabulary_path))
     vocab = {}
-    with gfile.GFile(data_path, mode="r") as f:
-      counter = 0
-      for line in f:
-        counter += 1
-        if counter % 100000 == 0:
-          print("  processing line %d" % counter)
-        tokens = tokenizer(line) if tokenizer else basic_tokenizer(line)
-        for item in tokens:
-          if item in vocab:
-            vocab[item] += 1
-          else:
-            vocab[item] = 1
-      vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
-      with gfile.GFile(vocabulary_path, mode="w") as vocab_file:
-        for w in vocab_list:
-          vocab_file.write(w + "\n")
+    for i, line in enumerate(data):
+      if i % 100000 == 0:
+        print("  processing line %d" % i)
+      tokens = tokenizer(line) if tokenizer else basic_tokenizer(line)
+      for item in tokens:
+        if item in vocab:
+          vocab[item] += 1
+        else:
+          vocab[item] = 1
+    vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
+    with gfile.GFile(vocabulary_path, mode="w") as vocab_file:
+      for w in vocab_list:
+        vocab_file.write(w + "\n")
 
 
 
@@ -158,7 +155,7 @@ def sentence_to_token_ids(sentence, vocabulary,
   return [vocabulary.get(w, UNK_ID) for w in words]
 
 
-def data_to_token_ids(data_path, target_path, vocabulary_path,
+def data_to_token_ids(data, vocabulary_path,
                       tokenizer=None):
   """Tokenize data file and turn into token-ids using given vocabulary file.
 
@@ -173,21 +170,17 @@ def data_to_token_ids(data_path, target_path, vocabulary_path,
     tokenizer: a function to use to tokenize each sentence;
       if None, basic_tokenizer will be used.
   """
-  if not gfile.Exists(target_path):
-    print("Tokenizing data in %s" % data_path)
-    vocab, _ = initialize_vocabulary(vocabulary_path)
-    with gfile.GFile(data_path, mode="r") as data_file:
-      with gfile.GFile(target_path, mode="w") as tokens_file:
-        counter = 0
-        for line in data_file:
-          counter += 1
-          if counter % 100000 == 0:
-            print("  tokenizing line %d" % counter)
-          token_ids = sentence_to_token_ids(line, vocab, tokenizer)
-          tokens_file.write(" ".join([str(tok) for tok in token_ids]) + "\n")
+  vocab, _ = initialize_vocabulary(vocabulary_path)
+  tokens_dic =[]
+  for i, line in enumerate(data):
+    if i > 0 and i % 100000 == 0:
+      print("  tokenizing line %d" % i)
+    token_ids = sentence_to_token_ids(line, vocab, tokenizer)
+    tokens_dic.append(" ".join([str(tok) for tok in token_ids]) + "\n")
+  return tokens_dic
 
 
-def split_to_grapheme_phoneme(inp_dictionary, path):
+def split_to_grapheme_phoneme(inp_dictionary):
   """Split input dictionary into two separate files (which ended with .grapheme and .phoneme) in path directory.
 
   Args:
@@ -195,27 +188,22 @@ def split_to_grapheme_phoneme(inp_dictionary, path):
     path: path where we will create two files with separate graphemes and phonemes.
   """
   # Create vocabularies of the appropriate sizes.
-  gr_out_path = path + ".grapheme"
-  ph_out_path = path + ".phoneme"
 
   lst = []
   for line in inp_dictionary:
     lst.append(line.split())
 
-  g = open(gr_out_path,'w')
-  p = open(ph_out_path,'w')
-
+  graphemes, phonemes = [], []
   for line in lst:
     if len(line)>1:
-      g.write(' '.join(list(line[0])) + '\n')
-      p.write(' '.join(line[1:]) + '\n')
+      graphemes.append(' '.join(list(line[0])) + '\n')
+      phonemes.append(' '.join(line[1:]) + '\n')
 
-  g.close()
-  p.close()
-
+  return graphemes, phonemes
 
 
-def prepare_g2p_data(data_dir):
+
+def prepare_g2p_data(model_dir, train_gr, train_ph, valid_gr, valid_ph):
   """Get G2P data into data_dir, create vocabularies and tokenize data.
 
   Args:
@@ -232,32 +220,27 @@ def prepare_g2p_data(data_dir):
       (7) Grapheme vocabulary size,
       (8) Phoneme vocabulary size.
   """
-  # Get g2p data to the specified directory.
-  train_path = os.path.join(data_dir, "train")
-  dev_path = os.path.join(data_dir, "test")
-
   # Create vocabularies of the appropriate sizes.
-  ph_vocab_path = os.path.join(data_dir, "vocab.phoneme")
-  gr_vocab_path = os.path.join(data_dir, "vocab.grapheme")
-  create_vocabulary(ph_vocab_path, train_path + ".phoneme")
-  create_vocabulary(gr_vocab_path, train_path + ".grapheme")
+  ph_vocab_path = os.path.join(model_dir, "vocab.phoneme")
+  gr_vocab_path = os.path.join(model_dir, "vocab.grapheme")
+  create_vocabulary(ph_vocab_path, train_ph)
+  create_vocabulary(gr_vocab_path, train_gr)
   gr_vocab_size = get_vocab_size(gr_vocab_path)
   ph_vocab_size = get_vocab_size(ph_vocab_path)
 
-
   # Create token ids for the training data.
-  ph_train_ids_path = train_path + (".ids.phoneme")
-  gr_train_ids_path = train_path + (".ids.grapheme")
-  data_to_token_ids(train_path + ".phoneme", ph_train_ids_path, ph_vocab_path)
-  data_to_token_ids(train_path + ".grapheme", gr_train_ids_path, gr_vocab_path)
+  print("Tokenizing data train phonemes")
+  train_ph_ids = data_to_token_ids(train_ph, ph_vocab_path)
+  print("Tokenizing data train graphemes")
+  train_gr_ids = data_to_token_ids(train_gr, gr_vocab_path)
 
   # Create token ids for the development data.
-  ph_dev_ids_path = dev_path + (".ids.phoneme")
-  gr_dev_ids_path = dev_path + (".ids.grapheme")
-  data_to_token_ids(dev_path + ".phoneme", ph_dev_ids_path, ph_vocab_path)
-  data_to_token_ids(dev_path + ".grapheme", gr_dev_ids_path, gr_vocab_path)
+  print("Tokenizing data valid phonemes")
+  valid_ph_ids = data_to_token_ids(valid_ph, ph_vocab_path)
+  print("Tokenizing data valid graphemes")
+  valid_gr_ids = data_to_token_ids(valid_gr, gr_vocab_path)
 
-  return (gr_train_ids_path, ph_train_ids_path,
-          gr_dev_ids_path, ph_dev_ids_path,
+  return (train_gr_ids, train_ph_ids,
+          valid_gr_ids, valid_ph_ids,
           gr_vocab_path, ph_vocab_path,
           gr_vocab_size, ph_vocab_size)
