@@ -90,8 +90,10 @@ def read_data(source, target, max_size=None):
   """
   data_set = [[] for _ in _buckets]
   for i in range(len(source)):
-    source_ids = [int(x) for x in source[i].split()]
-    target_ids = [int(x) for x in target[i].split()]
+    #source_ids = [int(x) for x in source[i].split()]
+    #target_ids = [int(x) for x in target[i].split()]
+    source_ids = source[i]
+    target_ids = target[i]
     target_ids.append(data_utils.EOS_ID)
     for bucket_id, (source_size, target_size) in enumerate(_buckets):
       if len(source_ids) < source_size and len(target_ids) < target_size:

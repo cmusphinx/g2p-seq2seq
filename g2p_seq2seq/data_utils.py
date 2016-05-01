@@ -176,7 +176,7 @@ def data_to_token_ids(data, vocabulary_path,
     if i > 0 and i % 100000 == 0:
       print("  tokenizing line %d" % i)
     token_ids = sentence_to_token_ids(line, vocab, tokenizer)
-    tokens_dic.append(" ".join([str(tok) for tok in token_ids]) + "\n")
+    tokens_dic.append(token_ids)
   return tokens_dic
 
 
