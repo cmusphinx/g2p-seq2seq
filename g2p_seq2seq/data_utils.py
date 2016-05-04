@@ -39,18 +39,6 @@ GO_ID = 1
 EOS_ID = 2
 UNK_ID = 3
 
-# Regular expressions used to tokenize.
-_WORD_SPLIT = re.compile("([.,!?\"':;)(])")
-#_DIGIT_RE = re.compile(r"\d")
-
-
-def basic_tokenizer(sentence):
-  """Very basic tokenizer: split the sentence into a list of tokens."""
-  words = []
-  for space_separated_fragment in sentence.strip().split():
-    words.extend(re.split(_WORD_SPLIT, space_separated_fragment))
-  return [w for w in words if w]
-
 
 def create_vocabulary(vocabulary_path, data, tokenizer=None):
   """Create vocabulary file (if it does not exist yet) from data file.
@@ -64,8 +52,6 @@ def create_vocabulary(vocabulary_path, data, tokenizer=None):
   Args:
     vocabulary_path: path where the vocabulary will be created.
     data_path: data file that will be used to create vocabulary.
-    tokenizer: a function to use to tokenize each data word;
-      if None, basic_tokenizer will be used.
 
   """
   if not gfile.Exists(vocabulary_path):
@@ -74,8 +60,7 @@ def create_vocabulary(vocabulary_path, data, tokenizer=None):
     for i, line in enumerate(data):
       if i % 100000 == 0:
         print("  processing line %d" % i)
-      tokens = tokenizer(line) if tokenizer else basic_tokenizer(line)
-      for item in tokens:
+      for item in line:
         if item in vocab:
           vocab[item] += 1
         else:
@@ -131,32 +116,7 @@ def initialize_vocabulary(vocabulary_path):
     raise ValueError("Vocabulary file %s not found.", vocabulary_path)
 
 
-def sentence_to_token_ids(sentence, vocabulary,
-                          tokenizer=None):
-  """Convert a string to list of integers representing token-ids.
-
-  For example, a sentence "M A N Y" may become tokenized into
-  ["M", "A", "N", "Y"] and with vocabulary {"M": 1, "A": 2,
-  "N": 4, "Y": 7"} this function will return [1, 2, 4, 7].
-
-  Args:
-    sentence: a string, the sentence to convert to token-ids.
-    vocabulary: a dictionary mapping tokens to integers.
-    tokenizer: a function to use to tokenize each sentence;
-      if None, basic_tokenizer will be used.
-
-  Returns:
-    a list of integers, the token-ids for the sentence.
-  """
-  if tokenizer:
-    words = tokenizer(sentence)
-  else:
-    words = basic_tokenizer(sentence)
-  return [vocabulary.get(w, UNK_ID) for w in words]
-
-
-def data_to_token_ids(data, vocabulary_path,
-                      tokenizer=None):
+def data_to_token_ids(data, vocabulary_path):
   """Tokenize data file and turn into token-ids using given vocabulary file.
 
   This function loads data line-by-line from data_path, calls the above
@@ -164,18 +124,15 @@ def data_to_token_ids(data, vocabulary_path,
   for sentence_to_token_ids on the details of token-ids format.
 
   Args:
-    data_path: path to the data file in one-sentence-per-line format.
-    target_path: path where the file with token-ids will be created.
+    data: input data in one-word-per-line format.
     vocabulary_path: path to the vocabulary file.
-    tokenizer: a function to use to tokenize each sentence;
-      if None, basic_tokenizer will be used.
   """
   vocab, _ = initialize_vocabulary(vocabulary_path)
   tokens_dic =[]
   for i, line in enumerate(data):
     if i > 0 and i % 100000 == 0:
       print("  tokenizing line %d" % i)
-    token_ids = sentence_to_token_ids(line, vocab, tokenizer)
+    token_ids = [vocab.get(w, UNK_ID) for w in line]
     tokens_dic.append(token_ids)
   return tokens_dic
 

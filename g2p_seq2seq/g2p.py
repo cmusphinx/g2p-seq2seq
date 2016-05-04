@@ -39,6 +39,7 @@ from tensorflow.python.platform import gfile
 import data_utils as data_utils
 from tensorflow.models.rnn.translate import seq2seq_model
 
+UNK_ID = 3
 
 tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate.")
 tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.8,
@@ -90,8 +91,6 @@ def read_data(source, target, max_size=None):
   """
   data_set = [[] for _ in _buckets]
   for i in range(len(source)):
-    #source_ids = [int(x) for x in source[i].split()]
-    #target_ids = [int(x) for x in target[i].split()]
     source_ids = source[i]
     target_ids = target[i]
     target_ids.append(data_utils.EOS_ID)
@@ -196,7 +195,7 @@ def train(train_gr, train_ph, valid_gr, valid_ph):
 
 def decode_word(word, sess, model, gr_vocab, rev_ph_vocab):
   # Get token-ids for the input sentence.
-  token_ids = data_utils.sentence_to_token_ids(word, gr_vocab)
+  token_ids = [gr_vocab.get(w, UNK_ID) for w in word]
   # Which bucket does it belong to?
   bucket_id = min([b for b in xrange(len(_buckets))
                    if _buckets[b][0] > len(token_ids)])
