@@ -58,7 +58,7 @@ def create_vocabulary(vocabulary_path, data, tokenizer=None):
     print("Creating vocabulary %s" % (vocabulary_path))
     vocab = {}
     for i, line in enumerate(data):
-      if i % 100000 == 0:
+      if i > 0 and i % 100000 == 0:
         print("  processing line %d" % i)
       for item in line:
         if item in vocab:
@@ -130,19 +130,16 @@ def data_to_token_ids(data, vocabulary_path):
   vocab, _ = initialize_vocabulary(vocabulary_path)
   tokens_dic =[]
   for i, line in enumerate(data):
-    if i > 0 and i % 100000 == 0:
-      print("  tokenizing line %d" % i)
     token_ids = [vocab.get(w, UNK_ID) for w in line]
     tokens_dic.append(token_ids)
   return tokens_dic
 
 
 def split_to_grapheme_phoneme(inp_dictionary):
-  """Split input dictionary into two separate files (which ended with .grapheme and .phoneme) in path directory.
+  """Split input dictionary into two separate lists with graphemes and phonemes.
 
   Args:
     inp_dictionary: input dictionary.
-    path: path where we will create two files with separate graphemes and phonemes.
   """
   # Create vocabularies of the appropriate sizes.
 
@@ -153,51 +150,43 @@ def split_to_grapheme_phoneme(inp_dictionary):
   graphemes, phonemes = [], []
   for line in lst:
     if len(line)>1:
-      graphemes.append(' '.join(list(line[0])) + '\n')
-      phonemes.append(' '.join(line[1:]) + '\n')
+      graphemes.append(list(line[0]))
+      phonemes.append(line[1:])
 
   return graphemes, phonemes
 
 
 
 def prepare_g2p_data(model_dir, train_gr, train_ph, valid_gr, valid_ph):
-  """Get G2P data into data_dir, create vocabularies and tokenize data.
+  """Create vocabularies into model_dir, create ids data lists.
 
   Args:
-    data_dir: directory in which the data sets will be stored.
+    model_dir: directory in which the data sets will be stored.
 
   Returns:
-    A tuple of 8 elements:
-      (1) path to the token-ids for Grapheme training data-set,
-      (2) path to the token-ids for Phoneme training data-set,
-      (3) path to the token-ids for Grapheme development data-set,
-      (4) path to the token-ids for Phoneme development data-set,
+    A tuple of 6 elements:
+      (1) Token-ids for Grapheme training data-set,
+      (2) Token-ids for Phoneme training data-set,
+      (3) Token-ids for Grapheme development data-set,
+      (4) Token-ids for Phoneme development data-set,
       (5) path to the Grapheme vocabulary file,
-      (6) path to the Phoneme vocabulary file,
-      (7) Grapheme vocabulary size,
-      (8) Phoneme vocabulary size.
+      (6) path to the Phoneme vocabulary file.
   """
   # Create vocabularies of the appropriate sizes.
   ph_vocab_path = os.path.join(model_dir, "vocab.phoneme")
   gr_vocab_path = os.path.join(model_dir, "vocab.grapheme")
+  print("Creating vocabularies in %s" %model_dir)
   create_vocabulary(ph_vocab_path, train_ph)
   create_vocabulary(gr_vocab_path, train_gr)
-  gr_vocab_size = get_vocab_size(gr_vocab_path)
-  ph_vocab_size = get_vocab_size(ph_vocab_path)
 
   # Create token ids for the training data.
-  print("Tokenizing data train phonemes")
   train_ph_ids = data_to_token_ids(train_ph, ph_vocab_path)
-  print("Tokenizing data train graphemes")
   train_gr_ids = data_to_token_ids(train_gr, gr_vocab_path)
 
   # Create token ids for the development data.
-  print("Tokenizing data valid phonemes")
   valid_ph_ids = data_to_token_ids(valid_ph, ph_vocab_path)
-  print("Tokenizing data valid graphemes")
   valid_gr_ids = data_to_token_ids(valid_gr, gr_vocab_path)
 
   return (train_gr_ids, train_ph_ids,
           valid_gr_ids, valid_ph_ids,
-          gr_vocab_path, ph_vocab_path,
-          gr_vocab_size, ph_vocab_size)
+          gr_vocab_path, ph_vocab_path)

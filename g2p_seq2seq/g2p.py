@@ -39,8 +39,6 @@ from tensorflow.python.platform import gfile
 import data_utils as data_utils
 from tensorflow.models.rnn.translate import seq2seq_model
 
-UNK_ID = 3
-
 tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate.")
 tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.8,
                           "Learning rate decays by this much.")
@@ -76,8 +74,8 @@ def read_data(source, target, max_size=None):
   """Read data from source and target files and put into buckets.
 
   Args:
-    source_path: path to the files with token-ids for the source language.
-    target_path: path to the file with token-ids for the target language;
+    source: data with token-ids for the source language.
+    target: data with token-ids for the target language;
       it must be aligned with the source file: n-th line contains the desired
       output for n-th line from the source_path.
     max_size: maximum number of lines to read, all other will be ignored;
@@ -123,8 +121,10 @@ def create_model(session, forward_only, gr_vocab_size, ph_vocab_size):
 def train(train_gr, train_ph, valid_gr, valid_ph):
   """Train a gr->ph translation model using G2P data."""
   # Prepare G2P data.
-  print("Preparing G2P data in %s" % FLAGS.model)
-  train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, _, _, gr_vocab_size, ph_vocab_size = data_utils.prepare_g2p_data(FLAGS.model, train_gr, train_ph, valid_gr, valid_ph)
+  print("Preparing G2P data")
+  train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, gr_vocab_path, ph_vocab_path = data_utils.prepare_g2p_data(FLAGS.model, train_gr, train_ph, valid_gr, valid_ph)
+  gr_vocab_size = data_utils.get_vocab_size(gr_vocab_path)
+  ph_vocab_size = data_utils.get_vocab_size(ph_vocab_path)
   with tf.Session() as sess:
     # Create model.
     print("Creating %d layers of %d units." % (FLAGS.num_layers, FLAGS.size))
@@ -135,9 +135,9 @@ def train(train_gr, train_ph, valid_gr, valid_ph):
            % FLAGS.max_train_data_size)
     valid_set = read_data(valid_gr_ids, valid_ph_ids)
     train_set = read_data(train_gr_ids, train_ph_ids, FLAGS.max_train_data_size)
+    
     train_bucket_sizes = [len(train_set[b]) for b in xrange(len(_buckets))]
     train_total_size = float(sum(train_bucket_sizes))
-
     # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
     # to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
     # the size if i-th training bucket, as used later.
@@ -195,7 +195,7 @@ def train(train_gr, train_ph, valid_gr, valid_ph):
 
 def decode_word(word, sess, model, gr_vocab, rev_ph_vocab):
   # Get token-ids for the input sentence.
-  token_ids = [gr_vocab.get(w, UNK_ID) for w in word]
+  token_ids = [gr_vocab.get(w, data_utils.UNK_ID) for w in word]
   # Which bucket does it belong to?
   bucket_id = min([b for b in xrange(len(_buckets))
                    if _buckets[b][0] > len(token_ids)])
