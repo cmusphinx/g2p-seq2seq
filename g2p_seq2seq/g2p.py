@@ -242,7 +242,7 @@ def interactive():
         res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
         print(res_phoneme_seq)
       else:
-        print("Symbols: %s not in trained model's vocabulary" % ",".join(gr_absent) )
+        print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
       print("> ", end="")
       sys.stdout.flush()
       w = sys.stdin.readline()
@@ -299,7 +299,7 @@ def evaluate():
           if model_assumption != test_phonemes[i]:
             errors += 1
         else:
-          raise ValueError("Symbols: %s not in trained model's vocabulary" % ",".join(gr_absent) ) 
+          raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) ) 
       elif w not in dupl_error_calculated:
         counter += 1
         dupl_error_calculated.append(w)
@@ -310,7 +310,7 @@ def evaluate():
           if model_assumption not in duplicates[w]:
             errors += 1
         else:
-          raise ValueError("Symbols: %s not in trained model's vocabulary" % ",".join(gr_absent) )
+          raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
 
     print("WER : ", errors/counter )
     print("Accuracy : ", (1-errors/counter) )
@@ -348,7 +348,7 @@ def decode():
             output_file.write(res_phoneme_seq)
             output_file.write('\n')
           else:
-            raise ValueError("Symbols: %s not in trained model's vocabulary" % ",".join(gr_absent) )
+            raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
     else:
       for w in graphemes:
         word = " ".join(list(w))
@@ -358,7 +358,7 @@ def decode():
           print(w.replace('\n',' ') + res_phoneme_seq)
           sys.stdout.flush()
         else:
-          raise ValueError("Symbols: %s not in trained model's vocabulary" % ",".join(gr_absent) )
+          raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
 
 
 def main(_):
