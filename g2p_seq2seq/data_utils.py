@@ -145,7 +145,7 @@ def split_to_grapheme_phoneme(inp_dictionary):
 
   lst = []
   for line in inp_dictionary:
-    lst.append(line.split())
+    lst.append(line.strip().split())
 
   graphemes, phonemes = [], []
   for line in lst:
