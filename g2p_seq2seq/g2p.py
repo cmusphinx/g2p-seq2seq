@@ -263,51 +263,26 @@ def evaluate():
 
     # Decode from input file.
     test = open(FLAGS.evaluate).readlines()
-    test_graphemes = []
-    test_phonemes = []
-
+    w_ph_dict = {}
     for line in test:
       lst = line.strip().split()
       if len(lst)>=2:
-        test_graphemes.append(lst[0])
-        test_phonemes.append(" ".join(lst[1:]))
+        if lst[0] not in w_ph_dict: w_ph_dict[lst[0]] = [" ".join(lst[1:])]
+        else: w_ph_dict[lst[0]].append(" ".join(lst[1:]))
 
-    duplicates = {}
-    total_dupl_num = 0
-    for i, gr in enumerate(test_graphemes):
-      if test_graphemes.count(gr) > 1:
-        total_dupl_num += test_graphemes.count(gr) - 1
-        if gr in duplicates:
-          duplicates[gr].append(test_phonemes[i])
-        else:
-          duplicates[gr] = [test_phonemes[i]]
-
+    # Calculate errors
     errors = 0
-    counter = 0
-    dupl_error_calculated = []
-    for i, word in enumerate(test_graphemes):
-      if word not in duplicates:
-        counter += 1
+    for word, phonetics in w_ph_dict.items():
+      if len(phonetics) == 1:
         gr_absent = set(gr for gr in word if gr not in gr_vocab)
         if not gr_absent:
           model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab) 
-          if model_assumption != test_phonemes[i]:
+          if model_assumption not in phonetics:
             errors += 1
         else:
           raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) ) 
-      elif word not in dupl_error_calculated:
-        counter += 1
-        dupl_error_calculated.append(word)
-        gr_absent = set(gr for gr in word if gr not in gr_vocab)
-        if not gr_absent:
-          model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-          if model_assumption not in duplicates[word]:
-            errors += 1
-        else:
-          raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
-
-    print("WER : ", errors/counter )
-    print("Accuracy : ", (1-errors/counter) )
+    print("WER : ", errors/len(w_ph_dict) )
+    print("Accuracy : ", ( 1-(errors/len(w_ph_dict)) ) )
 
 
 def decode():
