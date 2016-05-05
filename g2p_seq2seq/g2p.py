@@ -258,7 +258,7 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab):
 
 def interactive():
   with tf.Session() as sess:
-    gr_vocab, ph_vocab, gr_vocab_path, ph_vocab_path = get_vocabs()
+    gr_vocab, rev_ph_vocab, gr_vocab_path, ph_vocab_path = get_vocabs()
     model = load_model(sess, gr_vocab_path, ph_vocab_path)
 
     while True:
