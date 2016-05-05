@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2016 AC Technology LLC. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import os
 import random
 import sys
 import time
+import re
 
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
@@ -195,7 +196,7 @@ def train(train_gr, train_ph, valid_gr, valid_ph):
 
 def decode_word(word, sess, model, gr_vocab, rev_ph_vocab):
   # Get token-ids for the input sentence.
-  token_ids = [gr_vocab.get(w, data_utils.UNK_ID) for w in word]
+  token_ids = [gr_vocab.get(s, data_utils.UNK_ID) for s in word]
   # Which bucket does it belong to?
   bucket_id = min([b for b in xrange(len(_buckets))
                    if _buckets[b][0] > len(token_ids)])
@@ -233,10 +234,9 @@ def interactive():
     while True:
       print("> ", end="")
       sys.stdout.flush()
-      w = sys.stdin.readline().strip()
-      if w:
-        word = " ".join(list(w))
-        gr_absent = set(gr for gr in w if gr not in gr_vocab)
+      word = sys.stdin.readline().strip()
+      if word:
+        gr_absent = set(gr for gr in word if gr not in gr_vocab)
         if not gr_absent:
           res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
           print(res_phoneme_seq)
@@ -262,7 +262,7 @@ def evaluate():
     _, rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path)
 
     # Decode from input file.
-    test = open(FLAGS.evaluate).read().split('\n')
+    test = open(FLAGS.evaluate).readlines()
     test_graphemes = []
     test_phonemes = []
 
@@ -285,25 +285,23 @@ def evaluate():
     errors = 0
     counter = 0
     dupl_error_calculated = []
-    for i, w in enumerate(test_graphemes):
-      if w not in duplicates:
+    for i, word in enumerate(test_graphemes):
+      if word not in duplicates:
         counter += 1
-        word = " ".join(list(w))
-        gr_absent = set(gr for gr in w if gr not in gr_vocab)
+        gr_absent = set(gr for gr in word if gr not in gr_vocab)
         if not gr_absent:
           model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab) 
           if model_assumption != test_phonemes[i]:
             errors += 1
         else:
           raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) ) 
-      elif w not in dupl_error_calculated:
+      elif word not in dupl_error_calculated:
         counter += 1
-        dupl_error_calculated.append(w)
-        word = " ".join(list(w))
-        gr_absent = set(gr for gr in w if gr not in gr_vocab)
+        dupl_error_calculated.append(word)
+        gr_absent = set(gr for gr in word if gr not in gr_vocab)
         if not gr_absent:
           model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-          if model_assumption not in duplicates[w]:
+          if model_assumption not in duplicates[word]:
             errors += 1
         else:
           raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
@@ -335,26 +333,24 @@ def decode():
 
     if output_file_path:
       with gfile.GFile(output_file_path, mode="w") as output_file:
-        for w in graphemes:
-          w = w.strip()
-          word = " ".join(list(w))
-          gr_absent = set(gr for gr in w if gr not in gr_vocab)
+        for word in graphemes:
+          word = word.strip()
+          gr_absent = set(gr for gr in word if gr not in gr_vocab)
           if not gr_absent:
             res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-            output_file.write(w)
+            output_file.write(word)
             output_file.write(' ')
             output_file.write(res_phoneme_seq)
             output_file.write('\n')
           else:
             raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
     else:
-      for w in graphemes:
-        w = w.strip()
-        word = " ".join(list(w))
-        gr_absent = set(gr for gr in w if gr not in gr_vocab)
+      for word in graphemes:
+        word = word.strip()
+        gr_absent = set(gr for gr in word if gr not in gr_vocab)
         if not gr_absent:
           res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-          print(w + ' ' + res_phoneme_seq)
+          print(word + ' ' + res_phoneme_seq)
           sys.stdout.flush()
         else:
           raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )

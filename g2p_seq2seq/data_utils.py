@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2016 AC Technology LLC. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -71,7 +71,6 @@ def create_vocabulary(vocabulary_path, data, tokenizer=None):
         vocab_file.write(w + "\n")
 
 
-
 def get_vocab_size(vocabulary_path):
   """Return size of the vocabulary.
 
@@ -130,7 +129,7 @@ def data_to_token_ids(data, vocabulary_path):
   vocab, _ = initialize_vocabulary(vocabulary_path)
   tokens_dic =[]
   for i, line in enumerate(data):
-    token_ids = [vocab.get(w, UNK_ID) for w in line]
+    token_ids = [vocab.get(s, UNK_ID) for s in line]
     tokens_dic.append(token_ids)
   return tokens_dic
 
@@ -152,7 +151,6 @@ def split_to_grapheme_phoneme(inp_dictionary):
     if len(line)>1:
       graphemes.append(list(line[0]))
       phonemes.append(line[1:])
-
   return graphemes, phonemes
 
 
