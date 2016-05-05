@@ -62,6 +62,8 @@ tf.app.flags.DEFINE_string("output", "", "Decoding result file.")
 tf.app.flags.DEFINE_string("train", "", "Train dictionary.")
 tf.app.flags.DEFINE_string("valid", "", "Development dictionary.")
 tf.app.flags.DEFINE_string("test", "", "Test dictionary.")
+tf.app.flags.DEFINE_integer("max_steps", 5000,
+                            "How many training checkpoints(epochs) to do until stop training (0: no limit).")
 
 
 FLAGS = tf.app.flags.FLAGS
@@ -149,7 +151,7 @@ def train(train_gr, train_ph, valid_gr, valid_ph):
     step_time, loss = 0.0, 0.0
     current_step = 0
     previous_losses = []
-    while True:
+    while (FLAGS.max_steps == 0 or current_step <= FLAGS.max_steps ):
       # Choose a bucket according to data distribution. We pick a random number
       # in [0, 1] and use the corresponding interval in train_buckets_scale.
       random_number_01 = np.random.random_sample()
@@ -194,6 +196,43 @@ def train(train_gr, train_ph, valid_gr, valid_ph):
         sys.stdout.flush()
 
 
+def get_vocabs():
+  """Initialize and return vocabularies and pathes to them.
+
+  Returns:
+    gr_vocab: Graphemes vocabulary;
+    rev_ph_vocab: Reversed phonemes vocabulary;
+    gr_vocab_path: Path to the graphemes vocabulary;
+    ph_vocab_path: Path to the phonemes vocabulary.
+  """
+  # Initialize vocabularies
+  gr_vocab_path = os.path.join(FLAGS.model, "vocab.grapheme")
+  ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
+  gr_vocab, _ = data_utils.initialize_vocabulary(gr_vocab_path)
+  _, rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path)
+  return (gr_vocab, rev_ph_vocab, gr_vocab_path, ph_vocab_path)
+
+
+def load_model(sess, gr_vocab_path, ph_vocab_path):
+  """Load saved model.
+
+  Args:
+    sess: current session;
+    gr_vocab_path: Path to the graphemes vocabulary;
+    ph_vocab_path: Path to the phonemes vocabulary.
+
+  Returns:
+    model: Trained model.
+  """
+  # Get vocabulary sizes
+  gr_vocab_size = data_utils.get_vocab_size(gr_vocab_path)
+  ph_vocab_size = data_utils.get_vocab_size(ph_vocab_path)
+  # Load model
+  model = create_model(sess, True, gr_vocab_size, ph_vocab_size)
+  model.batch_size = 1  # We decode one word at a time.
+  return model
+
+
 def decode_word(word, sess, model, gr_vocab, rev_ph_vocab):
   # Get token-ids for the input sentence.
   token_ids = [gr_vocab.get(s, data_utils.UNK_ID) for s in word]
@@ -219,17 +258,8 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab):
 
 def interactive():
   with tf.Session() as sess:
-    # Create model and load parameters.
-    gr_vocab_path = os.path.join(FLAGS.model, "vocab.grapheme")
-    ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
-    gr_vocab_size = data_utils.get_vocab_size(gr_vocab_path)
-    ph_vocab_size = data_utils.get_vocab_size(ph_vocab_path)
-    model = create_model(sess, True, gr_vocab_size, ph_vocab_size)
-    model.batch_size = 1  # We decode one sentence at a time.
-
-    # Load vocabularies.
-    gr_vocab, _ = data_utils.initialize_vocabulary(gr_vocab_path)
-    _, rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path)
+    gr_vocab, ph_vocab, gr_vocab_path, ph_vocab_path = get_vocabs()
+    model = load_model(sess, gr_vocab_path, ph_vocab_path)
 
     while True:
       print("> ", end="")
@@ -247,19 +277,8 @@ def interactive():
 
 def evaluate():
   with tf.Session() as sess:
-    # Create model and load parameters.
-    gr_vocab_path = os.path.join(FLAGS.model, "vocab.grapheme")
-    ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
-    gr_vocab_size = data_utils.get_vocab_size(gr_vocab_path)
-    ph_vocab_size = data_utils.get_vocab_size(ph_vocab_path)
-    model = create_model(sess, True, gr_vocab_size, ph_vocab_size)
-    model.batch_size = 1  # We decode one word at a time.
-
-    # Load vocabularies.
-    gr_vocab_path = os.path.join(FLAGS.model, "vocab.grapheme")
-    ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
-    gr_vocab, _ = data_utils.initialize_vocabulary(gr_vocab_path)
-    _, rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path)
+    gr_vocab, rev_ph_vocab, gr_vocab_path, ph_vocab_path = get_vocabs()
+    model = load_model(sess, gr_vocab_path, ph_vocab_path)
 
     # Decode from input file.
     test = open(FLAGS.evaluate).readlines()
@@ -287,19 +306,8 @@ def evaluate():
 
 def decode():
   with tf.Session() as sess:
-    # Create model and load parameters.
-    gr_vocab_path = os.path.join(FLAGS.model, "vocab.grapheme")
-    ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
-    gr_vocab_size = data_utils.get_vocab_size(gr_vocab_path)
-    ph_vocab_size = data_utils.get_vocab_size(ph_vocab_path)
-    model = create_model(sess, True, gr_vocab_size, ph_vocab_size)
-    model.batch_size = 1  # We decode one sentence at a time.
-
-    # Load vocabularies.
-    gr_vocab_path = os.path.join(FLAGS.model, "vocab.grapheme")
-    ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
-    gr_vocab, _ = data_utils.initialize_vocabulary(gr_vocab_path)
-    _, rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path)
+    gr_vocab, rev_ph_vocab, gr_vocab_path, ph_vocab_path = get_vocabs()
+    model = load_model(sess, gr_vocab_path, ph_vocab_path)
 
     # Decode from input file.
     graphemes = open(FLAGS.decode).readlines()
