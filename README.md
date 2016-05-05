@@ -41,7 +41,7 @@ The wordlist is a text file: one word per line
 To count Word Error Rate  of the trained model, run
 
 ```
-  python g2p.py --count_wer [your_wordlist] --model [model_folder_path]
+  python g2p.py --evaluate [your_wordlist] --model [model_folder_path]
 
 ```
 The wordlist is a text file: one word per line
@@ -56,6 +56,12 @@ See an [example dictionary](http://github.com/cmusphinx/cmudict)
   python g2p.py --train [train_dictionary.dic] --model [model_folder_path]
 ```
 
+You can set up maximum training steps:
+```
+  "--max_steps" - Maximum number of training steps (Default: 10000).
+     If 0 train until no improvement is observed
+```
+
 It is a good idea to play with the following parameters:
 ```
   "--size" - Size of each model layer (Default: 64).
@@ -65,7 +71,7 @@ It is a good idea to play with the following parameters:
      For example, you can try 1 if the train set is not large enough, 
      or 3 to hopefully get better results
 
-  "--learning_rate" - Initial Learning rate (Default: 0.5). 
+  "--learning_rate" - Initial Learning rate (Default: 0.5) 
 
   "--learning_rate_decay_factor" - Learning rate decays by this much (Default: 0.8)
 ```

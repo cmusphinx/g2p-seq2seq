@@ -63,7 +63,7 @@ tf.app.flags.DEFINE_string("train", "", "Train dictionary.")
 tf.app.flags.DEFINE_string("valid", "", "Development dictionary.")
 tf.app.flags.DEFINE_string("test", "", "Test dictionary.")
 tf.app.flags.DEFINE_integer("max_steps", 5000,
-                            "How many training checkpoints(epochs) to do until stop training (0: no limit).")
+                            "How many training steps to do until stop training (0: no limit).")
 
 
 FLAGS = tf.app.flags.FLAGS
