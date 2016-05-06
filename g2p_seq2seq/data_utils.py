@@ -22,6 +22,7 @@ import gzip
 import os
 import re
 import tarfile
+import codecs
 
 from six.moves import urllib
 
@@ -66,9 +67,9 @@ def create_vocabulary(vocabulary_path, data, tokenizer=None):
         else:
           vocab[item] = 1
     vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
-    with gfile.GFile(vocabulary_path, mode="w") as vocab_file:
+    with codecs.open(vocabulary_path, "w", "utf-8") as vocab_file:
       for w in vocab_list:
-        vocab_file.write(w + "\n")
+        vocab_file.write( w + '\n')
 
 
 def get_vocab_size(vocabulary_path):
@@ -106,7 +107,8 @@ def initialize_vocabulary(vocabulary_path):
   """
   if gfile.Exists(vocabulary_path):
     rev_vocab = []
-    with gfile.GFile(vocabulary_path, mode="r") as f:
+    #with gfile.GFile(vocabulary_path, mode="r") as f:
+    with codecs.open(vocabulary_path, "r", "utf-8") as f:
       rev_vocab.extend(f.readlines())
     rev_vocab = [line.strip() for line in rev_vocab]
     vocab = dict([(x, y) for (y, x) in enumerate(rev_vocab)])
@@ -141,7 +143,6 @@ def split_to_grapheme_phoneme(inp_dictionary):
     inp_dictionary: input dictionary.
   """
   # Create vocabularies of the appropriate sizes.
-
   lst = []
   for line in inp_dictionary:
     lst.append(line.strip().split())

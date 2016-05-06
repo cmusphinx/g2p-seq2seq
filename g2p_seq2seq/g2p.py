@@ -29,7 +29,7 @@ import os
 import random
 import sys
 import time
-import re
+import codecs
 
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
@@ -260,11 +260,10 @@ def interactive():
   with tf.Session() as sess:
     gr_vocab, rev_ph_vocab, gr_vocab_path, ph_vocab_path = get_vocabs()
     model = load_model(sess, gr_vocab_path, ph_vocab_path)
+    print("> ", end="")
+    sys.stdout.flush()
 
-    while True:
-      print("> ", end="")
-      sys.stdout.flush()
-      word = sys.stdin.readline().strip()
+    for word in iter(lambda: sys.stdin.readline().decode('utf-8').strip(), ''):
       if word:
         gr_absent = set(gr for gr in word if gr not in gr_vocab)
         if not gr_absent:
@@ -273,6 +272,8 @@ def interactive():
         else:
           print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
       else: break
+      print("> ", end="")
+      sys.stdout.flush()
 
 
 def evaluate():
@@ -281,7 +282,7 @@ def evaluate():
     model = load_model(sess, gr_vocab_path, ph_vocab_path)
 
     # Decode from input file.
-    test = open(FLAGS.evaluate).readlines()
+    test = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
     w_ph_dict = {}
     for line in test:
       lst = line.strip().split()
@@ -310,12 +311,12 @@ def decode():
     model = load_model(sess, gr_vocab_path, ph_vocab_path)
 
     # Decode from input file.
-    graphemes = open(FLAGS.decode).readlines()
+    graphemes = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
 
     output_file_path = FLAGS.output
 
     if output_file_path:
-      with gfile.GFile(output_file_path, mode="w") as output_file:
+      with codecs.open(output_file_path, "w", "utf-8") as output_file:
         for word in graphemes:
           word = word.strip()
           gr_absent = set(gr for gr in word if gr not in gr_vocab)
@@ -348,7 +349,7 @@ def main(_):
     evaluate()
   else:
     if FLAGS.train:
-      source_dic = open(FLAGS.train).readlines()
+      source_dic = codecs.open(FLAGS.train, "r", "utf-8").readlines()
       train_dic, valid_dic, test_dic = [], [], []
       if (not FLAGS.valid) and (not FLAGS.test):
         for i, word in enumerate(source_dic):
@@ -358,20 +359,20 @@ def main(_):
             valid_dic.append(word)
           else: train_dic.append(word)
       elif not FLAGS.valid:
-        test_dic = open(FLAGS.test).readlines()
+        test_dic = codecs.open(FLAGS.test, "r", "utf-8").readlines()
         for i, word in enumerate(source_dic):
           if i % 20 == 0:
             valid_dic.append(word)
           else: train_dic.append(word)
       elif not FLAGS.test:
-        valid_dic = open(FLAGS.valid).readlines()
+        valid_dic = codecs.open(FLAGS.valid, "r", "utf-8").readlines()
         for i, word in enumerate(source_dic):
           if i % 10 == 0:
             test_dic.append(word)
           else: train_dic.append(word)
       else:
-        valid_dic = open(FLAGS.valid).readlines()
-        test_dic = open(FLAGS.test).readlines()
+        valid_dic = codecs.open(FLAGS.valid, "r", "utf-8").readlines()
+        test_dic = codecs.open(FLAGS.test, "r", "utf-8").readlines()
         train_dic = source_dic
     else:
       raise ValueError("Train dictionary absent.")
