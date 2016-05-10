@@ -117,7 +117,7 @@ def create_model(session, forward_only, gr_vocab_size, ph_vocab_size):
   return model
 
 
-def train(train_gr, train_ph, valid_gr, valid_ph):
+def train(train_gr, train_ph, valid_gr, valid_ph, test_gr, test_ph):
   """Train a gr->ph translation model using G2P data."""
   # Prepare G2P data.
   print("Preparing G2P data")
@@ -189,6 +189,7 @@ def train(train_gr, train_ph, valid_gr, valid_ph):
           eval_ppx = math.exp(eval_loss) if eval_loss < 300 else float('inf')
           print("  eval: bucket %d perplexity %.2f" % (bucket_id, eval_ppx))
         sys.stdout.flush()
+  evaluate(FLAGS.evaluate)
 
 
 def get_vocabs_load_model(sess):
@@ -258,12 +259,12 @@ def interactive():
       sys.stdout.flush()
 
 
-def evaluate():
+def evaluate(test_path):
   with tf.Session() as sess:
     gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
 
     # Decode from input file.
-    test = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
+    test = codecs.open(test_path, "r", "utf-8").readlines()
     w_ph_dict = {}
     for line in test:
       lst = line.strip().split()
@@ -286,12 +287,12 @@ def evaluate():
     print("Accuracy : ", ( 1-(errors/len(w_ph_dict)) ) )
 
 
-def decode():
+def decode(word_list_file_path):
   with tf.Session() as sess:
     gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
 
     # Decode from input file.
-    graphemes = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
+    graphemes = codecs.open(word_list_file_path, "r", "utf-8").readlines()
 
     output_file_path = FLAGS.output
 
@@ -322,11 +323,11 @@ def decode():
 
 def main(_):
   if FLAGS.decode:
-    decode()
+    decode(FLAGS.decode)
   elif FLAGS.interactive:
     interactive()
   elif FLAGS.evaluate:
-    evaluate()
+    evaluate(FLAGS.evaluate)
   else:
     if FLAGS.train:
       source_dic = codecs.open(FLAGS.train, "r", "utf-8").readlines()
@@ -358,7 +359,8 @@ def main(_):
       raise ValueError("Train dictionary absent.")
     train_gr, train_ph = data_utils.split_to_grapheme_phoneme(train_dic)
     valid_gr, valid_ph = data_utils.split_to_grapheme_phoneme(valid_dic)
-    train(train_gr, train_ph, valid_gr, valid_ph)
+    test_gr, test_ph = data_utils.split_to_grapheme_phoneme(test_dic)
+    train(train_gr, train_ph, valid_gr, valid_ph, test_gr, test_ph)
 
 if __name__ == "__main__":
   tf.app.run()
