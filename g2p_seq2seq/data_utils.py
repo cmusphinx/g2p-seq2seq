@@ -41,7 +41,7 @@ EOS_ID = 2
 UNK_ID = 3
 
 
-def create_vocabulary(vocabulary_path, data, tokenizer=None):
+def create_vocabulary(vocabulary_path, data):
   """Create vocabulary file (if it does not exist yet) from data file.
 
   Data file is assumed to contain one word per line. Each word is
@@ -107,7 +107,6 @@ def initialize_vocabulary(vocabulary_path):
   """
   if gfile.Exists(vocabulary_path):
     rev_vocab = []
-    #with gfile.GFile(vocabulary_path, mode="r") as f:
     with codecs.open(vocabulary_path, "r", "utf-8") as f:
       rev_vocab.extend(f.readlines())
     rev_vocab = [line.strip() for line in rev_vocab]

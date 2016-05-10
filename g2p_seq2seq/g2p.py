@@ -50,8 +50,6 @@ tf.app.flags.DEFINE_integer("batch_size", 64,
 tf.app.flags.DEFINE_integer("size", 64, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("num_layers", 1, "Number of layers in the model.")
 tf.app.flags.DEFINE_string("model", "/tmp", "Training directory.")
-tf.app.flags.DEFINE_integer("max_train_data_size", 0,
-                            "Limit on the size of training data (0: no limit).")
 tf.app.flags.DEFINE_integer("steps_per_checkpoint", 200,
                             "How many training steps to do per checkpoint.")
 tf.app.flags.DEFINE_boolean("interactive", False,
@@ -73,22 +71,20 @@ FLAGS = tf.app.flags.FLAGS
 _buckets = [(5, 10), (10, 15), (40, 50)]
 
 
-def read_data(source, target, max_size=None):
-  """Read data from source and target files and put into buckets.
+def put_into_buckets(source, target):
+  """Put data from source and target into buckets.
 
   Args:
-    source: data with token-ids for the source language.
-    target: data with token-ids for the target language;
-      it must be aligned with the source file: n-th line contains the desired
-      output for n-th line from the source_path.
-    max_size: maximum number of lines to read, all other will be ignored;
-      if 0 or None, data files will be read completely (no limit).
+    source: data with ids for the source language.
+    target: data with ids for the target language;
+      it must be aligned with the source data: n-th line contains the desired
+      output for n-th line from the source.
 
   Returns:
     data_set: a list of length len(_buckets); data_set[n] contains a list of
-      (source, target) pairs read from the provided data files that fit
+      (source, target) pairs read from the provided data that fit
       into the n-th bucket, i.e., such that len(source) < _buckets[n][0] and
-      len(target) < _buckets[n][1]; source and target are lists of token-ids.
+      len(target) < _buckets[n][1]; source and target are lists of ids.
   """
   data_set = [[] for _ in _buckets]
   for i in range(len(source)):
@@ -134,10 +130,9 @@ def train(train_gr, train_ph, valid_gr, valid_ph):
     model = create_model(sess, False, gr_vocab_size, ph_vocab_size)
 
     # Read data into buckets and compute their sizes.
-    print ("Reading development and training data (limit: %d)."
-           % FLAGS.max_train_data_size)
-    valid_set = read_data(valid_gr_ids, valid_ph_ids)
-    train_set = read_data(train_gr_ids, train_ph_ids, FLAGS.max_train_data_size)
+    print ("Reading development and training data.")
+    valid_set = put_into_buckets(valid_gr_ids, valid_ph_ids)
+    train_set = put_into_buckets(train_gr_ids, train_ph_ids)
     
     train_bucket_sizes = [len(train_set[b]) for b in xrange(len(_buckets))]
     train_total_size = float(sum(train_bucket_sizes))
@@ -251,7 +246,6 @@ def interactive():
     sys.stdout.flush()
 
     while True:
-    #for word in iter(lambda: sys.stdin.readline().decode('utf-8').strip(), ''):
       word = sys.stdin.readline().decode('utf-8').strip()
       if word:
         gr_absent = set(gr for gr in word if gr not in gr_vocab)
