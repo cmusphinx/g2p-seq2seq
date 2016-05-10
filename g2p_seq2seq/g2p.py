@@ -48,7 +48,7 @@ tf.app.flags.DEFINE_float("max_gradient_norm", 5.0,
 tf.app.flags.DEFINE_integer("batch_size", 64,
                             "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("size", 64, "Size of each model layer.")
-tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
+tf.app.flags.DEFINE_integer("num_layers", 1, "Number of layers in the model.")
 tf.app.flags.DEFINE_string("model", "/tmp", "Training directory.")
 tf.app.flags.DEFINE_integer("max_train_data_size", 0,
                             "Limit on the size of training data (0: no limit).")
@@ -62,7 +62,7 @@ tf.app.flags.DEFINE_string("output", "", "Decoding result file.")
 tf.app.flags.DEFINE_string("train", "", "Train dictionary.")
 tf.app.flags.DEFINE_string("valid", "", "Development dictionary.")
 tf.app.flags.DEFINE_string("test", "", "Test dictionary.")
-tf.app.flags.DEFINE_integer("max_steps", 5000,
+tf.app.flags.DEFINE_integer("max_steps", 10000,
                             "How many training steps to do until stop training (0: no limit).")
 
 
@@ -196,41 +196,28 @@ def train(train_gr, train_ph, valid_gr, valid_ph):
         sys.stdout.flush()
 
 
-def get_vocabs():
+def get_vocabs_load_model(sess):
   """Initialize and return vocabularies and pathes to them.
+  And load saved model.
 
   Returns:
     gr_vocab: Graphemes vocabulary;
     rev_ph_vocab: Reversed phonemes vocabulary;
-    gr_vocab_path: Path to the graphemes vocabulary;
-    ph_vocab_path: Path to the phonemes vocabulary.
+    model: Trained model.
   """
   # Initialize vocabularies
   gr_vocab_path = os.path.join(FLAGS.model, "vocab.grapheme")
   ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
   gr_vocab, _ = data_utils.initialize_vocabulary(gr_vocab_path)
   _, rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path)
-  return (gr_vocab, rev_ph_vocab, gr_vocab_path, ph_vocab_path)
 
-
-def load_model(sess, gr_vocab_path, ph_vocab_path):
-  """Load saved model.
-
-  Args:
-    sess: current session;
-    gr_vocab_path: Path to the graphemes vocabulary;
-    ph_vocab_path: Path to the phonemes vocabulary.
-
-  Returns:
-    model: Trained model.
-  """
   # Get vocabulary sizes
   gr_vocab_size = data_utils.get_vocab_size(gr_vocab_path)
   ph_vocab_size = data_utils.get_vocab_size(ph_vocab_path)
   # Load model
   model = create_model(sess, True, gr_vocab_size, ph_vocab_size)
   model.batch_size = 1  # We decode one word at a time.
-  return model
+  return (gr_vocab, rev_ph_vocab, model)
 
 
 def decode_word(word, sess, model, gr_vocab, rev_ph_vocab):
@@ -263,7 +250,9 @@ def interactive():
     print("> ", end="")
     sys.stdout.flush()
 
-    for word in iter(lambda: sys.stdin.readline().decode('utf-8').strip(), ''):
+    while True:
+    #for word in iter(lambda: sys.stdin.readline().decode('utf-8').strip(), ''):
+      word = sys.stdin.readline().decode('utf-8').strip()
       if word:
         gr_absent = set(gr for gr in word if gr not in gr_vocab)
         if not gr_absent:
