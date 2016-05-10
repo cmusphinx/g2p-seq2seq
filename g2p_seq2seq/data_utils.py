@@ -126,18 +126,14 @@ def split_to_grapheme_phoneme(inp_dictionary):
   Args:
     inp_dictionary: input dictionary.
   """
-  # Create vocabularies of the appropriate sizes.
-  lst = []
-  for line in inp_dictionary:
-    lst.append(line.strip().split())
 
   graphemes, phonemes = [], []
-  for line in lst:
+  for l in inp_dictionary:
+    line = l.strip().split()
     if len(line)>1:
       graphemes.append(list(line[0]))
       phonemes.append(line[1:])
   return graphemes, phonemes
-
 
 
 def prepare_g2p_data(model_dir, train_gr, train_ph, valid_gr, valid_ph):
