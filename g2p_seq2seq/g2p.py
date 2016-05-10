@@ -121,9 +121,9 @@ def train(train_gr, train_ph, valid_gr, valid_ph):
   """Train a gr->ph translation model using G2P data."""
   # Prepare G2P data.
   print("Preparing G2P data")
-  train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, gr_vocab_path, ph_vocab_path = data_utils.prepare_g2p_data(FLAGS.model, train_gr, train_ph, valid_gr, valid_ph)
-  gr_vocab_size = data_utils.get_vocab_size(gr_vocab_path)
-  ph_vocab_size = data_utils.get_vocab_size(ph_vocab_path)
+  train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, gr_vocab, ph_vocab = data_utils.prepare_g2p_data(FLAGS.model, train_gr, train_ph, valid_gr, valid_ph)
+  gr_vocab_size = len(gr_vocab)
+  ph_vocab_size = len(ph_vocab)
   with tf.Session() as sess:
     # Create model.
     print("Creating %d layers of %d units." % (FLAGS.num_layers, FLAGS.size))
@@ -207,8 +207,8 @@ def get_vocabs_load_model(sess):
   _, rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path)
 
   # Get vocabulary sizes
-  gr_vocab_size = data_utils.get_vocab_size(gr_vocab_path)
-  ph_vocab_size = data_utils.get_vocab_size(ph_vocab_path)
+  gr_vocab_size = len(gr_vocab)
+  ph_vocab_size = len(rev_ph_vocab)
   # Load model
   model = create_model(sess, True, gr_vocab_size, ph_vocab_size)
   model.batch_size = 1  # We decode one word at a time.

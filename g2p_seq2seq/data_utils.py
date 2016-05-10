@@ -52,7 +52,7 @@ def create_vocabulary(vocabulary_path, data):
 
   Args:
     vocabulary_path: path where the vocabulary will be created.
-    data_path: data file that will be used to create vocabulary.
+    data: data file that will be used to create vocabulary.
 
   """
   if not gfile.Exists(vocabulary_path):
@@ -70,20 +70,6 @@ def create_vocabulary(vocabulary_path, data):
     with codecs.open(vocabulary_path, "w", "utf-8") as vocab_file:
       for w in vocab_list:
         vocab_file.write( w + '\n')
-
-
-def get_vocab_size(vocabulary_path):
-  """Return size of the vocabulary.
-
-  Args:
-    vocabulary_path: path to the vocabulary file.
-  """
-  counter = 0
-  if gfile.Exists(vocabulary_path):
-    with gfile.GFile(vocabulary_path, mode="r") as f:
-      for line in f:
-        counter += 1
-  return counter
 
 
 def initialize_vocabulary(vocabulary_path):
@@ -116,7 +102,7 @@ def initialize_vocabulary(vocabulary_path):
     raise ValueError("Vocabulary file %s not found.", vocabulary_path)
 
 
-def data_to_token_ids(data, vocabulary_path):
+def data_to_token_ids(data, vocab):
   """Tokenize data file and turn into token-ids using given vocabulary file.
 
   This function loads data line-by-line from data_path, calls the above
@@ -125,9 +111,8 @@ def data_to_token_ids(data, vocabulary_path):
 
   Args:
     data: input data in one-word-per-line format.
-    vocabulary_path: path to the vocabulary file.
+    vocabulary: vocabulary.
   """
-  vocab, _ = initialize_vocabulary(vocabulary_path)
   tokens_dic =[]
   for i, line in enumerate(data):
     token_ids = [vocab.get(s, UNK_ID) for s in line]
@@ -167,8 +152,8 @@ def prepare_g2p_data(model_dir, train_gr, train_ph, valid_gr, valid_ph):
       (2) Token-ids for Phoneme training data-set,
       (3) Token-ids for Grapheme development data-set,
       (4) Token-ids for Phoneme development data-set,
-      (5) path to the Grapheme vocabulary file,
-      (6) path to the Phoneme vocabulary file.
+      (5) Grapheme vocabulary file,
+      (6) Phoneme vocabulary file.
   """
   # Create vocabularies of the appropriate sizes.
   ph_vocab_path = os.path.join(model_dir, "vocab.phoneme")
@@ -177,14 +162,18 @@ def prepare_g2p_data(model_dir, train_gr, train_ph, valid_gr, valid_ph):
   create_vocabulary(ph_vocab_path, train_ph)
   create_vocabulary(gr_vocab_path, train_gr)
 
-  # Create token ids for the training data.
-  train_ph_ids = data_to_token_ids(train_ph, ph_vocab_path)
-  train_gr_ids = data_to_token_ids(train_gr, gr_vocab_path)
+  # Initialize vocabularies.
+  ph_vocab, _ = initialize_vocabulary(ph_vocab_path)
+  gr_vocab, _ = initialize_vocabulary(gr_vocab_path)
 
-  # Create token ids for the development data.
-  valid_ph_ids = data_to_token_ids(valid_ph, ph_vocab_path)
-  valid_gr_ids = data_to_token_ids(valid_gr, gr_vocab_path)
+  # Create ids for the training data.
+  train_ph_ids = data_to_token_ids(train_ph, ph_vocab)
+  train_gr_ids = data_to_token_ids(train_gr, gr_vocab)
+
+  # Create ids for the development data.
+  valid_ph_ids = data_to_token_ids(valid_ph, ph_vocab)
+  valid_gr_ids = data_to_token_ids(valid_gr, gr_vocab)
 
   return (train_gr_ids, train_ph_ids,
           valid_gr_ids, valid_ph_ids,
-          gr_vocab_path, ph_vocab_path)
+          gr_vocab, ph_vocab)
