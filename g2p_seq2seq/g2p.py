@@ -240,13 +240,12 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab):
 
 def interactive():
   with tf.Session() as sess:
-    gr_vocab, rev_ph_vocab, gr_vocab_path, ph_vocab_path = get_vocabs()
-    model = load_model(sess, gr_vocab_path, ph_vocab_path)
+    gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
     print("> ", end="")
     sys.stdout.flush()
 
     while True:
-      word = sys.stdin.readline().decode('utf-8').strip()
+      word = sys.stdin.readline().strip().decode("utf-8")
       if word:
         gr_absent = set(gr for gr in word if gr not in gr_vocab)
         if not gr_absent:
@@ -261,8 +260,7 @@ def interactive():
 
 def evaluate():
   with tf.Session() as sess:
-    gr_vocab, rev_ph_vocab, gr_vocab_path, ph_vocab_path = get_vocabs()
-    model = load_model(sess, gr_vocab_path, ph_vocab_path)
+    gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
 
     # Decode from input file.
     test = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
@@ -290,8 +288,7 @@ def evaluate():
 
 def decode():
   with tf.Session() as sess:
-    gr_vocab, rev_ph_vocab, gr_vocab_path, ph_vocab_path = get_vocabs()
-    model = load_model(sess, gr_vocab_path, ph_vocab_path)
+    gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
 
     # Decode from input file.
     graphemes = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
