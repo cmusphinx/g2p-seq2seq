@@ -48,7 +48,7 @@ tf.app.flags.DEFINE_float("max_gradient_norm", 5.0,
 tf.app.flags.DEFINE_integer("batch_size", 64,
                             "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("size", 64, "Size of each model layer.")
-tf.app.flags.DEFINE_integer("num_layers", 1, "Number of layers in the model.")
+tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 tf.app.flags.DEFINE_string("model", "/tmp", "Training directory.")
 tf.app.flags.DEFINE_integer("steps_per_checkpoint", 200,
                             "How many training steps to do per checkpoint.")
@@ -146,6 +146,7 @@ def train(train_gr, train_ph, valid_gr, valid_ph, test_gr, test_ph):
     step_time, loss = 0.0, 0.0
     current_step = 0
     previous_losses = []
+
     while (FLAGS.max_steps == 0 or model.global_step.eval() <= FLAGS.max_steps ):
       # Choose a bucket according to data distribution. We pick a random number
       # in [0, 1] and use the corresponding interval in train_buckets_scale.
@@ -190,8 +191,8 @@ def train(train_gr, train_ph, valid_gr, valid_ph, test_gr, test_ph):
           print("  eval: bucket %d perplexity %.2f" % (bucket_id, eval_ppx))
         sys.stdout.flush()
     else:
-      raise ValueError("Global step %d exceed allocated parameter max_steps %d. To continue training increase max_steps parameter." % (model.global_step.eval(), FLAGS.max_steps) )
-  evaluate(FLAGS.evaluate)
+      print("Global step %d exceed allocated parameter max_steps %d. To continue training increase max_steps parameter." % (model.global_step.eval(), FLAGS.max_steps) )
+  #evaluate(FLAGS.evaluate)
 
 
 def get_vocabs_load_model(sess):
@@ -261,12 +262,12 @@ def interactive():
       sys.stdout.flush()
 
 
-def evaluate(test_path):
+def evaluate():
   with tf.Session() as sess:
     gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
 
     # Decode from input file.
-    test = codecs.open(test_path, "r", "utf-8").readlines()
+    test = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
     w_ph_dict = {}
     for line in test:
       lst = line.strip().split()
@@ -329,7 +330,7 @@ def main(_):
   elif FLAGS.interactive:
     interactive()
   elif FLAGS.evaluate:
-    evaluate(FLAGS.evaluate)
+    evaluate()
   else:
     if FLAGS.train:
       source_dic = codecs.open(FLAGS.train, "r", "utf-8").readlines()
