@@ -146,7 +146,7 @@ def train(train_gr, train_ph, valid_gr, valid_ph, test_gr, test_ph):
     step_time, loss = 0.0, 0.0
     current_step = 0
     previous_losses = []
-    while (FLAGS.max_steps == 0 or current_step <= FLAGS.max_steps ):
+    while (FLAGS.max_steps == 0 or model.global_step.eval() <= FLAGS.max_steps ):
       # Choose a bucket according to data distribution. We pick a random number
       # in [0, 1] and use the corresponding interval in train_buckets_scale.
       random_number_01 = np.random.random_sample()
@@ -189,6 +189,8 @@ def train(train_gr, train_ph, valid_gr, valid_ph, test_gr, test_ph):
           eval_ppx = math.exp(eval_loss) if eval_loss < 300 else float('inf')
           print("  eval: bucket %d perplexity %.2f" % (bucket_id, eval_ppx))
         sys.stdout.flush()
+    else:
+      raise ValueError("Global step %d exceed allocated parameter max_steps %d. To continue training increase max_steps parameter." % (model.global_step.eval(), FLAGS.max_steps) )
   evaluate(FLAGS.evaluate)
 
 
@@ -246,7 +248,7 @@ def interactive():
     sys.stdout.flush()
 
     while True:
-      word = sys.stdin.readline().strip().decode("utf-8")
+      word = sys.stdin.readline().decode("utf-8").strip()
       if word:
         gr_absent = set(gr for gr in word if gr not in gr_vocab)
         if not gr_absent:
