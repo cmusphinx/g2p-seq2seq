@@ -117,7 +117,7 @@ def create_model(session, forward_only, gr_vocab_size, ph_vocab_size):
   return model
 
 
-def train(train_gr, train_ph, valid_gr, valid_ph, test_gr, test_ph):
+def train(train_gr, train_ph, valid_gr, valid_ph, test_dic):
   """Train a gr->ph translation model using G2P data."""
   # Prepare G2P data.
   print("Preparing G2P data")
@@ -192,7 +192,13 @@ def train(train_gr, train_ph, valid_gr, valid_ph, test_gr, test_ph):
         sys.stdout.flush()
     else:
       print("Global step %d exceed allocated parameter max_steps %d. To continue training increase max_steps parameter." % (model.global_step.eval(), FLAGS.max_steps) )
-  #evaluate(FLAGS.evaluate)
+      print('Training process stopped.')
+      print('Beginning calculation word error rate (WER) on test sample.')
+      sys.stdout.flush()
+      ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
+      _, rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path)
+      model.batch_size = 1  # We decode one word at a time.
+      evaluate(test_dic, sess, model, gr_vocab, rev_ph_vocab)
 
 
 def get_vocabs_load_model(sess):
@@ -262,32 +268,58 @@ def interactive():
       sys.stdout.flush()
 
 
-def evaluate():
-  with tf.Session() as sess:
-    gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
+def evaluate(test_dic=None, sess=None, model=None, gr_vocab=None, rev_ph_vocab=None):
+  """Calculate and print out word error rate (WER) and Accuracy on test sample.
 
+  Args:
+    No arguments need if this function called not from active Session in tensorflow.
+    Otherwise following arguments should be pointed out:
+    test_dic: List of test dictionary. Each element of list must be String contained 
+              word and its pronounciation (e.g., "word W ER D");
+    sess: Current tensorflow session;
+    model: Current active model;
+    gr_vocab: Graphemes vocabulary dictionary (a dictionary mapping string to integers);
+    rev_ph_vocab: reversed Phonemes vocabulary list (a list, which reverses the vocabulary mapping).
+  """
+  if not test_dic:
     # Decode from input file.
-    test = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
-    w_ph_dict = {}
-    for line in test:
-      lst = line.strip().split()
-      if len(lst)>=2:
-        if lst[0] not in w_ph_dict: w_ph_dict[lst[0]] = [" ".join(lst[1:])]
-        else: w_ph_dict[lst[0]].append(" ".join(lst[1:]))
+    test_dic = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
 
-    # Calculate errors
+  w_ph_dict = {}
+  for line in test_dic:
+    lst = line.strip().split()
+    if len(lst)>=2:
+      if lst[0] not in w_ph_dict: w_ph_dict[lst[0]] = [" ".join(lst[1:])]
+      else: w_ph_dict[lst[0]].append(" ".join(lst[1:]))
+
+  # Calculate errors
+  if not sess:
+    with tf.Session() as sess:
+      gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
+
+      errors = 0
+      for word, phonetics in w_ph_dict.items():
+        if len(phonetics) == 1:
+          gr_absent = set(gr for gr in word if gr not in gr_vocab)
+          if not gr_absent:
+            model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab) 
+            if model_assumption not in phonetics:
+              errors += 1
+          else:
+            raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) ) 
+  else:
     errors = 0
     for word, phonetics in w_ph_dict.items():
       if len(phonetics) == 1:
         gr_absent = set(gr for gr in word if gr not in gr_vocab)
         if not gr_absent:
-          model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab) 
+          model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
           if model_assumption not in phonetics:
             errors += 1
         else:
-          raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) ) 
-    print("WER : ", errors/len(w_ph_dict) )
-    print("Accuracy : ", ( 1-(errors/len(w_ph_dict)) ) )
+          raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
+  print("WER : ", errors/len(w_ph_dict) )
+  print("Accuracy : ", ( 1-(errors/len(w_ph_dict)) ) )
 
 
 def decode(word_list_file_path):
@@ -362,8 +394,7 @@ def main(_):
       raise ValueError("Train dictionary absent.")
     train_gr, train_ph = data_utils.split_to_grapheme_phoneme(train_dic)
     valid_gr, valid_ph = data_utils.split_to_grapheme_phoneme(valid_dic)
-    test_gr, test_ph = data_utils.split_to_grapheme_phoneme(test_dic)
-    train(train_gr, train_ph, valid_gr, valid_ph, test_gr, test_ph)
+    train(train_gr, train_ph, valid_gr, valid_ph, test_dic)
 
 if __name__ == "__main__":
   tf.app.run()
