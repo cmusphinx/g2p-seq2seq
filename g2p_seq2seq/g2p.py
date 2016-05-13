@@ -100,20 +100,21 @@ def put_into_buckets(source, target):
 
 def create_model(session, forward_only, gr_vocab_size, ph_vocab_size):
   """Create translation model and initialize or load parameters in session."""
+  num_layers = FLAGS.num_layers
+  size = FLAGS.size
   # Checking model's architecture for testing processes.
   if forward_only:
     params_path = os.path.join(FLAGS.model, "model.params")
-    params = open(params_path).readlines()
-    for line in params:
-      l = line.strip().split(":")
-      if l[0] == "num_layers" and (int(l[1]) != FLAGS.num_layers):
-        raise ValueError("Pointed out parameter num_layers=%s not match trained parameter num_layers=%s." % (FLAGS.num_layers, l[1]))
-      if l[0] == "size" and (int(l[1]) != FLAGS.size):
-        raise ValueError("Pointed out parameter size=%s not match trained parameter size=%s." % (FLAGS.size, l[1]))
+    if gfile.Exists(params_path):
+      params = open(params_path).readlines()
+      for line in params:
+        l = line.strip().split(":")
+        if l[0] == "num_layers": num_layers = int(l[1])
+        if l[0] == "size": size = int(l[1])
 
   model = seq2seq_model.Seq2SeqModel(
       gr_vocab_size, ph_vocab_size, _buckets,
-      FLAGS.size, FLAGS.num_layers, FLAGS.max_gradient_norm, FLAGS.batch_size,
+      size, num_layers, FLAGS.max_gradient_norm, FLAGS.batch_size,
       FLAGS.learning_rate, FLAGS.learning_rate_decay_factor,
       forward_only=forward_only)
   ckpt = tf.train.get_checkpoint_state(FLAGS.model)
