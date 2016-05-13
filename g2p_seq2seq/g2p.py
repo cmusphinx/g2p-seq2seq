@@ -189,12 +189,9 @@ def train(train_gr, train_ph, valid_gr, valid_ph, test_dic):
                                        target_weights, bucket_id, True)
           eval_ppx = math.exp(eval_loss) if eval_loss < 300 else float('inf')
           print("  eval: bucket %d perplexity %.2f" % (bucket_id, eval_ppx))
-        sys.stdout.flush()
     else:
-      print("Global step %d exceed allocated parameter max_steps %d. To continue training increase max_steps parameter." % (model.global_step.eval(), FLAGS.max_steps) )
       print('Training process stopped.')
       print('Beginning calculation word error rate (WER) on test sample.')
-      sys.stdout.flush()
       ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
       _, rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path)
       model.batch_size = 1  # We decode one word at a time.
@@ -252,7 +249,6 @@ def interactive():
   with tf.Session() as sess:
     gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
     print("> ", end="")
-    sys.stdout.flush()
 
     while True:
       word = sys.stdin.readline().decode("utf-8").strip()
@@ -265,7 +261,20 @@ def interactive():
           print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
       else: break
       print("> ", end="")
-      sys.stdout.flush()
+
+
+def calc_error(sess, model, w_ph_dict, gr_vocab, rev_ph_vocab):
+  errors = 0
+  for word, phonetics in w_ph_dict.items():
+    if len(phonetics) == 1:
+      gr_absent = set(gr for gr in word if gr not in gr_vocab)
+      if not gr_absent:
+        model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
+        if model_assumption not in phonetics:
+          errors += 1
+      else:
+        raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
+  return errors
 
 
 def evaluate(test_dic=None, sess=None, model=None, gr_vocab=None, rev_ph_vocab=None):
@@ -292,32 +301,14 @@ def evaluate(test_dic=None, sess=None, model=None, gr_vocab=None, rev_ph_vocab=N
       if lst[0] not in w_ph_dict: w_ph_dict[lst[0]] = [" ".join(lst[1:])]
       else: w_ph_dict[lst[0]].append(" ".join(lst[1:]))
 
+  errors = 0
   # Calculate errors
   if not sess:
     with tf.Session() as sess:
       gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
-
-      errors = 0
-      for word, phonetics in w_ph_dict.items():
-        if len(phonetics) == 1:
-          gr_absent = set(gr for gr in word if gr not in gr_vocab)
-          if not gr_absent:
-            model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab) 
-            if model_assumption not in phonetics:
-              errors += 1
-          else:
-            raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) ) 
+      errors = calc_error(sess, model, w_ph_dict, gr_vocab, rev_ph_vocab)
   else:
-    errors = 0
-    for word, phonetics in w_ph_dict.items():
-      if len(phonetics) == 1:
-        gr_absent = set(gr for gr in word if gr not in gr_vocab)
-        if not gr_absent:
-          model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-          if model_assumption not in phonetics:
-            errors += 1
-        else:
-          raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
+    errors = calc_error(sess, model, w_ph_dict, gr_vocab, rev_ph_vocab)
   print("WER : ", errors/len(w_ph_dict) )
   print("Accuracy : ", ( 1-(errors/len(w_ph_dict)) ) )
 
@@ -351,7 +342,6 @@ def decode(word_list_file_path):
         if not gr_absent:
           res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
           print(word + ' ' + res_phoneme_seq)
-          sys.stdout.flush()
         else:
           raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
 
