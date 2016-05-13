@@ -72,7 +72,7 @@ def create_vocabulary(vocabulary_path, data):
         vocab_file.write( w + '\n')
 
 
-def initialize_vocabulary(vocabulary_path):
+def initialize_vocabulary(vocabulary_path, reverse = False):
   """Initialize vocabulary from file.
 
   We assume the vocabulary is stored one-item-per-line, so a file:
@@ -96,8 +96,10 @@ def initialize_vocabulary(vocabulary_path):
     with codecs.open(vocabulary_path, "r", "utf-8") as f:
       rev_vocab.extend(f.readlines())
     rev_vocab = [line.strip() for line in rev_vocab]
-    vocab = dict([(x, y) for (y, x) in enumerate(rev_vocab)])
-    return vocab, rev_vocab
+    if reverse:
+      return rev_vocab
+    else:
+      return dict([(x, y) for (y, x) in enumerate(rev_vocab)])
   else:
     raise ValueError("Vocabulary file %s not found.", vocabulary_path)
 
@@ -159,8 +161,8 @@ def prepare_g2p_data(model_dir, train_gr, train_ph, valid_gr, valid_ph):
   create_vocabulary(gr_vocab_path, train_gr)
 
   # Initialize vocabularies.
-  ph_vocab, _ = initialize_vocabulary(ph_vocab_path)
-  gr_vocab, _ = initialize_vocabulary(gr_vocab_path)
+  ph_vocab = initialize_vocabulary(ph_vocab_path, False)
+  gr_vocab = initialize_vocabulary(gr_vocab_path, False)
 
   # Create ids for the training data.
   train_ph_ids = data_to_token_ids(train_ph, ph_vocab)

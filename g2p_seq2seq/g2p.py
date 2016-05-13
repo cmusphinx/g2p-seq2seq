@@ -195,7 +195,7 @@ def train(train_dic, valid_dic, test_dic):
       print('Training process stopped.')
       print('Beginning calculation word error rate (WER) on test sample.')
       ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
-      _, rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path)
+      rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path, True)
       model.batch_size = 1  # We decode one word at a time.
       evaluate(test_dic, sess, model, gr_vocab, rev_ph_vocab)
 
@@ -212,8 +212,8 @@ def get_vocabs_load_model(sess):
   # Initialize vocabularies
   gr_vocab_path = os.path.join(FLAGS.model, "vocab.grapheme")
   ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
-  gr_vocab, _ = data_utils.initialize_vocabulary(gr_vocab_path)
-  _, rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path)
+  gr_vocab = data_utils.initialize_vocabulary(gr_vocab_path, False)
+  rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path, True)
 
   # Get vocabulary sizes
   gr_vocab_size = len(gr_vocab)
