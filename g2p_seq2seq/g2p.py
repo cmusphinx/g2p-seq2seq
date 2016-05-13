@@ -278,15 +278,14 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab):
 def interactive():
   with tf.Session() as sess:
     gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
-    print("> ", end="")
 
     while True:
+      print("> ", end="")
       word = sys.stdin.readline().decode("utf-8").strip()
       if word:
         res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
         if res_phoneme_seq: print(res_phoneme_seq)
       else: break
-      print("> ", end="")
 
 
 def calc_error(sess, model, w_ph_dict, gr_vocab, rev_ph_vocab):
