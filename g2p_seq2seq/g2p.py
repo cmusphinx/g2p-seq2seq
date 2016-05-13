@@ -117,10 +117,12 @@ def create_model(session, forward_only, gr_vocab_size, ph_vocab_size):
   return model
 
 
-def train(train_gr, train_ph, valid_gr, valid_ph, test_dic):
+def train(train_dic, valid_dic, test_dic):
   """Train a gr->ph translation model using G2P data."""
   # Prepare G2P data.
   print("Preparing G2P data")
+  train_gr, train_ph = data_utils.split_to_grapheme_phoneme(train_dic)
+  valid_gr, valid_ph = data_utils.split_to_grapheme_phoneme(valid_dic)
   train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, gr_vocab, ph_vocab = data_utils.prepare_g2p_data(FLAGS.model, train_gr, train_ph, valid_gr, valid_ph)
   gr_vocab_size = len(gr_vocab)
   ph_vocab_size = len(ph_vocab)
@@ -382,9 +384,7 @@ def main(_):
         train_dic = source_dic
     else:
       raise ValueError("Train dictionary absent.")
-    train_gr, train_ph = data_utils.split_to_grapheme_phoneme(train_dic)
-    valid_gr, valid_ph = data_utils.split_to_grapheme_phoneme(valid_dic)
-    train(train_gr, train_ph, valid_gr, valid_ph, test_dic)
+    train(train_dic, valid_dic, test_dic)
 
 if __name__ == "__main__":
   tf.app.run()
