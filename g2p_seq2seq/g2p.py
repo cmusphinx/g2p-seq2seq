@@ -225,24 +225,30 @@ def get_vocabs_load_model(sess):
 
 
 def decode_word(word, sess, model, gr_vocab, rev_ph_vocab):
-  # Get token-ids for the input sentence.
-  token_ids = [gr_vocab.get(s, data_utils.UNK_ID) for s in word]
-  # Which bucket does it belong to?
-  bucket_id = min([b for b in xrange(len(_buckets))
-                   if _buckets[b][0] > len(token_ids)])
-  # Get a 1-element batch to feed the sentence to the model.
-  encoder_inputs, decoder_inputs, target_weights = model.get_batch(
-      {bucket_id: [(token_ids, [])]}, bucket_id)
-  # Get output logits for the sentence.
-  _, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs,
-                                   target_weights, bucket_id, True)
-  # This is a greedy decoder - outputs are just argmaxes of output_logits.
-  outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
-  # If there is an EOS symbol in outputs, cut them at that point.
-  if data_utils.EOS_ID in outputs:
-    outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-  # Print out phoneme corresponding to outputs.
-  res_phoneme_seq = " ".join([rev_ph_vocab[output] for output in outputs])
+  res_phoneme_seq = ""
+  # Check if all graphemes attended in vocabulary
+  gr_absent = set(gr for gr in word if gr not in gr_vocab)
+  if not gr_absent:
+    # Get token-ids for the input sentence.
+    token_ids = [gr_vocab.get(s, data_utils.UNK_ID) for s in word]
+    # Which bucket does it belong to?
+    bucket_id = min([b for b in xrange(len(_buckets))
+                     if _buckets[b][0] > len(token_ids)])
+    # Get a 1-element batch to feed the sentence to the model.
+    encoder_inputs, decoder_inputs, target_weights = model.get_batch(
+        {bucket_id: [(token_ids, [])]}, bucket_id)
+    # Get output logits for the sentence.
+    _, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs,
+                                     target_weights, bucket_id, True)
+    # This is a greedy decoder - outputs are just argmaxes of output_logits.
+    outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
+    # If there is an EOS symbol in outputs, cut them at that point.
+    if data_utils.EOS_ID in outputs:
+      outputs = outputs[:outputs.index(data_utils.EOS_ID)]
+    # Print out phoneme corresponding to outputs.
+    res_phoneme_seq = " ".join([rev_ph_vocab[output] for output in outputs])
+  else:
+    print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
   return res_phoneme_seq
 
 
@@ -255,12 +261,8 @@ def interactive():
     while True:
       word = sys.stdin.readline().decode("utf-8").strip()
       if word:
-        gr_absent = set(gr for gr in word if gr not in gr_vocab)
-        if not gr_absent:
-          res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-          print(res_phoneme_seq)
-        else:
-          print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
+        res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
+        if res_phoneme_seq: print(res_phoneme_seq)
       else: break
       print("> ", end="")
 
@@ -269,13 +271,9 @@ def calc_error(sess, model, w_ph_dict, gr_vocab, rev_ph_vocab):
   errors = 0
   for word, phonetics in w_ph_dict.items():
     if len(phonetics) == 1:
-      gr_absent = set(gr for gr in word if gr not in gr_vocab)
-      if not gr_absent:
-        model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-        if model_assumption not in phonetics:
-          errors += 1
-      else:
-        raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
+      model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
+      if model_assumption not in phonetics:
+        errors += 1
   return errors
 
 
@@ -328,24 +326,16 @@ def decode(word_list_file_path):
       with codecs.open(output_file_path, "w", "utf-8") as output_file:
         for word in graphemes:
           word = word.strip()
-          gr_absent = set(gr for gr in word if gr not in gr_vocab)
-          if not gr_absent:
-            res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-            output_file.write(word)
-            output_file.write(' ')
-            output_file.write(res_phoneme_seq)
-            output_file.write('\n')
-          else:
-            raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
+          res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
+          output_file.write(word)
+          output_file.write(' ')
+          output_file.write(res_phoneme_seq)
+          output_file.write('\n')
     else:
       for word in graphemes:
         word = word.strip()
-        gr_absent = set(gr for gr in word if gr not in gr_vocab)
-        if not gr_absent:
-          res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-          print(word + ' ' + res_phoneme_seq)
-        else:
-          raise ValueError("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
+        res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
+        print(word + ' ' + res_phoneme_seq)
 
 
 def main(_):
