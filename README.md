@@ -22,7 +22,7 @@ Unpack the model after download. It is trained on [CMU English dictionary](http:
 
 The easiest way to check how the tool works is to run it the interactive mode
 ```
-  python g2p.py --interactive --model [model_folder_path]
+  python g2p.py --interactive --model model_folder_path
 
 ```
 
@@ -32,7 +32,7 @@ then type the words
 To generate pronunciations for an English word list with a trained model, run
 
 ```
-  python g2p.py --decode [your_wordlist] --model [model_folder_path]
+  python g2p.py --decode your_wordlist --model model_folder_path
 
 ```
 The wordlist is a text file: one word per line
@@ -41,7 +41,7 @@ The wordlist is a text file: one word per line
 To count Word Error Rate  of the trained model, run
 
 ```
-  python g2p.py --evaluate [your_wordlist] --model [model_folder_path]
+  python g2p.py --evaluate your_wordlist --model model_folder_path
 
 ```
 The wordlist is a text file: one word per line
@@ -53,7 +53,7 @@ To train G2P you need a dictionary (word and phone sequence per line).
 See an [example dictionary](http://github.com/cmusphinx/cmudict)
 
 ```
-  python g2p.py --train [train_dictionary.dic] --model [model_folder_path]
+  python g2p.py --train train_dictionary.dic --model model_folder_path
 ```
 
 You can set up maximum training steps:
@@ -67,7 +67,7 @@ It is a good idea to play with the following parameters:
   "--size" - Size of each model layer (Default: 64).
      We observed much better results with 512 units, but the training becomes slow
 
-  "--num_layers" - Number of layers in the model (Default: 1). 
+  "--num_layers" - Number of layers in the model (Default: 2). 
      For example, you can try 1 if the train set is not large enough, 
      or 3 to hopefully get better results
 
@@ -89,7 +89,7 @@ System | WER,%
 --- | --- 
 Baseline WFST (Phonetisaurus) | 28.0
 LSTM num_layers=2, size=64    | 32.0
-LSTM num_layers=2, size=512   | **24.7**
+LSTM num_layers=2, size=512   | **24.2**
 
 
 ## References
