@@ -100,6 +100,22 @@ def put_into_buckets(source, target):
 
 def create_model(session, forward_only, gr_vocab_size, ph_vocab_size):
   """Create translation model and initialize or load parameters in session."""
+  # Checking model's architecture for testing processes.
+  if forward_only:
+    params_path = os.path.join(FLAGS.model, "model.params")
+    if gfile.Exists(params_path):
+      params = open(params_path).readlines()
+      for line in params:
+        l = line.strip().split(":")
+        if l[0] == "model" and (l[1] != FLAGS.model): 
+          raise ValueError("Pointed out model's path not match to previously trained model's path.")
+        if l[0] == "num_layers" and (int(l[1]) != FLAGS.num_layers):
+          raise ValueError("Pointed out parameter num_layers=%s not match trained parameter num_layers=%s." % (FLAGS.num_layers, l[1]))
+        if l[0] == "size" and (int(l[1]) != FLAGS.size):
+          raise ValueError("Pointed out parameter size=%s not match trained parameter size=%s." % (FLAGS.size, l[1]))
+    else:
+      raise ValueError("File model.params absent.")
+
   model = seq2seq_model.Seq2SeqModel(
       gr_vocab_size, ph_vocab_size, _buckets,
       FLAGS.size, FLAGS.num_layers, FLAGS.max_gradient_norm, FLAGS.batch_size,
@@ -119,6 +135,12 @@ def create_model(session, forward_only, gr_vocab_size, ph_vocab_size):
 
 def train(train_dic, valid_dic, test_dic):
   """Train a gr->ph translation model using G2P data."""
+  # Save model's architecture
+  params_path = os.path.join(FLAGS.model, "model.params")
+  with open(params_path, 'w') as f:
+    f.write("model:" + FLAGS.model + "\n")
+    f.write("num_layers:" + str(FLAGS.num_layers) + "\n")
+    f.write("size:" + str(FLAGS.size))
   # Prepare G2P data.
   print("Preparing G2P data")
   train_gr, train_ph = data_utils.split_to_grapheme_phoneme(train_dic)
