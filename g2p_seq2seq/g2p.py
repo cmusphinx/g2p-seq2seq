@@ -103,18 +103,13 @@ def create_model(session, forward_only, gr_vocab_size, ph_vocab_size):
   # Checking model's architecture for testing processes.
   if forward_only:
     params_path = os.path.join(FLAGS.model, "model.params")
-    if gfile.Exists(params_path):
-      params = open(params_path).readlines()
-      for line in params:
-        l = line.strip().split(":")
-        if l[0] == "model" and (l[1] != FLAGS.model): 
-          raise ValueError("Pointed out model's path not match to previously trained model's path.")
-        if l[0] == "num_layers" and (int(l[1]) != FLAGS.num_layers):
-          raise ValueError("Pointed out parameter num_layers=%s not match trained parameter num_layers=%s." % (FLAGS.num_layers, l[1]))
-        if l[0] == "size" and (int(l[1]) != FLAGS.size):
-          raise ValueError("Pointed out parameter size=%s not match trained parameter size=%s." % (FLAGS.size, l[1]))
-    else:
-      raise ValueError("File model.params absent.")
+    params = open(params_path).readlines()
+    for line in params:
+      l = line.strip().split(":")
+      if l[0] == "num_layers" and (int(l[1]) != FLAGS.num_layers):
+        raise ValueError("Pointed out parameter num_layers=%s not match trained parameter num_layers=%s." % (FLAGS.num_layers, l[1]))
+      if l[0] == "size" and (int(l[1]) != FLAGS.size):
+        raise ValueError("Pointed out parameter size=%s not match trained parameter size=%s." % (FLAGS.size, l[1]))
 
   model = seq2seq_model.Seq2SeqModel(
       gr_vocab_size, ph_vocab_size, _buckets,
@@ -138,7 +133,6 @@ def train(train_dic, valid_dic, test_dic):
   # Save model's architecture
   params_path = os.path.join(FLAGS.model, "model.params")
   with open(params_path, 'w') as f:
-    f.write("model:" + FLAGS.model + "\n")
     f.write("num_layers:" + str(FLAGS.num_layers) + "\n")
     f.write("size:" + str(FLAGS.size))
   # Prepare G2P data.

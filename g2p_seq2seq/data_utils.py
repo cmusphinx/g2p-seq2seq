@@ -91,17 +91,14 @@ def initialize_vocabulary(vocabulary_path, reverse = False):
   Raises:
     ValueError: if the provided vocabulary_path does not exist.
   """
-  if gfile.Exists(vocabulary_path):
-    rev_vocab = []
-    with codecs.open(vocabulary_path, "r", "utf-8") as f:
-      rev_vocab.extend(f.readlines())
-    rev_vocab = [line.strip() for line in rev_vocab]
-    if reverse:
-      return rev_vocab
-    else:
-      return dict([(x, y) for (y, x) in enumerate(rev_vocab)])
+  rev_vocab = []
+  with codecs.open(vocabulary_path, "r", "utf-8") as f:
+    rev_vocab.extend(f.readlines())
+  rev_vocab = [line.strip() for line in rev_vocab]
+  if reverse:
+    return rev_vocab
   else:
-    raise ValueError("Vocabulary file %s not found.", vocabulary_path)
+    return dict([(x, y) for (y, x) in enumerate(rev_vocab)])
 
 
 def data_to_token_ids(data, vocab):
