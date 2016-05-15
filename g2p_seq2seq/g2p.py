@@ -212,25 +212,24 @@ def train(train_dic, valid_dic, test_dic):
       print('Training process stopped.')
       print('Beginning calculation word error rate (WER) on test sample.')
       ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
-      rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path, True)
+      rev_ph_vocab = data_utils.load_vocabulary(ph_vocab_path, True)
       model.batch_size = 1  # We decode one word at a time.
       evaluate(test_dic, sess, model, gr_vocab, rev_ph_vocab)
 
 
-def get_vocabs_load_model(sess):
-  """Initialize and return vocabularies and pathes to them.
-  And load saved model.
+def load_vocabs_load_model(sess):
+  """Load vocabularies and saved model.
 
   Returns:
     gr_vocab: Graphemes vocabulary;
     rev_ph_vocab: Reversed phonemes vocabulary;
     model: Trained model.
   """
-  # Initialize vocabularies
+  # Load vocabularies
   gr_vocab_path = os.path.join(FLAGS.model, "vocab.grapheme")
   ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
-  gr_vocab = data_utils.initialize_vocabulary(gr_vocab_path, False)
-  rev_ph_vocab = data_utils.initialize_vocabulary(ph_vocab_path, True)
+  gr_vocab = data_utils.load_vocabulary(gr_vocab_path, False)
+  rev_ph_vocab = data_utils.load_vocabulary(ph_vocab_path, True)
 
   # Get vocabulary sizes
   gr_vocab_size = len(gr_vocab)
@@ -272,7 +271,7 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab):
 
 def interactive():
   with tf.Session() as sess:
-    gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
+    gr_vocab, rev_ph_vocab, model = load_vocabs_load_model(sess)
 
     while True:
       print("> ", end="")
@@ -321,7 +320,7 @@ def evaluate(test_dic=None, sess=None, model=None, gr_vocab=None, rev_ph_vocab=N
   # Calculate errors
   if not sess:
     with tf.Session() as sess:
-      gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
+      gr_vocab, rev_ph_vocab, model = load_vocabs_load_model(sess)
       errors = calc_error(sess, model, w_ph_dict, gr_vocab, rev_ph_vocab)
   else:
     errors = calc_error(sess, model, w_ph_dict, gr_vocab, rev_ph_vocab)
@@ -331,7 +330,7 @@ def evaluate(test_dic=None, sess=None, model=None, gr_vocab=None, rev_ph_vocab=N
 
 def decode(word_list_file_path):
   with tf.Session() as sess:
-    gr_vocab, rev_ph_vocab, model = get_vocabs_load_model(sess)
+    gr_vocab, rev_ph_vocab, model = load_vocabs_load_model(sess)
 
     # Decode from input file.
     graphemes = codecs.open(word_list_file_path, "r", "utf-8").readlines()

@@ -72,20 +72,20 @@ def create_vocabulary(vocabulary_path, data):
         vocab_file.write( w + '\n')
 
 
-def initialize_vocabulary(vocabulary_path, reverse = False):
-  """Initialize vocabulary from file.
-
+def load_vocabulary(vocabulary_path, reverse = False):
+  """Load vocabulary from file.
   We assume the vocabulary is stored one-item-per-line, so a file:
     d
     c
-  will result in a vocabulary {"d": 0, "c": 1}, and this function will
-  also return the reversed-vocabulary ["d", "c"].
+  will result in a vocabulary {"d": 0, "c": 1}, and this function may
+  also return the reversed-vocabulary [0, 1].
 
   Args:
     vocabulary_path: path to the file containing the vocabulary.
+    reverse: flag managing what type of vocabulary to return.
 
   Returns:
-    a pair: the vocabulary (a dictionary mapping string to integers), and
+    the vocabulary (a dictionary mapping string to integers), or if set reverse to True
     the reversed vocabulary (a list, which reverses the vocabulary mapping).
 
   Raises:
@@ -125,7 +125,6 @@ def split_to_grapheme_phoneme(inp_dictionary):
   Args:
     inp_dictionary: input dictionary.
   """
-
   graphemes, phonemes = [], []
   for l in inp_dictionary:
     line = l.strip().split()
@@ -157,9 +156,9 @@ def prepare_g2p_data(model_dir, train_gr, train_ph, valid_gr, valid_ph):
   create_vocabulary(ph_vocab_path, train_ph)
   create_vocabulary(gr_vocab_path, train_gr)
 
-  # Initialize vocabularies.
-  ph_vocab = initialize_vocabulary(ph_vocab_path, False)
-  gr_vocab = initialize_vocabulary(gr_vocab_path, False)
+  # Load vocabularies.
+  ph_vocab = load_vocabulary(ph_vocab_path, False)
+  gr_vocab = load_vocabulary(gr_vocab_path, False)
 
   # Create ids for the training data.
   train_ph_ids = data_to_token_ids(train_ph, ph_vocab)
