@@ -41,35 +41,52 @@ EOS_ID = 2
 UNK_ID = 3
 
 
-def create_vocabulary(vocabulary_path, data):
-  """Create vocabulary file (if it does not exist yet) from data file.
+def create_vocabulary(data):
+  """Create vocabulary file from input data.
 
-  Data file is assumed to contain one word per line. Each word is
-  tokenized and digits.
+  Input data is assumed to contain one word per line.
   Vocabulary contains the most-frequent tokens.
-  We write it to vocabulary_path in a one-token-per-line format, so that later
+
+  Args:
+    data: data file that will be used to create vocabulary.
+
+  Rerurn:
+    vocab_list: vocabulary list.
+
+  """
+  #if not gfile.Exists(vocabulary_path):
+  #print("Creating vocabulary %s" % (vocabulary_path))
+  vocab = {}
+  for i, line in enumerate(data):
+    if i > 0 and i % 100000 == 0:
+      print("  processing line %d" % i)
+    for item in line:
+      if item in vocab:
+        vocab[item] += 1
+      else:
+        vocab[item] = 1
+  vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
+  #with codecs.open(vocabulary_path, "w", "utf-8") as vocab_file:
+  #  for w in vocab_list:
+  #    vocab_file.write( w + '\n')
+  return vocab_list
+
+
+def save_vocabulary(vocab_list, vocabulary_path):
+  """Save vocabulary file in vocabulary_path.
+
+  We write vocabulary to vocabulary_path in a one-token-per-line format, so that later
   token in the first line gets id=0, second line gets id=1, and so on.
 
   Args:
+    vocab_list: list of vocabulary file. 
     vocabulary_path: path where the vocabulary will be created.
-    data: data file that will be used to create vocabulary.
 
   """
-  if not gfile.Exists(vocabulary_path):
-    print("Creating vocabulary %s" % (vocabulary_path))
-    vocab = {}
-    for i, line in enumerate(data):
-      if i > 0 and i % 100000 == 0:
-        print("  processing line %d" % i)
-      for item in line:
-        if item in vocab:
-          vocab[item] += 1
-        else:
-          vocab[item] = 1
-    vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
-    with codecs.open(vocabulary_path, "w", "utf-8") as vocab_file:
-      for w in vocab_list:
-        vocab_file.write( w + '\n')
+  print("Creating vocabulary %s" % (vocabulary_path))
+  with codecs.open(vocabulary_path, "w", "utf-8") as vocab_file:
+    for w in vocab_list:
+      vocab_file.write( w + '\n')
 
 
 def load_vocabulary(vocabulary_path, reverse = False):
@@ -153,12 +170,16 @@ def prepare_g2p_data(model_dir, train_gr, train_ph, valid_gr, valid_ph):
   ph_vocab_path = os.path.join(model_dir, "vocab.phoneme")
   gr_vocab_path = os.path.join(model_dir, "vocab.grapheme")
   print("Creating vocabularies in %s" %model_dir)
-  create_vocabulary(ph_vocab_path, train_ph)
-  create_vocabulary(gr_vocab_path, train_gr)
+  ph_vocab_list = create_vocabulary(train_ph)
+  gr_vocab_list = create_vocabulary(train_gr)
+  save_vocabulary(ph_vocab_list, ph_vocab_path)
+  save_vocabulary(gr_vocab_list, gr_vocab_path)
 
   # Load vocabularies.
-  ph_vocab = load_vocabulary(ph_vocab_path, False)
-  gr_vocab = load_vocabulary(gr_vocab_path, False)
+  ph_vocab = dict([(x, y) for (y, x) in enumerate(ph_vocab_list)])
+  gr_vocab = dict([(x, y) for (y, x) in enumerate(gr_vocab_list)])
+  #ph_vocab = load_vocabulary(ph_vocab_path, False)
+  #gr_vocab = load_vocabulary(gr_vocab_path, False)
 
   # Create ids for the training data.
   train_ph_ids = data_to_token_ids(train_ph, ph_vocab)

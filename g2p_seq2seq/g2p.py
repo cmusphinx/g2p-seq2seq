@@ -98,12 +98,12 @@ def put_into_buckets(source, target):
   return data_set
 
 
-def create_model(session, forward_only, gr_vocab_size, ph_vocab_size):
+def create_model(session, decode_flag, gr_vocab_size, ph_vocab_size):
   """Create translation model and initialize or load parameters in session."""
   num_layers = FLAGS.num_layers
   size = FLAGS.size
-  # Checking model's architecture for testing processes.
-  if forward_only:
+  # Checking model's architecture for decode processes.
+  if decode_flag:
     params_path = os.path.join(FLAGS.model, "model.params")
     if gfile.Exists(params_path):
       params = open(params_path).readlines()
@@ -116,7 +116,7 @@ def create_model(session, forward_only, gr_vocab_size, ph_vocab_size):
       gr_vocab_size, ph_vocab_size, _buckets,
       size, num_layers, FLAGS.max_gradient_norm, FLAGS.batch_size,
       FLAGS.learning_rate, FLAGS.learning_rate_decay_factor,
-      forward_only=forward_only)
+      forward_only=decode_flag)
   ckpt = tf.train.get_checkpoint_state(FLAGS.model)
   if ckpt and tf.gfile.Exists(ckpt.model_checkpoint_path):
     print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
