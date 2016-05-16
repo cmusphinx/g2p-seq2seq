@@ -166,8 +166,7 @@ def train(train_dic, valid_dic, test_dic):
     current_step = 0
     previous_losses = []
 
-    stop_train = False if FLAGS.max_steps == 0 else True
-    while (stop_train == False or model.global_step.eval() <= FLAGS.max_steps ):
+    while ( FLAGS.max_steps == 0 or model.global_step.eval() <= FLAGS.max_steps ):
       # Choose a bucket according to data distribution. We pick a random number
       # in [0, 1] and use the corresponding interval in train_buckets_scale.
       random_number_01 = np.random.random_sample()
@@ -195,7 +194,7 @@ def train(train_dic, valid_dic, test_dic):
         if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
           sess.run(model.learning_rate_decay_op)
         if len(previous_losses) > 34 and previous_losses[-35:-34] <= min(previous_losses[-35:]):
-          stop_train = True
+          break
         previous_losses.append(loss)
         # Save checkpoint and zero timer and loss.
         checkpoint_path = os.path.join(FLAGS.model, "translate.ckpt")
@@ -209,13 +208,13 @@ def train(train_dic, valid_dic, test_dic):
                                        target_weights, bucket_id, True)
           eval_ppx = math.exp(eval_loss) if eval_loss < 300 else float('inf')
           print("  eval: bucket %d perplexity %.2f" % (bucket_id, eval_ppx))
-    else:
-      print('Training process stopped.')
-      print('Beginning calculation word error rate (WER) on test sample.')
-      ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
-      rev_ph_vocab = data_utils.load_vocabulary(ph_vocab_path, True)
-      model.batch_size = 1  # We decode one word at a time.
-      evaluate(test_dic, sess, model, gr_vocab, rev_ph_vocab)
+
+    print('Training process stopped.')
+    print('Beginning calculation word error rate (WER) on test sample.')
+    ph_vocab_path = os.path.join(FLAGS.model, "vocab.phoneme")
+    rev_ph_vocab = data_utils.load_vocabulary(ph_vocab_path, True)
+    model.batch_size = 1  # We decode one word at a time.
+    evaluate(test_dic, sess, model, gr_vocab, rev_ph_vocab)
 
 
 def load_vocabs_load_model(sess):
