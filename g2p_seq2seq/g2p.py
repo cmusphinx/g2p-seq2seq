@@ -166,7 +166,8 @@ def train(train_dic, valid_dic, test_dic):
     current_step = 0
     previous_losses = []
 
-    while (FLAGS.max_steps == 0 or model.global_step.eval() <= FLAGS.max_steps ):
+    stop_train = False if FLAGS.max_steps == 0 else True
+    while (stop_train == False or model.global_step.eval() <= FLAGS.max_steps ):
       # Choose a bucket according to data distribution. We pick a random number
       # in [0, 1] and use the corresponding interval in train_buckets_scale.
       random_number_01 = np.random.random_sample()
@@ -194,7 +195,7 @@ def train(train_dic, valid_dic, test_dic):
         if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
           sess.run(model.learning_rate_decay_op)
         if len(previous_losses) > 34 and previous_losses[-35:-34] <= min(previous_losses[-35:]):
-          break
+          stop_train = True
         previous_losses.append(loss)
         # Save checkpoint and zero timer and loss.
         checkpoint_path = os.path.join(FLAGS.model, "translate.ckpt")
