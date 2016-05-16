@@ -123,9 +123,11 @@ def create_model(session, decode_flag, gr_vocab_size, ph_vocab_size):
     model.saver.restore(session, ckpt.model_checkpoint_path)
   elif tf.gfile.Exists(os.path.join(FLAGS.model, "model")):
     model.saver.restore(session, os.path.join(FLAGS.model, "model"))
-  else:
+  elif not decode_flag:
     print("Created model with fresh parameters.")
     session.run(tf.initialize_all_variables())
+  else:
+    raise ValueError("Model not found in %s" % ckpt.model_checkpoint_path)
   return model
 
 
