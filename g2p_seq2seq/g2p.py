@@ -133,6 +133,8 @@ def create_model(session, decode_flag, gr_vocab_size, ph_vocab_size):
 
 def train(train_dic, valid_dic, test_dic):
   """Train a gr->ph translation model using G2P data."""
+  if not os.path.exists(FLAGS.model):
+    os.makedirs(FLAGS.model)
   # Save model's architecture
   params_path = os.path.join(FLAGS.model, "model.params")
   with open(params_path, 'w') as f:
