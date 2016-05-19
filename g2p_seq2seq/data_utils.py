@@ -45,10 +45,9 @@ def create_vocabulary(data):
   """Create vocabulary from input data.
 
   Input data is assumed to contain one word per line.
-  Vocabulary contains the most-frequent tokens.
-
+  
   Args:
-    data: data file that will be used to create vocabulary.
+    data: word list that will be used to create vocabulary.
 
   Rerurn:
     vocab: vocabulary dictionary. In this dictionary keys are symbols and values are their indexes.
@@ -115,10 +114,6 @@ def load_vocabulary(vocabulary_path, reverse = False):
 def data_to_token_ids(data, vocab):
   """Tokenize data file and turn into token-ids using given vocabulary file.
 
-  This function loads data line-by-line from data_path, calls the above
-  sentence_to_token_ids, and saves the result to target_path. See comment
-  for sentence_to_token_ids on the details of token-ids format.
-
   Args:
     data: input data in one-word-per-line format.
     vocabulary: vocabulary.
@@ -157,8 +152,8 @@ def prepare_g2p_data(model_dir, train_gr, train_ph, valid_gr, valid_ph):
       (2) Token-ids for Phoneme training data-set,
       (3) Token-ids for Grapheme development data-set,
       (4) Token-ids for Phoneme development data-set,
-      (5) Grapheme vocabulary file,
-      (6) Phoneme vocabulary file.
+      (5) Grapheme vocabulary,
+      (6) Phoneme vocabulary.
   """
   # Create vocabularies of the appropriate sizes.
   ph_vocab_path = os.path.join(model_dir, "vocab.phoneme")
