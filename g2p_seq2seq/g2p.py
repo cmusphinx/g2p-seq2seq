@@ -228,8 +228,8 @@ def load_vocabs_load_model(sess):
   """Load vocabularies and saved model.
 
   Returns:
-    gr_vocab: Graphemes vocabulary;
-    rev_ph_vocab: Reversed phonemes vocabulary;
+    gr_vocab: Grapheme vocabulary;
+    rev_ph_vocab: Reversed phoneme vocabulary;
     model: Trained model.
   """
   # Load vocabularies
@@ -247,22 +247,28 @@ def load_vocabs_load_model(sess):
   return (gr_vocab, rev_ph_vocab, model)
 
 
-def decode_word(word, sess, model, gr_vocab, rev_ph_vocab, ph_ids=[]):
+def decode_word(word, sess, model, gr_vocab, rev_ph_vocab, ph_vocab=None, phonetics=None):
   """Decode input word to sequence of phonemes.
 
   Args:
     word: input word;
     sess: current session;
     model: current model;
-    gr_vocab: graphemes vocabulary;
-    rev_ph_vocab: reversed phonemes vocabulary (keys in vocabulary are ids and values are phonemes)
-    ph_ids: list of phonemes related to test word. This argument used only with model created in train mode. 
+    gr_vocab: grapheme vocabulary;
+    rev_ph_vocab: reversed phoneme vocabulary (keys are ids and values are phonemes)
+
+    Following arguments are used only with model created in train mode:
+    ph_vocab: Phoneme vocabulary dictionary (a dictionary mapping string to integers);
+    phonetics: target phoneme sequence.
 
   Returns:
-    gr_vocab: Graphemes vocabulary;
-    rev_ph_vocab: Reversed phonemes vocabulary;
+    gr_vocab: Grapheme vocabulary;
+    rev_ph_vocab: Reversed phoneme vocabulary;
     model: Trained model.
   """
+  if ph_vocab:
+    ph_ids = data_utils.data_to_token_ids([phonetics], ph_vocab)
+
   res_phoneme_seq = ""
   # Check if all graphemes attended in vocabulary
   gr_absent = set(gr for gr in word if gr not in gr_vocab)
@@ -274,7 +280,7 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab, ph_ids=[]):
                      if _buckets[b][0] > len(token_ids)])
     # Get a 1-element batch to feed the word to the model.
     encoder_inputs, decoder_inputs, target_weights = model.get_batch(
-        {bucket_id: [(token_ids, ph_ids)]}, bucket_id)
+        {bucket_id: [(token_ids, ph_ids[0])]}, bucket_id)
     # Get output logits for the word.
     _, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs,
                                      target_weights, bucket_id, True)
@@ -307,13 +313,9 @@ def calc_error(sess, model, w_ph_dict, gr_vocab, rev_ph_vocab, ph_vocab=None):
   errors = 0
   for word, phonetics in w_ph_dict.items():
     if len(phonetics) == 1:
-      if ph_vocab:
-        ph_ids = data_utils.data_to_token_ids([phonetics[0].split()], ph_vocab)
-        model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab, ph_ids[0])
-      else:
-        model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-      if model_assumption not in phonetics:
-        errors += 1
+      model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab, ph_vocab, phonetics[0].split())
+    if model_assumption not in phonetics:
+      errors += 1
   return errors
 
 
@@ -327,9 +329,9 @@ def evaluate(test_dic=None, sess=None, model=None, gr_vocab=None, rev_ph_vocab=N
               word and its pronounciation (e.g., "word W ER D");
     sess: Current tensorflow session;
     model: Current active model;
-    gr_vocab: Graphemes vocabulary dictionary (a dictionary mapping string to integers);
-    rev_ph_vocab: reversed Phonemes vocabulary list (a list, which reverses the vocabulary mapping).
-    ph_vocab: Phonemes vocabulary dictionary (a dictionary mapping string to integers).
+    gr_vocab: Grapheme vocabulary dictionary (a dictionary mapping string to integers);
+    rev_ph_vocab: reversed Phoneme vocabulary list (a list, which reverses the vocabulary mapping).
+    ph_vocab: Phoneme vocabulary dictionary (a dictionary mapping string to integers).
   """
   if not test_dic:
     # Decode from input file.
