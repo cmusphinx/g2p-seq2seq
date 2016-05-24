@@ -18,15 +18,15 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import gzip
+#import gzip
 import os
-import re
-import tarfile
+#import re
+#import tarfile
 import codecs
 
-from six.moves import urllib
+#from six.moves import urllib
 
-from tensorflow.python.platform import gfile
+#from tensorflow.python.platform import gfile
 
 # Special vocabulary symbols - we always put them at the start.
 _PAD = "_PAD"
@@ -43,18 +43,17 @@ UNK_ID = 3
 
 def create_vocabulary(data):
   """Create vocabulary from input data.
-
   Input data is assumed to contain one word per line.
-  
+
   Args:
     data: word list that will be used to create vocabulary.
 
   Rerurn:
-    vocab: vocabulary dictionary. In this dictionary keys are symbols and values are their indexes.
-
+    vocab: vocabulary dictionary. In this dictionary keys are symbols
+           and values are their indexes.
   """
   vocab = {}
-  for i, line in enumerate(data):
+  for line in data:
     for item in line:
       if item in vocab:
         vocab[item] += 1
@@ -67,9 +66,9 @@ def create_vocabulary(data):
 
 def save_vocabulary(vocab, vocabulary_path):
   """Save vocabulary file in vocabulary_path.
-
-  We write vocabulary to vocabulary_path in a one-token-per-line format, so that later
-  token in the first line gets id=0, second line gets id=1, and so on.
+  We write vocabulary to vocabulary_path in a one-token-per-line format,
+  so that later token in the first line gets id=0, second line gets id=1,
+  and so on.
 
   Args:
     vocab: vocabulary dictionary.
@@ -78,11 +77,11 @@ def save_vocabulary(vocab, vocabulary_path):
   """
   print("Creating vocabulary %s" % (vocabulary_path))
   with codecs.open(vocabulary_path, "w", "utf-8") as vocab_file:
-    for w in sorted(vocab, key=vocab.get):
-      vocab_file.write( w + '\n')
+    for symbol in sorted(vocab, key=vocab.get):
+      vocab_file.write(symbol + '\n')
 
 
-def load_vocabulary(vocabulary_path, reverse = False):
+def load_vocabulary(vocabulary_path, reverse=False):
   """Load vocabulary from file.
   We assume the vocabulary is stored one-item-per-line, so a file:
     d
@@ -95,15 +94,16 @@ def load_vocabulary(vocabulary_path, reverse = False):
     reverse: flag managing what type of vocabulary to return.
 
   Returns:
-    the vocabulary (a dictionary mapping string to integers), or if set reverse to True
-    the reversed vocabulary (a list, which reverses the vocabulary mapping).
+    the vocabulary (a dictionary mapping string to integers), or
+    if set reverse to True the reversed vocabulary (a list, which reverses
+    the vocabulary mapping).
 
   Raises:
     ValueError: if the provided vocabulary_path does not exist.
   """
   rev_vocab = []
-  with codecs.open(vocabulary_path, "r", "utf-8") as f:
-    rev_vocab.extend(f.readlines())
+  with codecs.open(vocabulary_path, "r", "utf-8") as vocab_file:
+    rev_vocab.extend(vocab_file.readlines())
   rev_vocab = [line.strip() for line in rev_vocab]
   if reverse:
     return rev_vocab
@@ -132,11 +132,11 @@ def split_to_grapheme_phoneme(inp_dictionary):
     inp_dictionary: input dictionary.
   """
   graphemes, phonemes = [], []
-  for l in inp_dictionary:
-    line = l.strip().split()
-    if len(line)>1:
-      graphemes.append(list(line[0]))
-      phonemes.append(line[1:])
+  for line in inp_dictionary:
+    line_splitted = line.strip().split()
+    if len(line_splitted) > 1:
+      graphemes.append(list(line_splitted[0]))
+      phonemes.append(line_splitted[1:])
   return graphemes, phonemes
 
 
@@ -166,20 +166,20 @@ def prepare_g2p_data(model_dir, train_gr, train_ph, valid_gr, valid_ph):
 
   # Create ids for the training data.
   train_ph_ids = []
-  for i, line in enumerate(train_ph):
+  for line in train_ph:
     train_ph_ids.append(symbols_to_ids(line, ph_vocab))
 
   train_gr_ids = []
-  for i, line in enumerate(train_gr):
+  for line in train_gr:
     train_gr_ids.append(symbols_to_ids(line, gr_vocab))
 
   # Create ids for the development data.
   valid_ph_ids = []
-  for i, line in enumerate(valid_ph):
+  for line in valid_ph:
     valid_ph_ids.append(symbols_to_ids(line, ph_vocab))
 
   valid_gr_ids = []
-  for i, line in enumerate(valid_gr):
+  for line in valid_gr:
     valid_gr_ids.append(symbols_to_ids(line, gr_vocab))
 
   return (train_gr_ids, train_ph_ids,

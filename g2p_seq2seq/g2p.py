@@ -31,7 +31,6 @@ import time
 import codecs
 
 import numpy as np
-#from six.moves import xrange  # pylint: disable=redefined-builtin
 
 import tensorflow as tf
 from tensorflow.python.platform import gfile
@@ -44,7 +43,7 @@ tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.8,
                           "Learning rate decays by this much.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0,
                           "Clip gradients to this norm.")
-tf.app.flags.DEFINE_integer("batch_size", 64,
+tf.app.flags.DEFINE_integer("batch_size", 512,
                             "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("size", 64, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
@@ -53,7 +52,7 @@ tf.app.flags.DEFINE_integer("steps_per_checkpoint", 200,
                             "How many training steps to do per checkpoint.")
 tf.app.flags.DEFINE_boolean("interactive", False,
                             "Set to True for interactive decoding.")
-tf.app.flags.DEFINE_string("evaluate", "", "Count Word Error rate for file.")
+tf.app.flags.DEFINE_string("evaluate", "", "Count word error rate for file.")
 tf.app.flags.DEFINE_string("decode", "", "Decode file.")
 tf.app.flags.DEFINE_string("output", "", "Decoding result file.")
 tf.app.flags.DEFINE_string("train", "", "Train dictionary.")
@@ -68,7 +67,7 @@ FLAGS = tf.app.flags.FLAGS
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = [(5, 10), (10, 15), (40, 50)]
+_BUCKETS = [(5, 10), (10, 15), (40, 50)]
 
 
 def put_into_buckets(source, target):
@@ -81,17 +80,17 @@ def put_into_buckets(source, target):
       output for n-th line from the source.
 
   Returns:
-    data_set: a list of length len(_buckets); data_set[n] contains a list of
+    data_set: a list of length len(_BUCKETS); data_set[n] contains a list of
       (source, target) pairs read from the provided data that fit
-      into the n-th bucket, i.e., such that len(source) < _buckets[n][0] and
-      len(target) < _buckets[n][1]; source and target are lists of ids.
+      into the n-th bucket, i.e., such that len(source) < _BUCKETS[n][0] and
+      len(target) < _BUCKETS[n][1]; source and target are lists of ids.
   """
-  data_set = [[] for _ in _buckets]
+  data_set = [[] for _ in _BUCKETS]
   for i in range(len(source)):
     source_ids = source[i]
     target_ids = target[i]
     target_ids.append(data_utils.EOS_ID)
-    for bucket_id, (source_size, target_size) in enumerate(_buckets):
+    for bucket_id, (source_size, target_size) in enumerate(_BUCKETS):
       if len(source_ids) < source_size and len(target_ids) < target_size:
         data_set[bucket_id].append([source_ids, target_ids])
         break
@@ -115,7 +114,7 @@ def create_model(session, decode_flag, gr_vocab_size, ph_vocab_size):
           size = int(line_splitted[1])
 
   model = seq2seq_model.Seq2SeqModel(
-      gr_vocab_size, ph_vocab_size, _buckets,
+      gr_vocab_size, ph_vocab_size, _BUCKETS,
       size, num_layers, FLAGS.max_gradient_norm, FLAGS.batch_size,
       FLAGS.learning_rate, FLAGS.learning_rate_decay_factor,
       forward_only=decode_flag)
@@ -161,7 +160,7 @@ def train(train_dic, valid_dic, test_dic):
     valid_set = put_into_buckets(valid_gr_ids, valid_ph_ids)
     train_set = put_into_buckets(train_gr_ids, train_ph_ids)
 
-    train_bucket_sizes = [len(train_set[b]) for b in xrange(len(_buckets))]
+    train_bucket_sizes = [len(train_set[b]) for b in xrange(len(_BUCKETS))]
     train_total_size = float(sum(train_bucket_sizes))
     # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
     # to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
@@ -210,7 +209,7 @@ def train(train_dic, valid_dic, test_dic):
         model.saver.save(sess, checkpoint_path, global_step=model.global_step)
         step_time, loss = 0.0, 0.0
         # Run evals on development set and print their perplexity.
-        for bucket_id in xrange(len(_buckets)):
+        for bucket_id in xrange(len(_BUCKETS)):
           encoder_inputs, decoder_inputs, target_weights = model.get_batch(
               valid_set, bucket_id)
           _, eval_loss, _ = model.step(sess, encoder_inputs, decoder_inputs,
@@ -258,9 +257,9 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab,
     word: input word;
     sess: current session;
     model: current model;
-    gr_vocab: grapheme vocabulary;
-    rev_ph_vocab: reversed phoneme vocabulary (keys are ids,
-                  values are phonemes)
+    gr_vocab: grapheme vocabulary (a dictionary mapping string to integers);
+    rev_ph_vocab: reversed phoneme vocabulary list (a list where symbol's
+                  order correspond to its id);
 
     Following arguments are used only with model created in train mode:
     ph_vocab: Phoneme vocabulary dictionary (a dictionary mapping string
@@ -283,8 +282,8 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab,
     # Get token-ids for the input word.
     token_ids = [gr_vocab.get(s, data_utils.UNK_ID) for s in word]
     # Which bucket does it belong to?
-    bucket_id = min([b for b in xrange(len(_buckets))
-                     if _buckets[b][0] > len(token_ids)])
+    bucket_id = min([b for b in xrange(len(_BUCKETS))
+                     if _BUCKETS[b][0] > len(token_ids)])
     # Get a 1-element batch to feed the word to the model.
     encoder_inputs, decoder_inputs, target_weights = model.get_batch(
         {bucket_id: [(token_ids, ph_ids)]}, bucket_id)
@@ -340,13 +339,12 @@ def evaluate(test_dic=None, sess=None, model=None, gr_vocab=None,
     No arguments need if this function called not from active Session
     in tensorflow. Otherwise following arguments should be pointed out:
     test_dic: List of test dictionary. Each element of list must be String
-              contained word and its pronounciation (e.g., "word W ER D");
+              containing word and its pronounciation (e.g., "word W ER D");
     sess: Current tensorflow session;
     model: Current active model;
-    gr_vocab: Grapheme vocabulary dictionary (a dictionary mapping string
-              to integers);
-    rev_ph_vocab: reversed Phoneme vocabulary list (a list, which reverses
-                  the vocabulary mapping).
+    gr_vocab: Grapheme vocabulary (a dictionary mapping string to integers);
+    rev_ph_vocab: reversed phoneme vocabulary list (a list where symbol's
+                  order correspond to its id);
     ph_vocab: Phoneme vocabulary dictionary (a dictionary mapping string
               to integers).
   """
@@ -377,6 +375,16 @@ def evaluate(test_dic=None, sess=None, model=None, gr_vocab=None,
 
 
 def decode(word_list_file_path):
+  """Decode words from file.
+
+  Args:
+    word_list_file_path: path to input file. File must be
+                         in one-word-per-line format.
+
+  Returns:
+    if [--output output_file] pointed out, write decoded word sequences in
+    this file. Otherwise, print decoded words in standard output.
+  """
   with tf.Session() as sess:
     gr_vocab, rev_ph_vocab, model = load_vocabs_load_model(sess)
 
@@ -403,6 +411,8 @@ def decode(word_list_file_path):
 
 
 def main(_):
+  """Main function.
+  """
   if FLAGS.decode:
     decode(FLAGS.decode)
   elif FLAGS.interactive:
