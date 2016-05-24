@@ -26,13 +26,12 @@ from __future__ import print_function
 
 import math
 import os
-import random
 import sys
 import time
 import codecs
 
 import numpy as np
-from six.moves import xrange  # pylint: disable=redefined-builtin
+#from six.moves import xrange  # pylint: disable=redefined-builtin
 
 import tensorflow as tf
 from tensorflow.python.platform import gfile
@@ -54,14 +53,15 @@ tf.app.flags.DEFINE_integer("steps_per_checkpoint", 200,
                             "How many training steps to do per checkpoint.")
 tf.app.flags.DEFINE_boolean("interactive", False,
                             "Set to True for interactive decoding.")
-tf.app.flags.DEFINE_string("evaluate", "","Count Word Error rate for file.")
+tf.app.flags.DEFINE_string("evaluate", "", "Count Word Error rate for file.")
 tf.app.flags.DEFINE_string("decode", "", "Decode file.")
 tf.app.flags.DEFINE_string("output", "", "Decoding result file.")
 tf.app.flags.DEFINE_string("train", "", "Train dictionary.")
 tf.app.flags.DEFINE_string("valid", "", "Development dictionary.")
 tf.app.flags.DEFINE_string("test", "", "Test dictionary.")
 tf.app.flags.DEFINE_integer("max_steps", 10000,
-                            "How many training steps to do until stop training (0: no limit).")
+                            "How many training steps to do until stop training"
+                            " (0: no limit).")
 
 
 FLAGS = tf.app.flags.FLAGS
@@ -108,9 +108,11 @@ def create_model(session, decode_flag, gr_vocab_size, ph_vocab_size):
     if gfile.Exists(params_path):
       params = open(params_path).readlines()
       for line in params:
-        l = line.strip().split(":")
-        if l[0] == "num_layers": num_layers = int(l[1])
-        if l[0] == "size": size = int(l[1])
+        line_splitted = line.strip().split(":")
+        if line_splitted[0] == "num_layers":
+          num_layers = int(line_splitted[1])
+        if line_splitted[0] == "size":
+          size = int(line_splitted[1])
 
   model = seq2seq_model.Seq2SeqModel(
       gr_vocab_size, ph_vocab_size, _buckets,
@@ -137,18 +139,18 @@ def train(train_dic, valid_dic, test_dic):
     os.makedirs(FLAGS.model)
   # Save model's architecture
   params_path = os.path.join(FLAGS.model, "model.params")
-  with open(params_path, 'w') as f:
-    f.write("num_layers:" + str(FLAGS.num_layers) + "\n")
-    f.write("size:" + str(FLAGS.size))
+  with open(params_path, 'w') as param_file:
+    param_file.write("num_layers:" + str(FLAGS.num_layers) + "\n")
+    param_file.write("size:" + str(FLAGS.size))
   # Prepare G2P data.
   print("Preparing G2P data")
   train_gr, train_ph = data_utils.split_to_grapheme_phoneme(train_dic)
   valid_gr, valid_ph = data_utils.split_to_grapheme_phoneme(valid_dic)
-  train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, gr_vocab, ph_vocab = data_utils.prepare_g2p_data(FLAGS.model, train_gr, train_ph, valid_gr, valid_ph)
+  train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, gr_vocab, ph_vocab =\
+    data_utils.prepare_g2p_data(FLAGS.model, train_gr, train_ph,
+                                valid_gr, valid_ph)
   gr_vocab_size = len(gr_vocab)
   ph_vocab_size = len(ph_vocab)
-  print(valid_gr[0], "->", valid_ph[0])
-  print(valid_gr_ids[0], "->", valid_ph_ids[0])
   with tf.Session() as sess:
     # Create model.
     print("Creating %d layers of %d units." % (FLAGS.num_layers, FLAGS.size))
@@ -158,21 +160,21 @@ def train(train_dic, valid_dic, test_dic):
     print ("Reading development and training data.")
     valid_set = put_into_buckets(valid_gr_ids, valid_ph_ids)
     train_set = put_into_buckets(train_gr_ids, train_ph_ids)
-    
+
     train_bucket_sizes = [len(train_set[b]) for b in xrange(len(_buckets))]
     train_total_size = float(sum(train_bucket_sizes))
     # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
     # to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
     # the size if i-th training bucket, as used later.
     train_buckets_scale = [sum(train_bucket_sizes[:i + 1]) / train_total_size
-                          for i in xrange(len(train_bucket_sizes))]
+                           for i in xrange(len(train_bucket_sizes))]
 
     # This is the training loop.
     step_time, loss = 0.0, 0.0
     current_step = 0
     previous_losses = []
-
-    while ( FLAGS.max_steps == 0 or model.global_step.eval() <= FLAGS.max_steps ):
+    while (FLAGS.max_steps == 0
+           or model.global_step.eval() <= FLAGS.max_steps):
       # Choose a bucket according to data distribution. We pick a random number
       # in [0, 1] and use the corresponding interval in train_buckets_scale.
       random_number_01 = np.random.random_sample()
@@ -199,7 +201,8 @@ def train(train_dic, valid_dic, test_dic):
         # Decrease learning rate if no improvement was seen over last 3 times.
         if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
           sess.run(model.learning_rate_decay_op)
-        if len(previous_losses) > 34 and previous_losses[-35:-34] <= min(previous_losses[-35:]):
+        if len(previous_losses) > 34 and \
+        previous_losses[-35:-34] <= min(previous_losses[-35:]):
           break
         previous_losses.append(loss)
         # Save checkpoint and zero timer and loss.
@@ -247,7 +250,8 @@ def load_vocabs_load_model(sess):
   return (gr_vocab, rev_ph_vocab, model)
 
 
-def decode_word(word, sess, model, gr_vocab, rev_ph_vocab, ph_vocab=None, phonetics=None):
+def decode_word(word, sess, model, gr_vocab, rev_ph_vocab,
+                ph_vocab=None, phonetics=None):
   """Decode input word to sequence of phonemes.
 
   Args:
@@ -255,10 +259,12 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab, ph_vocab=None, phonet
     sess: current session;
     model: current model;
     gr_vocab: grapheme vocabulary;
-    rev_ph_vocab: reversed phoneme vocabulary (keys are ids and values are phonemes)
+    rev_ph_vocab: reversed phoneme vocabulary (keys are ids,
+                  values are phonemes)
 
     Following arguments are used only with model created in train mode:
-    ph_vocab: Phoneme vocabulary dictionary (a dictionary mapping string to integers);
+    ph_vocab: Phoneme vocabulary dictionary (a dictionary mapping string
+              to integers);
     phonetics: target phoneme sequence.
 
   Returns:
@@ -266,8 +272,9 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab, ph_vocab=None, phonet
     rev_ph_vocab: Reversed phoneme vocabulary;
     model: Trained model.
   """
+  ph_ids = []
   if ph_vocab:
-    ph_ids = data_utils.data_to_token_ids([phonetics], ph_vocab)
+    ph_ids = data_utils.symbols_to_ids(phonetics, ph_vocab)
 
   res_phoneme_seq = ""
   # Check if all graphemes attended in vocabulary
@@ -280,7 +287,7 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab, ph_vocab=None, phonet
                      if _buckets[b][0] > len(token_ids)])
     # Get a 1-element batch to feed the word to the model.
     encoder_inputs, decoder_inputs, target_weights = model.get_batch(
-        {bucket_id: [(token_ids, ph_ids[0])]}, bucket_id)
+        {bucket_id: [(token_ids, ph_ids)]}, bucket_id)
     # Get output logits for the word.
     _, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs,
                                      target_weights, bucket_id, True)
@@ -292,11 +299,13 @@ def decode_word(word, sess, model, gr_vocab, rev_ph_vocab, ph_vocab=None, phonet
     # Print out phoneme corresponding to outputs.
     res_phoneme_seq = " ".join([rev_ph_vocab[output] for output in outputs])
   else:
-    print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent) )
+    print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent))
   return res_phoneme_seq
 
 
 def interactive():
+  """Decode word from standard input.
+  """
   with tf.Session() as sess:
     gr_vocab, rev_ph_vocab, model = load_vocabs_load_model(sess)
 
@@ -305,33 +314,41 @@ def interactive():
       word = sys.stdin.readline().decode("utf-8").strip()
       if word:
         res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
-        if res_phoneme_seq: print(res_phoneme_seq)
+        if res_phoneme_seq:
+          print(res_phoneme_seq)
       else: break
 
 
 def calc_error(sess, model, w_ph_dict, gr_vocab, rev_ph_vocab, ph_vocab=None):
+  """Calculate Word-Error-Rate (WER).
+  """
   errors = 0
   for word, phonetics in w_ph_dict.items():
     if len(phonetics) == 1:
-      model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab, ph_vocab, phonetics[0].split())
+      model_assumption = decode_word(word, sess, model, gr_vocab, rev_ph_vocab,
+                                     ph_vocab, phonetics[0].split())
     if model_assumption not in phonetics:
       errors += 1
   return errors
 
 
-def evaluate(test_dic=None, sess=None, model=None, gr_vocab=None, rev_ph_vocab=None, ph_vocab=None):
+def evaluate(test_dic=None, sess=None, model=None, gr_vocab=None,
+             rev_ph_vocab=None, ph_vocab=None):
   """Calculate and print out word error rate (WER) and Accuracy on test sample.
 
   Args:
-    No arguments need if this function called not from active Session in tensorflow.
-    Otherwise following arguments should be pointed out:
-    test_dic: List of test dictionary. Each element of list must be String contained 
-              word and its pronounciation (e.g., "word W ER D");
+    No arguments need if this function called not from active Session
+    in tensorflow. Otherwise following arguments should be pointed out:
+    test_dic: List of test dictionary. Each element of list must be String
+              contained word and its pronounciation (e.g., "word W ER D");
     sess: Current tensorflow session;
     model: Current active model;
-    gr_vocab: Grapheme vocabulary dictionary (a dictionary mapping string to integers);
-    rev_ph_vocab: reversed Phoneme vocabulary list (a list, which reverses the vocabulary mapping).
-    ph_vocab: Phoneme vocabulary dictionary (a dictionary mapping string to integers).
+    gr_vocab: Grapheme vocabulary dictionary (a dictionary mapping string
+              to integers);
+    rev_ph_vocab: reversed Phoneme vocabulary list (a list, which reverses
+                  the vocabulary mapping).
+    ph_vocab: Phoneme vocabulary dictionary (a dictionary mapping string
+              to integers).
   """
   if not test_dic:
     # Decode from input file.
@@ -340,9 +357,11 @@ def evaluate(test_dic=None, sess=None, model=None, gr_vocab=None, rev_ph_vocab=N
   w_ph_dict = {}
   for line in test_dic:
     lst = line.strip().split()
-    if len(lst)>=2:
-      if lst[0] not in w_ph_dict: w_ph_dict[lst[0]] = [" ".join(lst[1:])]
-      else: w_ph_dict[lst[0]].append(" ".join(lst[1:]))
+    if len(lst) >= 2:
+      if lst[0] not in w_ph_dict:
+        w_ph_dict[lst[0]] = [" ".join(lst[1:])]
+      else:
+        w_ph_dict[lst[0]].append(" ".join(lst[1:]))
 
   errors = 0
   # Calculate errors
@@ -351,9 +370,10 @@ def evaluate(test_dic=None, sess=None, model=None, gr_vocab=None, rev_ph_vocab=N
       gr_vocab, rev_ph_vocab, model = load_vocabs_load_model(sess)
       errors = calc_error(sess, model, w_ph_dict, gr_vocab, rev_ph_vocab)
   else:
-    errors = calc_error(sess, model, w_ph_dict, gr_vocab, rev_ph_vocab, ph_vocab)
-  print("WER : ", errors/len(w_ph_dict) )
-  print("Accuracy : ", ( 1-(errors/len(w_ph_dict)) ) )
+    errors = calc_error(sess, model, w_ph_dict, gr_vocab, rev_ph_vocab,
+                        ph_vocab)
+  print("WER : ", errors/len(w_ph_dict))
+  print("Accuracy : ", (1-(errors/len(w_ph_dict))))
 
 
 def decode(word_list_file_path):
@@ -369,7 +389,8 @@ def decode(word_list_file_path):
       with codecs.open(output_file_path, "w", "utf-8") as output_file:
         for word in graphemes:
           word = word.strip()
-          res_phoneme_seq = decode_word(word, sess, model, gr_vocab, rev_ph_vocab)
+          res_phoneme_seq = decode_word(word, sess, model, gr_vocab,
+                                        rev_ph_vocab)
           output_file.write(word)
           output_file.write(' ')
           output_file.write(res_phoneme_seq)
@@ -394,7 +415,7 @@ def main(_):
       train_dic, valid_dic, test_dic = [], [], []
       if (not FLAGS.valid) and (not FLAGS.test):
         for i, word in enumerate(source_dic):
-          if i % 20 == 0 or i % 20 == 1: 
+          if i % 20 == 0 or i % 20 == 1:
             test_dic.append(word)
           elif i % 20 == 2:
             valid_dic.append(word)

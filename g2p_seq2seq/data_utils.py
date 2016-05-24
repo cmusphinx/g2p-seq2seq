@@ -111,18 +111,18 @@ def load_vocabulary(vocabulary_path, reverse = False):
     return dict([(x, y) for (y, x) in enumerate(rev_vocab)])
 
 
-def data_to_token_ids(data, vocab):
-  """Tokenize data file and turn into token-ids using given vocabulary file.
+def symbols_to_ids(symbols, vocab):
+  """Turn symbols into ids sequence using given vocabulary file.
 
   Args:
-    data: input data in one-word-per-line format.
-    vocabulary: vocabulary.
+    symbols: input symbols sequence.
+    vocab: vocabulary.
+
+  Returns:
+    ids: output sequence of ids.
   """
-  tokens_dic =[]
-  for i, line in enumerate(data):
-    token_ids = [vocab.get(s, UNK_ID) for s in line]
-    tokens_dic.append(token_ids)
-  return tokens_dic
+  ids = [vocab.get(s, UNK_ID) for s in symbols]
+  return ids
 
 
 def split_to_grapheme_phoneme(inp_dictionary):
@@ -165,12 +165,22 @@ def prepare_g2p_data(model_dir, train_gr, train_ph, valid_gr, valid_ph):
   save_vocabulary(gr_vocab, gr_vocab_path)
 
   # Create ids for the training data.
-  train_ph_ids = data_to_token_ids(train_ph, ph_vocab)
-  train_gr_ids = data_to_token_ids(train_gr, gr_vocab)
+  train_ph_ids = []
+  for i, line in enumerate(train_ph):
+    train_ph_ids.append(symbols_to_ids(line, ph_vocab))
+
+  train_gr_ids = []
+  for i, line in enumerate(train_gr):
+    train_gr_ids.append(symbols_to_ids(line, gr_vocab))
 
   # Create ids for the development data.
-  valid_ph_ids = data_to_token_ids(valid_ph, ph_vocab)
-  valid_gr_ids = data_to_token_ids(valid_gr, gr_vocab)
+  valid_ph_ids = []
+  for i, line in enumerate(valid_ph):
+    valid_ph_ids.append(symbols_to_ids(line, ph_vocab))
+
+  valid_gr_ids = []
+  for i, line in enumerate(valid_gr):
+    valid_gr_ids.append(symbols_to_ids(line, gr_vocab))
 
   return (train_gr_ids, train_ph_ids,
           valid_gr_ids, valid_ph_ids,
