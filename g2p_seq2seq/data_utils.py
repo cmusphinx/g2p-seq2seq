@@ -133,10 +133,10 @@ def split_to_grapheme_phoneme(inp_dictionary):
   """
   graphemes, phonemes = [], []
   for line in inp_dictionary:
-    line_splitted = line.strip().split()
-    if len(line_splitted) > 1:
-      graphemes.append(list(line_splitted[0]))
-      phonemes.append(line_splitted[1:])
+    split_line = line.strip().split()
+    if len(split_line) > 1:
+      graphemes.append(list(split_line[0]))
+      phonemes.append(split_line[1:])
   return graphemes, phonemes
 
 

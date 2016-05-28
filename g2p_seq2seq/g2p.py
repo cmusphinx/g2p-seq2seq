@@ -39,11 +39,11 @@ import data_utils as data_utils
 from tensorflow.models.rnn.translate import seq2seq_model
 
 tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate.")
-tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.8,
+tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.98,
                           "Learning rate decays by this much.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0,
                           "Clip gradients to this norm.")
-tf.app.flags.DEFINE_integer("batch_size", 512,
+tf.app.flags.DEFINE_integer("batch_size", 64,
                             "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("size", 64, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
@@ -107,11 +107,11 @@ def create_model(session, decode_flag, gr_vocab_size, ph_vocab_size):
     if gfile.Exists(params_path):
       params = open(params_path).readlines()
       for line in params:
-        line_splitted = line.strip().split(":")
-        if line_splitted[0] == "num_layers":
-          num_layers = int(line_splitted[1])
-        if line_splitted[0] == "size":
-          size = int(line_splitted[1])
+        split_line = line.strip().split(":")
+        if split_line[0] == "num_layers":
+          num_layers = int(split_line[1])
+        if split_line[0] == "size":
+          size = int(split_line[1])
 
   model = seq2seq_model.Seq2SeqModel(
       gr_vocab_size, ph_vocab_size, _BUCKETS,
