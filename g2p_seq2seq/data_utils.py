@@ -81,22 +81,18 @@ def save_vocabulary(vocab, vocabulary_path):
       vocab_file.write(symbol + '\n')
 
 
-def load_vocabulary(vocabulary_path, reverse=False):
+def load_vocabulary(vocabulary_path):
   """Load vocabulary from file.
   We assume the vocabulary is stored one-item-per-line, so a file:
     d
     c
-  will result in a vocabulary {"d": 0, "c": 1}, and this function may
-  also return the reversed-vocabulary [0, 1].
+  will result in a vocabulary {"d": 0, "c": 1}.
 
   Args:
     vocabulary_path: path to the file containing the vocabulary.
-    reverse: flag managing what type of vocabulary to return.
 
   Returns:
-    the vocabulary (a dictionary mapping string to integers), or
-    if set reverse to True the reversed vocabulary (a list, which reverses
-    the vocabulary mapping).
+    the vocabulary (a dictionary mapping string to integers).
 
   Raises:
     ValueError: if the provided vocabulary_path does not exist.
@@ -105,18 +101,15 @@ def load_vocabulary(vocabulary_path, reverse=False):
   with codecs.open(vocabulary_path, "r", "utf-8") as vocab_file:
     rev_vocab.extend(vocab_file.readlines())
   rev_vocab = [line.strip() for line in rev_vocab]
-  if reverse:
-    return rev_vocab
-  else:
-    return dict([(x, y) for (y, x) in enumerate(rev_vocab)])
+  return dict([(x, y) for (y, x) in enumerate(rev_vocab)])
 
 
 def symbols_to_ids(symbols, vocab):
   """Turn symbols into ids sequence using given vocabulary file.
 
   Args:
-    symbols: input symbols sequence.
-    vocab: vocabulary.
+    symbols: input symbols sequence;
+    vocab: vocabulary (a dictionary mapping string to integers).
 
   Returns:
     ids: output sequence of ids.
@@ -140,29 +133,33 @@ def split_to_grapheme_phoneme(inp_dictionary):
   return graphemes, phonemes
 
 
-def prepare_g2p_data(model_dir, train_gr, train_ph, valid_gr, valid_ph):
+def prepare_g2p_data(model_dir, train_dic, valid_dic):
   """Create vocabularies into model_dir, create ids data lists.
 
   Args:
     model_dir: directory in which the data sets will be stored.
+    train_dic:
+    valid_dic: :
 
   Returns:
     A tuple of 6 elements:
-      (1) Token-ids for Grapheme training data-set,
-      (2) Token-ids for Phoneme training data-set,
-      (3) Token-ids for Grapheme development data-set,
-      (4) Token-ids for Phoneme development data-set,
+      (1) Sequence of ids for Grapheme training data-set,
+      (2) Sequence of ids for Phoneme training data-set,
+      (3) Sequence of ids for Grapheme development data-set,
+      (4) Sequence of ids for Phoneme development data-set,
       (5) Grapheme vocabulary,
       (6) Phoneme vocabulary.
   """
+  #Split dictionaries into two separate lists with graphemes and phonemes.
+  train_gr, train_ph = split_to_grapheme_phoneme(train_dic)
+  valid_gr, valid_ph = split_to_grapheme_phoneme(valid_dic)
+
   # Create vocabularies of the appropriate sizes.
-  ph_vocab_path = os.path.join(model_dir, "vocab.phoneme")
-  gr_vocab_path = os.path.join(model_dir, "vocab.grapheme")
   print("Creating vocabularies in %s" %model_dir)
   ph_vocab = create_vocabulary(train_ph)
   gr_vocab = create_vocabulary(train_gr)
-  save_vocabulary(ph_vocab, ph_vocab_path)
-  save_vocabulary(gr_vocab, gr_vocab_path)
+  save_vocabulary(ph_vocab, os.path.join(model_dir, "vocab.phoneme"))
+  save_vocabulary(gr_vocab, os.path.join(model_dir, "vocab.grapheme"))
 
   # Create ids for the training data.
   train_ph_ids = []
