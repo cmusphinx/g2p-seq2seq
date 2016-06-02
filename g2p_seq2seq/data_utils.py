@@ -81,18 +81,22 @@ def save_vocabulary(vocab, vocabulary_path):
       vocab_file.write(symbol + '\n')
 
 
-def load_vocabulary(vocabulary_path):
+def load_vocabulary(vocabulary_path, reverse=False):
   """Load vocabulary from file.
   We assume the vocabulary is stored one-item-per-line, so a file:
     d
     c
-  will result in a vocabulary {"d": 0, "c": 1}.
+  will result in a vocabulary {"d": 0, "c": 1}, and this function may
+  also return the reversed-vocabulary [0, 1].
 
   Args:
     vocabulary_path: path to the file containing the vocabulary.
+    reverse: flag managing what type of vocabulary to return.
 
   Returns:
-    the vocabulary (a dictionary mapping string to integers).
+    the vocabulary (a dictionary mapping string to integers), or
+    if set reverse to True the reversed vocabulary (a list, which reverses
+    the vocabulary mapping).
 
   Raises:
     ValueError: if the provided vocabulary_path does not exist.
@@ -101,7 +105,10 @@ def load_vocabulary(vocabulary_path):
   with codecs.open(vocabulary_path, "r", "utf-8") as vocab_file:
     rev_vocab.extend(vocab_file.readlines())
   rev_vocab = [line.strip() for line in rev_vocab]
-  return dict([(x, y) for (y, x) in enumerate(rev_vocab)])
+  if reverse:
+    return rev_vocab
+  else:
+    return dict([(x, y) for (y, x) in enumerate(rev_vocab)])
 
 
 def symbols_to_ids(symbols, vocab):

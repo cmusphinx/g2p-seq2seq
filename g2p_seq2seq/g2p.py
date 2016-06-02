@@ -92,7 +92,7 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
   def __init__(self, train_dic=None, valid_dic=None, test_dic=None):
     """Create G2P model and initialize or load parameters in session."""
     #Load model parameters.
-    num_layers, size = load_params()
+    num_layers, size = self.__load_params()
     self.test_dic = test_dic
 
     # Preliminary actions before model creation.
@@ -115,20 +115,56 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
       self.ph_vocab = data_utils.load_vocabulary(os.path.join(FLAGS.model,
                                                               "vocab.phoneme"))
 
+    self.rev_ph_vocab =\
+        data_utils.load_vocabulary(os.path.join(FLAGS.model, "vocab.phoneme"),
+                                   reverse=True)
+
     self.session = tf.Session()
-    decode_flag = False if FLAGS.train else True
 
     # Create model.
-    print("Creating %d layers of %d units." % (FLAGS.num_layers, FLAGS.size))
+    print("Creating %d layers of %d units." % (num_layers, size))
     self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
                                             len(self.ph_vocab), self._BUCKETS,
                                             size, num_layers,
                                             FLAGS.max_gradient_norm, batch_size,
                                             FLAGS.learning_rate,
                                             FLAGS.learning_rate_decay_factor,
-                                            forward_only=decode_flag)
+                                            forward_only=not FLAGS.train)
 
-    self.__run_session()
+    self.__create_model()
+
+
+  def __load_params(self):
+    """On train mode save model parameters.
+    On decode mode load parameters from 'model.params' file,
+    or if file is absent, use Default parameters.
+
+    Returns:
+      num_layers: Number of layers in the model;
+      size: Size of each model layer.
+    """
+    num_layers = FLAGS.num_layers
+    size = FLAGS.size
+
+    if FLAGS.train:
+      if not os.path.exists(FLAGS.model):
+        os.makedirs(FLAGS.model)
+      # Save model's architecture
+      with open(os.path.join(FLAGS.model, "model.params"), 'w') as param_file:
+        param_file.write("num_layers:" + str(FLAGS.num_layers) + "\n")
+        param_file.write("size:" + str(FLAGS.size))
+    else:
+      # Checking model's architecture for decode processes.
+      if gfile.Exists(os.path.join(FLAGS.model, "model.params")):
+        params = open(os.path.join(FLAGS.model, "model.params")).readlines()
+        for line in params:
+          split_line = line.strip().split(":")
+          if split_line[0] == "num_layers":
+            num_layers = int(split_line[1])
+          if split_line[0] == "size":
+            size = int(split_line[1])
+    return num_layers, size
+
 
 
   def __put_into_buckets(self, source, target):
@@ -158,7 +194,7 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
     return data_set
 
 
-  def __run_session(self):
+  def __create_model(self):
     """Check for saved models and restore them, otherwise create new model.
     """
     ckpt = tf.train.get_checkpoint_state(FLAGS.model)
@@ -204,8 +240,8 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
         perplexity = math.exp(loss) if loss < 300 else float('inf')
         print ("global step %d learning rate %.4f step-time %.2f perplexity "
                "%.2f" % (self.model.global_step.eval(self.session),
-                         self.model.learning_rate.eval(self.session), step_time,
-                         perplexity))
+                         self.model.learning_rate.eval(self.session),
+                         step_time, perplexity))
         # Decrease learning rate if no improvement was seen over last 3 times.
         if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
           self.session.run(self.model.learning_rate_decay_op)
@@ -214,7 +250,11 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
           break
         previous_losses.append(loss)
         step_time, loss = 0.0, 0.0
-        self.__save_model_run_evals()
+        # Save checkpoint and zero timer and loss.
+        checkpoint_path = os.path.join(FLAGS.model, "translate.ckpt")
+        self.model.saver.save(self.session, checkpoint_path,
+                              global_step=self.model.global_step)
+        self.__run_evals()
     print('Training process stopped.')
 
     print('Beginning calculation word error rate (WER) on test sample.')
@@ -240,14 +280,9 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
     return step_loss
 
 
-  def __save_model_run_evals(self):
-    """Save model and then run evaluation on validation set.
+  def __run_evals(self):
+    """Run evals on development set and print their perplexity.
     """
-    # Save checkpoint and zero timer and loss.
-    checkpoint_path = os.path.join(FLAGS.model, "translate.ckpt")
-    self.model.saver.save(self.session, checkpoint_path,
-                          global_step=self.model.global_step)
-    # Run evals on development set and print their perplexity.
     for bucket_id in xrange(len(self._BUCKETS)):
       encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
           self.valid_set, bucket_id)
@@ -258,7 +293,7 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
       print("  eval: bucket %d perplexity %.2f" % (bucket_id, eval_ppx))
 
 
-  def __decode_word(self, word, phonetics=None):
+  def decode_word(self, word, phonetics=None):
     """Decode input word to sequence of phonemes.
 
     Args:
@@ -295,8 +330,8 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
       if data_utils.EOS_ID in outputs:
         outputs = outputs[:outputs.index(data_utils.EOS_ID)]
       # Phoneme sequence corresponding to outputs.
-      rev_ph_vocab = reverse_vocab(self.ph_vocab)
-      res_phoneme_seq = " ".join([rev_ph_vocab[output] for output in outputs])
+      res_phoneme_seq = " ".join([self.rev_ph_vocab[output]
+                                  for output in outputs])
     else:
       print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent))
     return res_phoneme_seq
@@ -309,7 +344,7 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
       print("> ", end="")
       word = sys.stdin.readline().decode("utf-8").strip()
       if word:
-        res_phoneme_seq = self.__decode_word(word)
+        res_phoneme_seq = self.decode_word(word)
         if res_phoneme_seq:
           print(res_phoneme_seq)
       else: break
@@ -320,14 +355,15 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
     """
     errors = 0
     for word, speech in w_ph_dict.items():
-      #if len(phonetics) == 1:
       phonetics = []
       if FLAGS.train:
         phonetics = speech[0].split()
 
-      model_assumption = self.__decode_word(word, phonetics)
+      model_assumption = self.decode_word(word, phonetics)
       if model_assumption not in speech:
         errors += 1
+        #print('Error:')
+        #print(word + ' : ' + ','.join(speech) + ' -> ' + model_assumption)
     return errors
 
 
@@ -359,19 +395,15 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
     print("Accuracy : ", (1-(errors/len(w_ph_dict))))
 
 
-  def decode(self, word_list_file_path):
+  def decode(self):
     """Decode words from file.
-
-    Args:
-      word_list_file_path: path to input file. File must be
-                           in one-word-per-line format.
 
     Returns:
       if [--output output_file] pointed out, write decoded word sequences in
       this file. Otherwise, print decoded words in standard output.
     """
     # Decode from input file.
-    graphemes = codecs.open(word_list_file_path, "r", "utf-8").readlines()
+    graphemes = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
 
     output_file_path = FLAGS.output
 
@@ -379,7 +411,7 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
       with codecs.open(output_file_path, "w", "utf-8") as output_file:
         for word in graphemes:
           word = word.strip()
-          res_phoneme_seq = self.__decode_word(word)
+          res_phoneme_seq = self.decode_word(word)
           output_file.write(word)
           output_file.write(' ')
           output_file.write(res_phoneme_seq)
@@ -387,101 +419,36 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
     else:
       for word in graphemes:
         word = word.strip()
-        res_phoneme_seq = self.__decode_word(word)
+        res_phoneme_seq = self.decode_word(word)
         print(word + ' ' + res_phoneme_seq)
-
-
-def load_params():
-  """On train mode save model parameters.
-  On decode mode load parameters from 'model.params' file, or if file is absent,
-  use Default parameters.
-
-  Returns:
-    num_layers: Number of layers in the model;
-    size: Size of each model layer.
-  """
-  num_layers = FLAGS.num_layers
-  size = FLAGS.size
-
-  if FLAGS.train:
-    if not os.path.exists(FLAGS.model):
-      os.makedirs(FLAGS.model)
-    # Save model's architecture
-    with open(os.path.join(FLAGS.model, "model.params"), 'w') as param_file:
-      param_file.write("num_layers:" + str(FLAGS.num_layers) + "\n")
-      param_file.write("size:" + str(FLAGS.size))
-  else:
-    # Checking model's architecture for decode processes.
-    if gfile.Exists(os.path.join(FLAGS.model, "model.params")):
-      params = open(os.path.join(FLAGS.model, "model.params")).readlines()
-      for line in params:
-        split_line = line.strip().split(":")
-        if split_line[0] == "num_layers":
-          num_layers = int(split_line[1])
-        if split_line[0] == "size":
-          size = int(split_line[1])
-  return num_layers, size
-
-
-def reverse_vocab(vocab):
-  """Reverse mapping of input vocabulary: from dictionary with string keys and
-     integer values ({"d": 0, "c": 1}) to reverse vocabulary list (a list
-     where symbol's order correspond to its id) and vice-versa.
-  """
-  if isinstance(vocab, dict):
-    rev_vocab = [data_utils.UNK_ID]*len(vocab)
-    for symbol, ids in vocab.items():
-      rev_vocab[ids] = symbol
-  elif isinstance(vocab, list):
-    rev_vocab = dict([(x, y) for (y, x) in enumerate(vocab)])
-  else:
-    raise ValueError("Dictionary type neither dict nor list.")
-  return rev_vocab
 
 
 def main(_):
   """Main function.
   """
-  if FLAGS.decode:
-    g2p_model = G2PModel()
-    g2p_model.decode(FLAGS.decode)
-  elif FLAGS.interactive:
-    g2p_model = G2PModel()
-    g2p_model.interactive()
-  elif FLAGS.evaluate:
-    g2p_model = G2PModel()
-    g2p_model.evaluate()
-  else:
-    if FLAGS.train:
-      source_dic = codecs.open(FLAGS.train, "r", "utf-8").readlines()
-      train_dic, valid_dic, test_dic = [], [], []
-      if (not FLAGS.valid) and (not FLAGS.test):
-        for i, word in enumerate(source_dic):
-          if i % 20 == 0 or i % 20 == 1:
-            test_dic.append(word)
-          elif i % 20 == 2:
-            valid_dic.append(word)
-          else: train_dic.append(word)
-      elif not FLAGS.valid:
-        test_dic = codecs.open(FLAGS.test, "r", "utf-8").readlines()
-        for i, word in enumerate(source_dic):
-          if i % 20 == 0:
-            valid_dic.append(word)
-          else: train_dic.append(word)
-      elif not FLAGS.test:
-        valid_dic = codecs.open(FLAGS.valid, "r", "utf-8").readlines()
-        for i, word in enumerate(source_dic):
-          if i % 10 == 0:
-            test_dic.append(word)
-          else: train_dic.append(word)
-      else:
-        valid_dic = codecs.open(FLAGS.valid, "r", "utf-8").readlines()
-        test_dic = codecs.open(FLAGS.test, "r", "utf-8").readlines()
-        train_dic = source_dic
-    else:
-      raise ValueError("Train dictionary absent.")
+  if FLAGS.train:
+    source_dic = codecs.open(FLAGS.train, "r", "utf-8").readlines()
+    train_dic, valid_dic, test_dic = [], [], []
+    if FLAGS.valid:
+      valid_dic = codecs.open(FLAGS.valid, "r", "utf-8").readlines()
+    if FLAGS.test:
+      test_dic = codecs.open(FLAGS.test, "r", "utf-8").readlines()
+    for i, line in enumerate(source_dic):
+      if i % 20 == 0 and not FLAGS.valid:
+        valid_dic.append(line)
+      elif (i % 20 == 1 or i % 20 == 2) and not FLAGS.test:
+        test_dic.append(line)
+      else: train_dic.append(line)
     g2p_model = G2PModel(train_dic, valid_dic, test_dic)
     g2p_model.train()
+  else:
+    g2p_model = G2PModel()
+    if FLAGS.decode:
+      g2p_model.decode()
+    elif FLAGS.interactive:
+      g2p_model.interactive()
+    elif FLAGS.evaluate:
+      g2p_model.evaluate()
 
 if __name__ == "__main__":
   tf.app.run()
