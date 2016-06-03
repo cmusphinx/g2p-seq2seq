@@ -18,15 +18,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-#import gzip
 import os
-#import re
-#import tarfile
 import codecs
-
-#from six.moves import urllib
-
-#from tensorflow.python.platform import gfile
+from tensorflow.python.platform import gfile
 
 # Special vocabulary symbols - we always put them at the start.
 _PAD = "_PAD"
@@ -111,6 +105,44 @@ def load_vocabulary(vocabulary_path, reverse=False):
     return dict([(x, y) for (y, x) in enumerate(rev_vocab)])
 
 
+def save_params(num_layers, size, model_path):
+  """Save model parameters.
+
+  Returns:
+    num_layers: Number of layers in the model;
+    size: Size of each model layer.
+  """
+  if not os.path.exists(model_path):
+    os.makedirs(model_path)
+  # Save model's architecture
+  with open(os.path.join(model_path, "model.params"), 'w') as param_file:
+    param_file.write("num_layers:" + str(num_layers) + "\n")
+    param_file.write("size:" + str(size))
+  return num_layers, size
+
+
+def load_params(default_num_layers, default_size, model_path):
+  """Load parameters from 'model.params' file,
+  or if file is absent, use Default parameters.
+
+  Returns:
+    default_num_layers: Default number of layers in the model;
+    default_size: Default size of each model layer.
+  """
+  num_layers = default_num_layers
+  size = default_size
+
+  # Checking model's architecture for decode processes.
+  if gfile.Exists(os.path.join(model_path, "model.params")):
+    params = open(os.path.join(model_path, "model.params")).readlines()
+    for line in params:
+      split_line = line.strip().split(":")
+      if split_line[0] == "num_layers":
+        num_layers = int(split_line[1])
+      if split_line[0] == "size":
+        size = int(split_line[1])
+  return num_layers, size
+
 def symbols_to_ids(symbols, vocab):
   """Turn symbols into ids sequence using given vocabulary file.
 
@@ -138,6 +170,24 @@ def split_to_grapheme_phoneme(inp_dictionary):
       graphemes.append(list(split_line[0]))
       phonemes.append(split_line[1:])
   return graphemes, phonemes
+
+
+def split_dictionary(train_path, valid_path=None, test_path=None):
+  """Split source dictionary to train, validation and test sets.
+  """
+  source_dic = codecs.open(train_path, "r", "utf-8").readlines()
+  train_dic, valid_dic, test_dic = [], [], []
+  if valid_path:
+    valid_dic = codecs.open(valid_path, "r", "utf-8").readlines()
+  if test_path:
+    test_dic = codecs.open(test_path, "r", "utf-8").readlines()
+  for i, line in enumerate(source_dic):
+    if i % 20 == 0 and not valid_path:
+      valid_dic.append(line)
+    elif (i % 20 == 1 or i % 20 == 2) and not test_path:
+      test_dic.append(line)
+    else: train_dic.append(line)
+  return train_dic, valid_dic, test_dic
 
 
 def prepare_g2p_data(model_dir, train_dic, valid_dic):

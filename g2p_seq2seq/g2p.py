@@ -33,7 +33,6 @@ import codecs
 import numpy as np
 
 import tensorflow as tf
-from tensorflow.python.platform import gfile
 
 import data_utils as data_utils
 from tensorflow.models.rnn.translate import seq2seq_model
@@ -65,7 +64,7 @@ tf.app.flags.DEFINE_integer("max_steps", 10000,
 
 FLAGS = tf.app.flags.FLAGS
 
-class G2PModel(seq2seq_model.Seq2SeqModel):
+class G2PModel():
   """Grapheme-to-Phoneme translation model class.
 
   Constructor parameters (for training mode only):
@@ -91,12 +90,13 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
 
   def __init__(self, train_dic=None, valid_dic=None, test_dic=None):
     """Create G2P model and initialize or load parameters in session."""
-    #Load model parameters.
-    num_layers, size = self.__load_params()
     self.test_dic = test_dic
 
     # Preliminary actions before model creation.
     if FLAGS.train:
+      #Load model parameters.
+      num_layers, size = data_utils.save_params(FLAGS.num_layers, FLAGS.size,
+                                                FLAGS.model)
       batch_size = FLAGS.batch_size
       # Prepare G2P data.
       print("Preparing G2P data")
@@ -108,6 +108,9 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
       self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
       self.train_set = self.__put_into_buckets(train_gr_ids, train_ph_ids)
     else:
+      #Load model parameters.
+      num_layers, size = data_utils.load_params(FLAGS.num_layers, FLAGS.size,
+                                                FLAGS.model)
       batch_size = 1 # We decode one word at a time.
       # Load vocabularies
       self.gr_vocab = data_utils.load_vocabulary(os.path.join(FLAGS.model,
@@ -132,39 +135,6 @@ class G2PModel(seq2seq_model.Seq2SeqModel):
                                             forward_only=not FLAGS.train)
 
     self.__create_model()
-
-
-  def __load_params(self):
-    """On train mode save model parameters.
-    On decode mode load parameters from 'model.params' file,
-    or if file is absent, use Default parameters.
-
-    Returns:
-      num_layers: Number of layers in the model;
-      size: Size of each model layer.
-    """
-    num_layers = FLAGS.num_layers
-    size = FLAGS.size
-
-    if FLAGS.train:
-      if not os.path.exists(FLAGS.model):
-        os.makedirs(FLAGS.model)
-      # Save model's architecture
-      with open(os.path.join(FLAGS.model, "model.params"), 'w') as param_file:
-        param_file.write("num_layers:" + str(FLAGS.num_layers) + "\n")
-        param_file.write("size:" + str(FLAGS.size))
-    else:
-      # Checking model's architecture for decode processes.
-      if gfile.Exists(os.path.join(FLAGS.model, "model.params")):
-        params = open(os.path.join(FLAGS.model, "model.params")).readlines()
-        for line in params:
-          split_line = line.strip().split(":")
-          if split_line[0] == "num_layers":
-            num_layers = int(split_line[1])
-          if split_line[0] == "size":
-            size = int(split_line[1])
-    return num_layers, size
-
 
 
   def __put_into_buckets(self, source, target):
@@ -427,18 +397,8 @@ def main(_):
   """Main function.
   """
   if FLAGS.train:
-    source_dic = codecs.open(FLAGS.train, "r", "utf-8").readlines()
-    train_dic, valid_dic, test_dic = [], [], []
-    if FLAGS.valid:
-      valid_dic = codecs.open(FLAGS.valid, "r", "utf-8").readlines()
-    if FLAGS.test:
-      test_dic = codecs.open(FLAGS.test, "r", "utf-8").readlines()
-    for i, line in enumerate(source_dic):
-      if i % 20 == 0 and not FLAGS.valid:
-        valid_dic.append(line)
-      elif (i % 20 == 1 or i % 20 == 2) and not FLAGS.test:
-        test_dic.append(line)
-      else: train_dic.append(line)
+    train_dic, valid_dic, test_dic =\
+       data_utils.split_dictionary(FLAGS.train, FLAGS.valid, FLAGS.test)
     g2p_model = G2PModel(train_dic, valid_dic, test_dic)
     g2p_model.train()
   else:
