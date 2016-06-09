@@ -57,7 +57,7 @@ tf.app.flags.DEFINE_string("output", "", "Decoding result file.")
 tf.app.flags.DEFINE_string("train", "", "Train dictionary.")
 tf.app.flags.DEFINE_string("valid", "", "Development dictionary.")
 tf.app.flags.DEFINE_string("test", "", "Test dictionary.")
-tf.app.flags.DEFINE_integer("max_steps", 10000,
+tf.app.flags.DEFINE_integer("max_steps", 0,
                             "How many training steps to do until stop training"
                             " (0: no limit).")
 
@@ -332,8 +332,6 @@ class G2PModel():
       model_assumption = self.decode_word(word, phonetics)
       if model_assumption not in speech:
         errors += 1
-        #print('Error:')
-        #print(word + ' : ' + ','.join(speech) + ' -> ' + model_assumption)
     return errors
 
 

@@ -181,12 +181,26 @@ def split_dictionary(train_path, valid_path=None, test_path=None):
     valid_dic = codecs.open(valid_path, "r", "utf-8").readlines()
   if test_path:
     test_dic = codecs.open(test_path, "r", "utf-8").readlines()
-  for i, line in enumerate(source_dic):
-    if i % 20 == 0 and not valid_path:
-      valid_dic.append(line)
-    elif (i % 20 == 1 or i % 20 == 2) and not test_path:
-      test_dic.append(line)
-    else: train_dic.append(line)
+
+  # Create dictionary mapping word to its different pronounciations.
+  word_pronounce_dict = {}
+  for line in source_dic:
+    lst = line.strip().split()
+    if len(lst) >= 2:
+      if lst[0] not in word_pronounce_dict:
+        word_pronounce_dict[lst[0]] = [" ".join(lst[1:])]
+      else:
+        word_pronounce_dict[lst[0]].append(" ".join(lst[1:]))
+
+  # Split dictionary to train, validation and test (if not assigned).
+  for i, word in enumerate(word_pronounce_dict):
+    for pronounce in word_pronounce_dict[word]:
+      if i % 20 == 0 and not valid_path:
+        valid_dic.append(word + ' ' + pronounce)
+      elif (i % 20 == 1 or i % 20 == 2) and not test_path:
+        test_dic.append(word + ' ' + pronounce)
+      else:
+        train_dic.append(word + ' ' + pronounce)
   return train_dic, valid_dic, test_dic
 
 
@@ -194,9 +208,9 @@ def prepare_g2p_data(model_dir, train_dic, valid_dic):
   """Create vocabularies into model_dir, create ids data lists.
 
   Args:
-    model_dir: directory in which the data sets will be stored.
-    train_dic:
-    valid_dic: :
+    model_dir: directory in which the data sets will be stored;
+    train_dic: training dictionary;
+    valid_dic: validation dictionary.
 
   Returns:
     A tuple of 6 elements:
