@@ -349,18 +349,11 @@ class G2PModel():
       # Decode from input file.
       test_dic = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
 
-    w_ph_dict = {}
-    for line in test_dic:
-      lst = line.strip().split()
-      if len(lst) >= 2:
-        if lst[0] not in w_ph_dict:
-          w_ph_dict[lst[0]] = [" ".join(lst[1:])]
-        else:
-          w_ph_dict[lst[0]].append(" ".join(lst[1:]))
-
-    errors = self.__calc_error(w_ph_dict)
-    print("WER : ", errors/len(w_ph_dict))
-    print("Accuracy : ", (1-(errors/len(w_ph_dict))))
+    test_word_pr_dic = data_utils.collect_pronunciations(test_dic)
+    print('Beginning calculation word error rate (WER) on test sample.')
+    errors = self.__calc_error(test_word_pr_dic)
+    print("WER : ", errors/len(test_word_pr_dic))
+    print("Accuracy : ", (1-(errors/len(test_word_pr_dic))))
 
 
   def decode(self):
@@ -377,6 +370,8 @@ class G2PModel():
 
     if output_file_path:
       with codecs.open(output_file_path, "w", "utf-8") as output_file:
+        print('Beginning decoding words from %s to %s' 
+              % (FLAGS.decode, FLAGS.output))
         for word in graphemes:
           word = word.strip()
           res_phoneme_seq = self.decode_word(word)
@@ -385,6 +380,7 @@ class G2PModel():
           output_file.write(res_phoneme_seq)
           output_file.write('\n')
     else:
+      print('Beginning decoding words from %s' % FLAGS.decode)
       for word in graphemes:
         word = word.strip()
         res_phoneme_seq = self.decode_word(word)

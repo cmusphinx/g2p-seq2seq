@@ -172,6 +172,20 @@ def split_to_grapheme_phoneme(inp_dictionary):
   return graphemes, phonemes
 
 
+def collect_pronunciations(source_dic):
+  '''Create dictionary mapping word to its different pronounciations.
+  '''
+  word_pr_dic = {}
+  for line in source_dic:
+    lst = line.strip().split()
+    if len(lst) >= 2:
+      if lst[0] not in word_pr_dic:
+        word_pr_dic[lst[0]] = [" ".join(lst[1:])]
+      else:
+        word_pr_dic[lst[0]].append(" ".join(lst[1:]))
+  return word_pr_dic
+
+
 def split_dictionary(train_path, valid_path=None, test_path=None):
   """Split source dictionary to train, validation and test sets.
   """
@@ -182,25 +196,17 @@ def split_dictionary(train_path, valid_path=None, test_path=None):
   if test_path:
     test_dic = codecs.open(test_path, "r", "utf-8").readlines()
 
-  # Create dictionary mapping word to its different pronounciations.
-  word_pronounce_dict = {}
-  for line in source_dic:
-    lst = line.strip().split()
-    if len(lst) >= 2:
-      if lst[0] not in word_pronounce_dict:
-        word_pronounce_dict[lst[0]] = [" ".join(lst[1:])]
-      else:
-        word_pronounce_dict[lst[0]].append(" ".join(lst[1:]))
+  word_pr_dic = collect_pronunciations(source_dic)
 
   # Split dictionary to train, validation and test (if not assigned).
-  for i, word in enumerate(word_pronounce_dict):
-    for pronounce in word_pronounce_dict[word]:
+  for i, word in enumerate(word_pr_dic):
+    for pr in word_pr_dic[word]:
       if i % 20 == 0 and not valid_path:
-        valid_dic.append(word + ' ' + pronounce)
+        valid_dic.append(word + ' ' + pr)
       elif (i % 20 == 1 or i % 20 == 2) and not test_path:
-        test_dic.append(word + ' ' + pronounce)
+        test_dic.append(word + ' ' + pr)
       else:
-        train_dic.append(word + ' ' + pronounce)
+        train_dic.append(word + ' ' + pr)
   return train_dic, valid_dic, test_dic
 
 

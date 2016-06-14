@@ -58,7 +58,7 @@ See an [example dictionary](http://github.com/cmusphinx/cmudict)
 
 You can set up maximum training steps:
 ```
-  "--max_steps" - Maximum number of training steps (Default: 10000).
+  "--max_steps" - Maximum number of training steps (Default: 0).
      If 0 train until no improvement is observed
 ```
 
@@ -83,14 +83,14 @@ You can manually point out Development and Test datasets:
 ```
 
 
-#### Word error rate on 12K test set of CMU dictionary
+#### Word error rate on CMU dictionary data sets
 
-System | WER,%
---- | --- 
-Baseline WFST (Phonetisaurus) | 28.0
-LSTM num_layers=2, size=64    | 32.0
-LSTM num_layers=2, size=512   | **24.2**
-
+System | WER ([CMUdict PRONALSYL 2007](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/phonetisaurus-cmudict-split.tar.gz)), % | WER ([CMUdict latest\*](https://github.com/cmusphinx/cmudict)), %
+--- | --- | ---
+Baseline WFST (Phonetisaurus) | 24.40 | 33.89
+LSTM num_layers=2, size=64    | 32.03 | 39.61
+LSTM num_layers=2, size=512   | **24.23** | 31.14
+\* These results pointed out for dictionary without stress.
 
 ## References
 ---------------------------------------
