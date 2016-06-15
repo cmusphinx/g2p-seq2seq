@@ -222,7 +222,8 @@ class G2PModel():
         step_time, loss = 0.0, 0.0
         # Save checkpoint and zero timer and loss.
         checkpoint_path = os.path.join(FLAGS.model, "model")
-        self.model.saver.save(self.session, checkpoint_path)
+        self.model.saver.save(self.session, checkpoint_path,
+                              write_meta_graph=False)
         self.__run_evals()
     print('Training process stopped.')
 
