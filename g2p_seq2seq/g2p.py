@@ -68,9 +68,9 @@ class G2PModel():
   """Grapheme-to-Phoneme translation model class.
 
   Constructor parameters (for training mode only):
-    train_dic: Train dictionary;
-    valid_dic: Development dictionary;
-    test_dic: Test dictionary.
+    train_file: Train dictionary;
+    valid_file: Development dictionary;
+    test_file: Test dictionary.
 
   Attributes:
     gr_vocab: Grapheme vocabulary;
@@ -88,9 +88,9 @@ class G2PModel():
   # See seq2seq_model.Seq2SeqModel for details of how they work.
   _BUCKETS = [(5, 10), (10, 15), (40, 50)]
 
-  def __init__(self, train_dic=None, valid_dic=None, test_dic=None):
+  def __init__(self, train_file=None, valid_file=None, test_file=None):
     """Create G2P model and initialize or load parameters in session."""
-    self.test_dic = test_dic
+    self.test_file = test_file
 
     # Preliminary actions before model creation.
     if FLAGS.train:
@@ -101,8 +101,8 @@ class G2PModel():
       # Prepare G2P data.
       print("Preparing G2P data")
       train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, self.gr_vocab,\
-      self.ph_vocab = data_utils.prepare_g2p_data(FLAGS.model, train_dic,
-                                                  valid_dic)
+      self.ph_vocab = data_utils.prepare_g2p_data(FLAGS.model, train_file,
+                                                  valid_file)
       # Read data into buckets and compute their sizes.
       print ("Reading development and training data.")
       self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
@@ -133,7 +133,7 @@ class G2PModel():
                                             FLAGS.learning_rate,
                                             FLAGS.learning_rate_decay_factor,
                                             forward_only=not FLAGS.train)
-
+    self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1)
     self.__create_model()
 
 
@@ -221,16 +221,15 @@ class G2PModel():
         previous_losses.append(loss)
         step_time, loss = 0.0, 0.0
         # Save checkpoint and zero timer and loss.
-        checkpoint_path = os.path.join(FLAGS.model, "translate.ckpt")
-        self.model.saver.save(self.session, checkpoint_path,
-                              global_step=self.model.global_step)
+        checkpoint_path = os.path.join(FLAGS.model, "model")
+        self.model.saver.save(self.session, checkpoint_path)
         self.__run_evals()
     print('Training process stopped.')
 
     print('Beginning calculation word error rate (WER) on test sample.')
     self.model.forward_only = True
     self.model.batch_size = 1  # We decode one word at a time.
-    self.evaluate(self.test_dic)
+    self.evaluate(self.test_file)
 
 
   def __calc_step_loss(self, train_buckets_scale):
@@ -320,40 +319,40 @@ class G2PModel():
       else: break
 
 
-  def __calc_error(self, w_ph_dict):
-    """Calculate number of wrong predicted words.
+  def __calc_error(self, dictionary):
+    """Calculate a number of prediction errors.
     """
     errors = 0
-    for word, speech in w_ph_dict.items():
-      phonetics = []
+    for word, pronunciations in dictionary.items():
+      phonemes = []
       if FLAGS.train:
-        phonetics = speech[0].split()
+        phonemes = pronunciations[0].split()
 
-      model_assumption = self.decode_word(word, phonetics)
-      if model_assumption not in speech:
+      hyp = self.decode_word(word, phonemes)
+      if hyp not in pronunciations:
         errors += 1
     return errors
 
 
-  def evaluate(self, test_dic=None):
+  def evaluate(self, test_file=None):
     """Calculate and print out word error rate (WER) and Accuracy
        on test sample.
 
     Args:
       No arguments need if this function called not from active Session
       in tensorflow. Otherwise test dictionary should be pointed out:
-      test_dic: List of test dictionary. Each element of list must be String
+      test_file: List of test dictionary. Each element of list must be String
                 containing word and its pronounciation (e.g., "word W ER D");
     """
-    if not test_dic:
+    if not test_file:
       # Decode from input file.
-      test_dic = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
+      test_file = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
 
-    test_word_pr_dic = data_utils.collect_pronunciations(test_dic)
+    test_dic = data_utils.collect_pronunciations(test_file)
     print('Beginning calculation word error rate (WER) on test sample.')
-    errors = self.__calc_error(test_word_pr_dic)
-    print("WER : ", errors/len(test_word_pr_dic))
-    print("Accuracy : ", (1-(errors/len(test_word_pr_dic))))
+    errors = self.__calc_error(test_dic)
+    print("WER : ", errors/len(test_dic))
+    print("Accuracy : ", (1-(errors/len(test_dic))))
 
 
   def decode(self):
@@ -391,9 +390,9 @@ def main(_):
   """Main function.
   """
   if FLAGS.train:
-    train_dic, valid_dic, test_dic =\
+    train_file, valid_file, test_file =\
        data_utils.split_dictionary(FLAGS.train, FLAGS.valid, FLAGS.test)
-    g2p_model = G2PModel(train_dic, valid_dic, test_dic)
+    g2p_model = G2PModel(train_file, valid_file, test_file)
     g2p_model.train()
   else:
     g2p_model = G2PModel()

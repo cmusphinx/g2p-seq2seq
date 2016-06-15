@@ -172,18 +172,18 @@ def split_to_grapheme_phoneme(inp_dictionary):
   return graphemes, phonemes
 
 
-def collect_pronunciations(source_dic):
+def collect_pronunciations(dic_lines):
   '''Create dictionary mapping word to its different pronounciations.
   '''
-  word_pr_dic = {}
-  for line in source_dic:
+  dic = {}
+  for line in dic_lines:
     lst = line.strip().split()
     if len(lst) >= 2:
-      if lst[0] not in word_pr_dic:
-        word_pr_dic[lst[0]] = [" ".join(lst[1:])]
+      if lst[0] not in dic:
+        dic[lst[0]] = [" ".join(lst[1:])]
       else:
-        word_pr_dic[lst[0]].append(" ".join(lst[1:]))
-  return word_pr_dic
+        dic[lst[0]].append(" ".join(lst[1:]))
+  return dic
 
 
 def split_dictionary(train_path, valid_path=None, test_path=None):
