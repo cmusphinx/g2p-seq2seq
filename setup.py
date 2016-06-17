@@ -25,7 +25,7 @@ setup(
     url='https://github.com/cmusphinx/g2p-seq2seq',
     author='Nurtas Makhazhanov',
     author_email='makhazhanovn@gmail.com',
-    license='BSD',
+    license='AC Technologies',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
@@ -45,4 +45,5 @@ setup(
             'g2p_seq2seq=g2p:main',
         ],
     },
+    test_suite = 'g2p_unittest'
 )
