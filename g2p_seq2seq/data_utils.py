@@ -105,33 +105,29 @@ def load_vocabulary(vocabulary_path, reverse=False):
     return dict([(x, y) for (y, x) in enumerate(rev_vocab)])
 
 
-def save_params(num_layers, size, model_path):
-  """Save model parameters.
+def save_params(num_layers, size, model_dir):
+  """Save model parameters in model_dir directory.
 
   Returns:
     num_layers: Number of layers in the model;
     size: Size of each model layer.
   """
-  if not os.path.exists(model_path):
-    os.makedirs(model_path)
+  if not os.path.exists(model_dir):
+    os.makedirs(model_dir)
   # Save model's architecture
-  with open(os.path.join(model_path, "model.params"), 'w') as param_file:
+  with open(os.path.join(model_dir, "model.params"), 'w') as param_file:
     param_file.write("num_layers:" + str(num_layers) + "\n")
     param_file.write("size:" + str(size))
   return num_layers, size
 
 
-def load_params(default_num_layers, default_size, model_path):
-  """Load parameters from 'model.params' file,
-  or if file is absent, use Default parameters.
+def load_params(model_path):
+  """Load parameters from 'model.params' file.
 
   Returns:
-    default_num_layers: Default number of layers in the model;
-    default_size: Default size of each model layer.
+    num_layers: Number of layers in the model;
+    size: Size of each model layer.
   """
-  num_layers = default_num_layers
-  size = default_size
-
   # Checking model's architecture for decode processes.
   if gfile.Exists(os.path.join(model_path, "model.params")):
     params = open(os.path.join(model_path, "model.params")).readlines()
@@ -196,27 +192,28 @@ def split_dictionary(train_path, valid_path=None, test_path=None):
   if test_path:
     test_dic = codecs.open(test_path, "r", "utf-8").readlines()
 
-  word_pr_dic = collect_pronunciations(source_dic)
+  dic = collect_pronunciations(source_dic)
 
   # Split dictionary to train, validation and test (if not assigned).
-  for i, word in enumerate(word_pr_dic):
-    for pr in word_pr_dic[word]:
+  for i, word in enumerate(dic):
+    for pronunciations in dic[word]:
       if i % 20 == 0 and not valid_path:
-        valid_dic.append(word + ' ' + pr)
+        valid_dic.append(word + ' ' + pronunciations)
       elif (i % 20 == 1 or i % 20 == 2) and not test_path:
-        test_dic.append(word + ' ' + pr)
+        test_dic.append(word + ' ' + pronunciations)
       else:
-        train_dic.append(word + ' ' + pr)
+        train_dic.append(word + ' ' + pronunciations)
   return train_dic, valid_dic, test_dic
 
 
-def prepare_g2p_data(model_dir, train_dic, valid_dic):
+def prepare_g2p_data(model_dir, train_path, valid_path, test_path):
   """Create vocabularies into model_dir, create ids data lists.
 
   Args:
     model_dir: directory in which the data sets will be stored;
-    train_dic: training dictionary;
-    valid_dic: validation dictionary.
+    train_path: path to training dictionary;
+    valid_path: path to validation dictionary;
+    test_path: path to test dictionary.
 
   Returns:
     A tuple of 6 elements:
@@ -227,7 +224,10 @@ def prepare_g2p_data(model_dir, train_dic, valid_dic):
       (5) Grapheme vocabulary,
       (6) Phoneme vocabulary.
   """
-  #Split dictionaries into two separate lists with graphemes and phonemes.
+  # Create train, validation and test sets.
+  train_dic, valid_dic, test_dic = split_dictionary(train_path, valid_path,
+                                                    test_path)
+  # Split dictionaries into two separate lists with graphemes and phonemes.
   train_gr, train_ph = split_to_grapheme_phoneme(train_dic)
   valid_gr, valid_ph = split_to_grapheme_phoneme(valid_dic)
 
@@ -258,4 +258,5 @@ def prepare_g2p_data(model_dir, train_dic, valid_dic):
 
   return (train_gr_ids, train_ph_ids,
           valid_gr_ids, valid_ph_ids,
-          gr_vocab, ph_vocab)
+          gr_vocab, ph_vocab,
+          test_dic)

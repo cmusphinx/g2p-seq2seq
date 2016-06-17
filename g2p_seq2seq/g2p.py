@@ -88,38 +88,64 @@ class G2PModel():
   # See seq2seq_model.Seq2SeqModel for details of how they work.
   _BUCKETS = [(5, 10), (10, 15), (40, 50)]
 
-  def __init__(self, train_file=None, valid_file=None, test_file=None):
+  def __init__(self, model_dir):
     """Create G2P model and initialize or load parameters in session."""
-    self.test_file = test_file
+    self.model_dir = model_dir
 
     # Preliminary actions before model creation.
-    if FLAGS.train:
-      #Load model parameters.
-      num_layers, size = data_utils.save_params(FLAGS.num_layers, FLAGS.size,
-                                                FLAGS.model)
-      batch_size = FLAGS.batch_size
-      # Prepare G2P data.
-      print("Preparing G2P data")
-      train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, self.gr_vocab,\
-      self.ph_vocab = data_utils.prepare_g2p_data(FLAGS.model, train_file,
-                                                  valid_file)
-      # Read data into buckets and compute their sizes.
-      print ("Reading development and training data.")
-      self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
-      self.train_set = self.__put_into_buckets(train_gr_ids, train_ph_ids)
-    else:
-      #Load model parameters.
-      num_layers, size = data_utils.load_params(FLAGS.num_layers, FLAGS.size,
-                                                FLAGS.model)
-      batch_size = 1 # We decode one word at a time.
-      # Load vocabularies
-      self.gr_vocab = data_utils.load_vocabulary(os.path.join(FLAGS.model,
-                                                              "vocab.grapheme"))
-      self.ph_vocab = data_utils.load_vocabulary(os.path.join(FLAGS.model,
-                                                              "vocab.phoneme"))
+    if not os.path.exists(os.path.join(self.model_dir, "model")):
+      return
+
+    #Load model parameters.
+    num_layers, size = data_utils.load_params(self.model_dir)
+    batch_size = 1 # We decode one word at a time.
+    # Load vocabularies
+    self.gr_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
+                                                            "vocab.grapheme"))
+    self.ph_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
+                                                            "vocab.phoneme"))
 
     self.rev_ph_vocab =\
-        data_utils.load_vocabulary(os.path.join(FLAGS.model, "vocab.phoneme"),
+      data_utils.load_vocabulary(os.path.join(self.model_dir, "vocab.phoneme"),
+                                 reverse=True)
+
+    self.session = tf.Session()
+
+    # Create model.
+    print("Creating %d layers of %d units." % (num_layers, size))
+    self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
+                                            len(self.ph_vocab), self._BUCKETS,
+                                            size, num_layers, 0, batch_size,
+                                            0, 0, forward_only=True)
+    self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1)
+    # Check for saved models and restore them.
+    print("Reading model parameters from %s" % self.model_dir)
+    self.model.saver.restore(self.session, os.path.join(self.model_dir,
+                                                        "model"))
+
+
+  def __train_init(self, params, train_path, valid_path=None, test_path=None):
+    """Create G2P model and initialize or load parameters in session."""
+
+    # Preliminary actions before model creation.
+    # Load model parameters.
+    num_layers, size = data_utils.save_params(params.num_layers,
+                                              params.size,
+                                              self.model_dir)
+    # Prepare G2P data.
+    print("Preparing G2P data")
+    train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, self.gr_vocab,\
+    self.ph_vocab, self.test_file =\
+    data_utils.prepare_g2p_data(self.model_dir, train_path, valid_path,
+                                test_path)
+    # Read data into buckets and compute their sizes.
+    print ("Reading development and training data.")
+    self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
+    self.train_set = self.__put_into_buckets(train_gr_ids, train_ph_ids)
+
+    self.rev_ph_vocab =\
+        data_utils.load_vocabulary(os.path.join(self.model_dir,
+                                                "vocab.phoneme"),
                                    reverse=True)
 
     self.session = tf.Session()
@@ -129,12 +155,14 @@ class G2PModel():
     self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
                                             len(self.ph_vocab), self._BUCKETS,
                                             size, num_layers,
-                                            FLAGS.max_gradient_norm, batch_size,
-                                            FLAGS.learning_rate,
-                                            FLAGS.learning_rate_decay_factor,
-                                            forward_only=not FLAGS.train)
+                                            params.max_gradient_norm,
+                                            params.batch_size,
+                                            params.learning_rate,
+                                            params.lr_decay_factor,
+                                            forward_only=False)
     self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1)
-    self.__create_model()
+    print("Created model with fresh parameters.")
+    self.session.run(tf.initialize_all_variables())
 
 
   def __put_into_buckets(self, source, target):
@@ -164,24 +192,13 @@ class G2PModel():
     return data_set
 
 
-  def __create_model(self):
-    """Check for saved models and restore them, otherwise create new model.
-    """
-    ckpt = tf.train.get_checkpoint_state(FLAGS.model)
-    if ckpt and tf.gfile.Exists(ckpt.model_checkpoint_path):
-      print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
-      self.model.saver.restore(self.session, ckpt.model_checkpoint_path)
-    elif tf.gfile.Exists(os.path.join(FLAGS.model, "model")):
-      self.model.saver.restore(self.session, os.path.join(FLAGS.model, "model"))
-    elif FLAGS.train:
-      print("Created model with fresh parameters.")
-      self.session.run(tf.initialize_all_variables())
-    else:
-      raise ValueError("Model not found in %s" % ckpt.model_checkpoint_path)
-
-
-  def train(self):
+  def train(self, params, train_path, valid_path, test_path):
     """Train a gr->ph translation model using G2P data."""
+    if os.path.exists(os.path.join(self.model_dir, "model")):
+      raise StandardError("Model already exists in %s" % self.model_dir)
+    else:
+      self.__train_init(params, train_path, valid_path, test_path)
+
     train_bucket_sizes = [len(self.train_set[b])
                           for b in xrange(len(self._BUCKETS))]
     train_total_size = float(sum(train_bucket_sizes))
@@ -195,17 +212,17 @@ class G2PModel():
     step_time, loss = 0.0, 0.0
     current_step = 0
     previous_losses = []
-    while (FLAGS.max_steps == 0
-           or self.model.global_step.eval(self.session) <= FLAGS.max_steps):
+    while (params.max_steps == 0
+           or self.model.global_step.eval(self.session) <= params.max_steps):
       # Get a batch and make a step.
       start_time = time.time()
       step_loss = self.__calc_step_loss(train_buckets_scale)
-      step_time += (time.time() - start_time) / FLAGS.steps_per_checkpoint
-      loss += step_loss / FLAGS.steps_per_checkpoint
+      step_time += (time.time() - start_time) / params.steps_per_checkpoint
+      loss += step_loss / params.steps_per_checkpoint
       current_step += 1
 
       # Once in a while, we save checkpoint, print statistics, and run evals.
-      if current_step % FLAGS.steps_per_checkpoint == 0:
+      if current_step % params.steps_per_checkpoint == 0:
         # Print statistics for the previous epoch.
         perplexity = math.exp(loss) if loss < 300 else float('inf')
         print ("global step %d learning rate %.4f step-time %.2f perplexity "
@@ -221,7 +238,7 @@ class G2PModel():
         previous_losses.append(loss)
         step_time, loss = 0.0, 0.0
         # Save checkpoint and zero timer and loss.
-        checkpoint_path = os.path.join(FLAGS.model, "model")
+        checkpoint_path = os.path.join(self.model_dir, "model")
         self.model.saver.save(self.session, checkpoint_path,
                               write_meta_graph=False)
         self.__run_evals()
@@ -326,7 +343,7 @@ class G2PModel():
     errors = 0
     for word, pronunciations in dictionary.items():
       phonemes = []
-      if FLAGS.train:
+      if not FLAGS.evaluate:
         phonemes = pronunciations[0].split()
 
       hyp = self.decode_word(word, phonemes)
@@ -370,7 +387,7 @@ class G2PModel():
 
     if output_file_path:
       with codecs.open(output_file_path, "w", "utf-8") as output_file:
-        print('Beginning decoding words from %s to %s' 
+        print('Beginning decoding words from %s to %s'
               % (FLAGS.decode, FLAGS.output))
         for word in graphemes:
           word = word.strip()
@@ -387,16 +404,30 @@ class G2PModel():
         print(word + ' ' + res_phoneme_seq)
 
 
+class G2P_Params():
+  """Class with training parameters."""
+  def __init__(self):
+    self.learning_rate = FLAGS.learning_rate
+    self.lr_decay_factor = FLAGS.learning_rate_decay_factor
+    self.max_gradient_norm = FLAGS.max_gradient_norm
+    self.batch_size = FLAGS.batch_size
+    self.size = FLAGS.size
+    self.num_layers = FLAGS.num_layers
+    self.steps_per_checkpoint = FLAGS.steps_per_checkpoint
+    self.max_steps = FLAGS.max_steps
+
+
 def main(_):
   """Main function.
   """
   if FLAGS.train:
-    train_file, valid_file, test_file =\
-       data_utils.split_dictionary(FLAGS.train, FLAGS.valid, FLAGS.test)
-    g2p_model = G2PModel(train_file, valid_file, test_file)
-    g2p_model.train()
+    g2p_model = G2PModel(FLAGS.model)
+    g2p_params = G2P_Params()
+    g2p_model.train(g2p_params, FLAGS.train, FLAGS.valid, FLAGS.test)
   else:
-    g2p_model = G2PModel()
+    g2p_model = G2PModel(FLAGS.model)
+    if not hasattr(g2p_model, "model"):
+      raise StandardError("Model not found in %s" % g2p_model.model_dir)
     if FLAGS.decode:
       g2p_model.decode()
     elif FLAGS.interactive:
