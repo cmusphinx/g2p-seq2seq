@@ -244,11 +244,6 @@ class G2PModel():
         self.__run_evals()
     print('Training process stopped.')
 
-    print('Beginning calculation word error rate (WER) on test sample.')
-    self.model.forward_only = True
-    self.model.batch_size = 1  # We decode one word at a time.
-    self.evaluate(self.test_file)
-
 
   def __calc_step_loss(self, train_buckets_scale):
     """Choose a bucket according to data distribution. We pick a random number
@@ -352,28 +347,24 @@ class G2PModel():
     return errors
 
 
-  def evaluate(self, test_file=None):
+  def evaluate(self, test_file):
     """Calculate and print out word error rate (WER) and Accuracy
        on test sample.
 
     Args:
-      No arguments need if this function called not from active Session
-      in tensorflow. Otherwise test dictionary should be pointed out:
       test_file: List of test dictionary. Each element of list must be String
                 containing word and its pronounciation (e.g., "word W ER D");
     """
-    if not test_file:
-      # Decode from input file.
-      test_file = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
-
     test_dic = data_utils.collect_pronunciations(test_file)
     print('Beginning calculation word error rate (WER) on test sample.')
     errors = self.__calc_error(test_dic)
-    print("WER : ", errors/len(test_dic))
-    print("Accuracy : ", (1-(errors/len(test_dic))))
+    print("Number of test utterances: %d" % len(test_dic))
+    print("Number of errors: %d" % errors)
+    print("WER : {:.2%}".format(errors/len(test_dic)))
+    print("Accuracy : {:.2%}".format(1-(errors/len(test_dic))))
 
 
-  def decode(self):
+  def decode(self, decode_file_path, output_file_path=None):
     """Decode words from file.
 
     Returns:
@@ -381,14 +372,12 @@ class G2PModel():
       this file. Otherwise, print decoded words in standard output.
     """
     # Decode from input file.
-    graphemes = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
-
-    output_file_path = FLAGS.output
+    graphemes = codecs.open(decode_file_path, "r", "utf-8").readlines()
 
     if output_file_path:
       with codecs.open(output_file_path, "w", "utf-8") as output_file:
         print('Beginning decoding words from %s to %s'
-              % (FLAGS.decode, FLAGS.output))
+              % (decode_file_path, output_file_path))
         for word in graphemes:
           word = word.strip()
           res_phoneme_seq = self.decode_word(word)
@@ -397,7 +386,7 @@ class G2PModel():
           output_file.write(res_phoneme_seq)
           output_file.write('\n')
     else:
-      print('Beginning decoding words from %s' % FLAGS.decode)
+      print('Beginning decoding words from %s' % decode_file_path)
       for word in graphemes:
         word = word.strip()
         res_phoneme_seq = self.decode_word(word)
@@ -421,19 +410,26 @@ def main(_):
   """Main function.
   """
   if FLAGS.train:
-    g2p_model = G2PModel(FLAGS.model)
-    g2p_params = G2P_Params()
-    g2p_model.train(g2p_params, FLAGS.train, FLAGS.valid, FLAGS.test)
+    with tf.Graph().as_default():
+      g2p_model = G2PModel(FLAGS.model)
+      g2p_params = G2P_Params()
+      g2p_model.train(g2p_params, FLAGS.train, FLAGS.valid, FLAGS.test)
+      test_file = g2p_model.test_file
+    with tf.Graph().as_default():
+      g2p_model_eval = G2PModel(FLAGS.model)
+      g2p_model_eval.evaluate(test_file)
   else:
-    g2p_model = G2PModel(FLAGS.model)
-    if not hasattr(g2p_model, "model"):
-      raise StandardError("Model not found in %s" % g2p_model.model_dir)
-    if FLAGS.decode:
-      g2p_model.decode()
-    elif FLAGS.interactive:
-      g2p_model.interactive()
-    elif FLAGS.evaluate:
-      g2p_model.evaluate()
+    with tf.Graph().as_default():
+      g2p_model = G2PModel(FLAGS.model)
+      if not hasattr(g2p_model, "model"):
+        raise StandardError("Model not found in %s" % g2p_model.model_dir)
+      if FLAGS.decode:
+        g2p_model.decode(FLAGS.decode, FLAGS.output)
+      elif FLAGS.interactive:
+        g2p_model.interactive()
+      elif FLAGS.evaluate:
+        test_file = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
+        g2p_model.evaluate(test_file)
 
 if __name__ == "__main__":
   tf.app.run()
