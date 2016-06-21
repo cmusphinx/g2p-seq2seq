@@ -322,6 +322,8 @@ class G2PModel():
   def interactive(self):
     """Decode word from standard input.
     """
+    if not hasattr(self, "model"):
+      raise StandardError("Model not found in %s" % self.model_dir)
     while True:
       print("> ", end="")
       word = sys.stdin.readline().decode("utf-8").strip()
@@ -355,13 +357,18 @@ class G2PModel():
       test_file: List of test dictionary. Each element of list must be String
                 containing word and its pronounciation (e.g., "word W ER D");
     """
+    if not hasattr(self, "model"):
+      raise StandardError("Model not found in %s" % self.model_dir)
+
     test_dic = data_utils.collect_pronunciations(test_file)
+
     print('Beginning calculation word error rate (WER) on test sample.')
     errors = self.__calc_error(test_dic)
-    print("Number of test utterances: %d" % len(test_dic))
-    print("Number of errors: %d" % errors)
-    print("WER : {:.2%}".format(errors/len(test_dic)))
-    print("Accuracy : {:.2%}".format(1-(errors/len(test_dic))))
+
+    print("Words : %d" % len(test_dic))
+    print("Errors: %d" % errors)
+    print("WER : %.3f" % (float(errors)/len(test_dic)))
+    print("Accuracy : %.3f" % float(1-(errors/len(test_dic))))
 
 
   def decode(self, decode_file_path, output_file_path=None):
@@ -371,6 +378,9 @@ class G2PModel():
       if [--output output_file] pointed out, write decoded word sequences in
       this file. Otherwise, print decoded words in standard output.
     """
+    if not hasattr(self, "model"):
+      raise StandardError("Model not found in %s" % self.model_dir)
+
     # Decode from input file.
     graphemes = codecs.open(decode_file_path, "r", "utf-8").readlines()
 
@@ -421,8 +431,6 @@ def main(_):
   else:
     with tf.Graph().as_default():
       g2p_model = G2PModel(FLAGS.model)
-      if not hasattr(g2p_model, "model"):
-        raise StandardError("Model not found in %s" % g2p_model.model_dir)
       if FLAGS.decode:
         g2p_model.decode(FLAGS.decode, FLAGS.output)
       elif FLAGS.interactive:
