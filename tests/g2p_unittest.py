@@ -1,8 +1,4 @@
 import os, sys, inspect
-# realpath() will make your script run, even if you symlink it :)
-#cmd_folder = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile( inspect.currentframe() ))[0]))
-#if cmd_folder not in sys.path:
-#    sys.path.insert(0, cmd_folder)
 
 sys.path.insert(0, '../g2p_seq2seq')
 
@@ -10,7 +6,7 @@ import unittest
 import g2p
 import data_utils
 
-class TestStringMethods(unittest.TestCase):
+class TestG2P(unittest.TestCase):
 
   def test_train(self):
     model_dir = "../tests/models/train"
@@ -31,8 +27,8 @@ class TestStringMethods(unittest.TestCase):
     model_dir = "../tests/models/decode"
     with g2p.tf.Graph().as_default():
       g2p_evaluate_model = g2p.G2PModel(model_dir)
-      test_file = g2p.codecs.open("../tests/data/toydict.test", "r", "utf-8").readlines()
-      g2p_evaluate_model.evaluate(test_file)
+      test_lines = g2p.codecs.open("../tests/data/toydict.test", "r", "utf-8").readlines()
+      g2p_evaluate_model.evaluate(test_lines)
 
 
   def test_decode(self):
@@ -43,5 +39,5 @@ class TestStringMethods(unittest.TestCase):
       g2p_decode_model.decode(decode_file_path)
 
 
-suite = unittest.TestLoader().loadTestsFromTestCase(TestStringMethods)
+suite = unittest.TestLoader().loadTestsFromTestCase(TestG2P)
 unittest.TextTestRunner(verbosity=2).run(suite)
