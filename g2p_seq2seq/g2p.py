@@ -238,9 +238,10 @@ class G2PModel():
         previous_losses.append(loss)
         step_time, loss = 0.0, 0.0
         # Save checkpoint and zero timer and loss.
-        checkpoint_path = os.path.join(self.model_dir, "model")
-        self.model.saver.save(self.session, checkpoint_path,
-                              write_meta_graph=False)
+        if params.write_model:
+          checkpoint_path = os.path.join(self.model_dir, "model")
+          self.model.saver.save(self.session, checkpoint_path,
+                                write_meta_graph=False)
         self.__run_evals()
     print('Training process stopped.')
 
@@ -334,7 +335,7 @@ class G2PModel():
       else: break
 
 
-  def __calc_error(self, dictionary):
+  def calc_error(self, dictionary):
     """Calculate a number of prediction errors.
     """
     errors = 0
@@ -363,7 +364,7 @@ class G2PModel():
     test_dic = data_utils.collect_pronunciations(test_lines)
 
     print('Beginning calculation word error rate (WER) on test sample.')
-    errors = self.__calc_error(test_dic)
+    errors = self.calc_error(test_dic)
 
     print("Words : %d" % len(test_dic))
     print("Errors: %d" % errors)
@@ -383,7 +384,7 @@ class G2PModel():
 
     # Decode from input file.
     if output_file:
-      for word in graphemes:
+      for word in decode_lines:
         word = word.strip()
         res_phoneme_seq = self.decode_word(word)
         output_file.write(word)
@@ -392,7 +393,7 @@ class G2PModel():
         output_file.write('\n')
       output_file.close()
     else:
-      for word in graphemes:
+      for word in decode_lines:
         word = word.strip()
         res_phoneme_seq = self.decode_word(word)
         print(word + ' ' + res_phoneme_seq)
@@ -409,6 +410,7 @@ class G2P_Params():
     self.num_layers = FLAGS.num_layers
     self.steps_per_checkpoint = FLAGS.steps_per_checkpoint
     self.max_steps = FLAGS.max_steps
+    self.write_model = True
 
 
 def main(_):
