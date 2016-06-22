@@ -65,7 +65,7 @@ tf.app.flags.DEFINE_integer("max_steps", 0,
 
 FLAGS = tf.app.flags.FLAGS
 
-class G2PModel():
+class G2PModel(object):
   """Grapheme-to-Phoneme translation model class.
 
   Constructor parameters (for training mode only):
@@ -308,8 +308,7 @@ class G2PModel():
       if data_utils.EOS_ID in outputs:
         outputs = outputs[:outputs.index(data_utils.EOS_ID)]
       # Phoneme sequence corresponding to outputs.
-      phonemes = " ".join([self.rev_ph_vocab[output]
-                                  for output in outputs])
+      phonemes = " ".join([self.rev_ph_vocab[output] for output in outputs])
     else:
       print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent))
     return phonemes
@@ -394,7 +393,7 @@ class G2PModel():
     return phoneme_lines
 
 
-class G2P_Params():
+class TrainingParams(object):
   """Class with training parameters."""
   def __init__(self):
     self.learning_rate = FLAGS.learning_rate
@@ -414,7 +413,7 @@ def main(_):
   if FLAGS.train:
     with tf.Graph().as_default():
       g2p_model = G2PModel(FLAGS.model)
-      g2p_params = G2P_Params()
+      g2p_params = TrainingParams()
       g2p_model.train(g2p_params, FLAGS.train, FLAGS.valid, FLAGS.test)
       test_lines = g2p_model.test_lines
     with tf.Graph().as_default():
