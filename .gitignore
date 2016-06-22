@@ -4,3 +4,4 @@ model/*
 *.egg-info/*
 build/*
 dist/*
+tests/models/train/*

@@ -276,22 +276,16 @@ class G2PModel():
       print("  eval: bucket %d perplexity %.2f" % (bucket_id, eval_ppx))
 
 
-  def decode_word(self, word, phonetics=None):
+  def decode_word(self, word):
     """Decode input word to sequence of phonemes.
 
     Args:
       word: input word;
-      phonetics: target phoneme sequence. This argument is used only with model
-                 created in train mode
 
     Returns:
-      res_phoneme_seq: decoded phoneme sequence for input word;
+      phonemes: decoded phoneme sequence for input word;
     """
-    ph_ids = []
-    if phonetics:
-      ph_ids = data_utils.symbols_to_ids(phonetics, self.ph_vocab)
-
-    res_phoneme_seq = ""
+    phonemes = ""
     # Check if all graphemes attended in vocabulary
     gr_absent = set(gr for gr in word if gr not in self.gr_vocab)
     if not gr_absent:
@@ -302,7 +296,7 @@ class G2PModel():
                        if self._BUCKETS[b][0] > len(token_ids)])
       # Get a 1-element batch to feed the word to the model.
       encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
-          {bucket_id: [(token_ids, ph_ids)]}, bucket_id)
+          {bucket_id: [(token_ids, [])]}, bucket_id)
       # Get output logits for the word.
       _, _, output_logits = self.model.step(self.session, encoder_inputs,
                                             decoder_inputs, target_weights,
@@ -313,11 +307,11 @@ class G2PModel():
       if data_utils.EOS_ID in outputs:
         outputs = outputs[:outputs.index(data_utils.EOS_ID)]
       # Phoneme sequence corresponding to outputs.
-      res_phoneme_seq = " ".join([self.rev_ph_vocab[output]
+      phonemes = " ".join([self.rev_ph_vocab[output]
                                   for output in outputs])
     else:
       print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent))
-    return res_phoneme_seq
+    return phonemes
 
 
   def interactive(self):
@@ -329,9 +323,9 @@ class G2PModel():
       print("> ", end="")
       word = sys.stdin.readline().decode("utf-8").strip()
       if word:
-        res_phoneme_seq = self.decode_word(word)
-        if res_phoneme_seq:
-          print(res_phoneme_seq)
+        phonemes = self.decode_word(word)
+        if phonemes:
+          print(phonemes)
       else: break
 
 
@@ -340,11 +334,7 @@ class G2PModel():
     """
     errors = 0
     for word, pronunciations in dictionary.items():
-      phonemes = []
-      if not FLAGS.evaluate:
-        phonemes = pronunciations[0].split()
-
-      hyp = self.decode_word(word, phonemes)
+      hyp = self.decode_word(word)
       if hyp not in pronunciations:
         errors += 1
     return errors
@@ -382,21 +372,25 @@ class G2PModel():
     if not hasattr(self, "model"):
       raise RuntimeError("Model not found in %s" % self.model_dir)
 
+    phoneme_lines = []
     # Decode from input file.
     if output_file:
       for word in decode_lines:
         word = word.strip()
-        res_phoneme_seq = self.decode_word(word)
+        phonemes = self.decode_word(word)
         output_file.write(word)
         output_file.write(' ')
-        output_file.write(res_phoneme_seq)
+        output_file.write(phonemes)
         output_file.write('\n')
+        phoneme_lines.append(phonemes)
       output_file.close()
     else:
       for word in decode_lines:
         word = word.strip()
-        res_phoneme_seq = self.decode_word(word)
-        print(word + ' ' + res_phoneme_seq)
+        phonemes = self.decode_word(word)
+        print(word + ' ' + phonemes)
+        phoneme_lines.append(phonemes)
+    return phoneme_lines
 
 
 class G2P_Params():
