@@ -45,5 +45,5 @@ setup(
             'g2p_seq2seq=g2p:main',
         ],
     },
-    test_suite = 'g2p_unittest'
+    test_suite = './tests/g2p_unittest'
 )
