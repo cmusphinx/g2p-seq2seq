@@ -34,7 +34,8 @@ import numpy as np
 
 import tensorflow as tf
 
-import data_utils as data_utils
+from g2p_seq2seq import data_utils
+
 from tensorflow.models.rnn.translate import seq2seq_model
 
 tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate.")

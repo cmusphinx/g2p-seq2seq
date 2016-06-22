@@ -1,7 +1,8 @@
+.tests
 *.log
 *.pyc
-model/*
-*.egg-info/*
-build/*
-dist/*
-tests/models/train/*
+*.egg-info
+build
+dist
+tests/models/train
+
