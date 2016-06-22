@@ -68,9 +68,9 @@ class G2PModel():
   """Grapheme-to-Phoneme translation model class.
 
   Constructor parameters (for training mode only):
-    train_file: Train dictionary;
-    valid_file: Development dictionary;
-    test_file: Test dictionary.
+    train_lines: Train dictionary;
+    valid_lines: Development dictionary;
+    test_lines: Test dictionary.
 
   Attributes:
     gr_vocab: Grapheme vocabulary;
@@ -135,7 +135,7 @@ class G2PModel():
     # Prepare G2P data.
     print("Preparing G2P data")
     train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, self.gr_vocab,\
-    self.ph_vocab, self.test_file =\
+    self.ph_vocab, self.test_lines =\
     data_utils.prepare_g2p_data(self.model_dir, train_path, valid_path,
                                 test_path)
     # Read data into buckets and compute their sizes.
@@ -169,8 +169,8 @@ class G2PModel():
     """Put data from source and target into buckets.
 
     Args:
-      source: data with ids for the source language.
-      target: data with ids for the target language;
+      source: data with ids for graphemes;
+      target: data with ids for phonemes;
         it must be aligned with the source data: n-th line contains the desired
         output for n-th line from the source.
 
@@ -195,7 +195,7 @@ class G2PModel():
   def train(self, params, train_path, valid_path, test_path):
     """Train a gr->ph translation model using G2P data."""
     if os.path.exists(os.path.join(self.model_dir, "model")):
-      raise StandardError("Model already exists in %s" % self.model_dir)
+      raise RuntimeError("Model already exists in %s" % self.model_dir)
     else:
       self.__train_init(params, train_path, valid_path, test_path)
 
@@ -323,7 +323,7 @@ class G2PModel():
     """Decode word from standard input.
     """
     if not hasattr(self, "model"):
-      raise StandardError("Model not found in %s" % self.model_dir)
+      raise RuntimeError("Model not found in %s" % self.model_dir)
     while True:
       print("> ", end="")
       word = sys.stdin.readline().decode("utf-8").strip()
@@ -349,18 +349,18 @@ class G2PModel():
     return errors
 
 
-  def evaluate(self, test_file):
+  def evaluate(self, test_lines):
     """Calculate and print out word error rate (WER) and Accuracy
        on test sample.
 
     Args:
-      test_file: List of test dictionary. Each element of list must be String
+      test_lines: List of test dictionary. Each element of list must be String
                 containing word and its pronounciation (e.g., "word W ER D");
     """
     if not hasattr(self, "model"):
-      raise StandardError("Model not found in %s" % self.model_dir)
+      raise RuntimeError("Model not found in %s" % self.model_dir)
 
-    test_dic = data_utils.collect_pronunciations(test_file)
+    test_dic = data_utils.collect_pronunciations(test_lines)
 
     print('Beginning calculation word error rate (WER) on test sample.')
     errors = self.__calc_error(test_dic)
@@ -371,7 +371,7 @@ class G2PModel():
     print("Accuracy : %.3f" % float(1-(errors/len(test_dic))))
 
 
-  def decode(self, decode_file_path, output_file_path=None):
+  def decode(self, decode_lines, output_file=None):
     """Decode words from file.
 
     Returns:
@@ -379,24 +379,19 @@ class G2PModel():
       this file. Otherwise, print decoded words in standard output.
     """
     if not hasattr(self, "model"):
-      raise StandardError("Model not found in %s" % self.model_dir)
+      raise RuntimeError("Model not found in %s" % self.model_dir)
 
     # Decode from input file.
-    graphemes = codecs.open(decode_file_path, "r", "utf-8").readlines()
-
-    if output_file_path:
-      with codecs.open(output_file_path, "w", "utf-8") as output_file:
-        print('Beginning decoding words from %s to %s'
-              % (decode_file_path, output_file_path))
-        for word in graphemes:
-          word = word.strip()
-          res_phoneme_seq = self.decode_word(word)
-          output_file.write(word)
-          output_file.write(' ')
-          output_file.write(res_phoneme_seq)
-          output_file.write('\n')
+    if output_file:
+      for word in graphemes:
+        word = word.strip()
+        res_phoneme_seq = self.decode_word(word)
+        output_file.write(word)
+        output_file.write(' ')
+        output_file.write(res_phoneme_seq)
+        output_file.write('\n')
+      output_file.close()
     else:
-      print('Beginning decoding words from %s' % decode_file_path)
       for word in graphemes:
         word = word.strip()
         res_phoneme_seq = self.decode_word(word)
@@ -424,20 +419,24 @@ def main(_):
       g2p_model = G2PModel(FLAGS.model)
       g2p_params = G2P_Params()
       g2p_model.train(g2p_params, FLAGS.train, FLAGS.valid, FLAGS.test)
-      test_file = g2p_model.test_file
+      test_lines = g2p_model.test_lines
     with tf.Graph().as_default():
       g2p_model_eval = G2PModel(FLAGS.model)
-      g2p_model_eval.evaluate(test_file)
+      g2p_model_eval.evaluate(test_lines)
   else:
     with tf.Graph().as_default():
       g2p_model = G2PModel(FLAGS.model)
       if FLAGS.decode:
-        g2p_model.decode(FLAGS.decode, FLAGS.output)
+        decode_lines = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
+        output_file = None
+        if FLAGS.output:
+          output_file = codecs.open(FLAGS.output, "w", "utf-8")
+        g2p_model.decode(decode_lines, output_file)
       elif FLAGS.interactive:
         g2p_model.interactive()
       elif FLAGS.evaluate:
-        test_file = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
-        g2p_model.evaluate(test_file)
+        test_lines = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
+        g2p_model.evaluate(test_lines)
 
 if __name__ == "__main__":
   tf.app.run()
