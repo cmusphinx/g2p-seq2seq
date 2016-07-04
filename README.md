@@ -22,7 +22,7 @@ Unpack the model after download. It is trained on [CMU English dictionary](http:
 
 The easiest way to check how the tool works is to run it the interactive mode
 ```
-  python g2p.py --interactive --model model_folder_path
+  g2p-seq2seq --interactive --model model_folder_path
 
 ```
 
@@ -32,7 +32,7 @@ then type the words
 To generate pronunciations for an English word list with a trained model, run
 
 ```
-  python g2p.py --decode your_wordlist --model model_folder_path
+  g2p-seq2seq --decode your_wordlist --model model_folder_path
 
 ```
 The wordlist is a text file: one word per line
@@ -41,7 +41,7 @@ The wordlist is a text file: one word per line
 To count Word Error Rate  of the trained model, run
 
 ```
-  python g2p.py --evaluate your_wordlist --model model_folder_path
+  g2p-seq2seq --evaluate your_wordlist --model model_folder_path
 
 ```
 The wordlist is a text file: one word per line
@@ -53,7 +53,7 @@ To train G2P you need a dictionary (word and phone sequence per line).
 See an [example dictionary](http://github.com/cmusphinx/cmudict)
 
 ```
-  python g2p.py --train train_dictionary.dic --model model_folder_path
+  g2p-seq2seq --train train_dictionary.dic --model model_folder_path
 ```
 
 You can set up maximum training steps:

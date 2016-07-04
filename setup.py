@@ -18,7 +18,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='g2p_seq2seq',
-    version='5prealpha',
+    version='5.0.0a0',
     packages=['g2p_seq2seq'],
     description='Grapheme to phoneme module based on Seq2Seq',
     long_description=long_description,
@@ -42,7 +42,7 @@ setup(
 
     entry_points={
         'console_scripts': [
-            'g2p_seq2seq=g2p:main',
+            'g2p-seq2seq=g2p_seq2seq.app:main',
         ],
     },
     test_suite = 'tests'
