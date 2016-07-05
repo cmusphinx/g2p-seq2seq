@@ -13,6 +13,8 @@
 # limitations under the License.
 # ==============================================================================
 
+""" G2P training and evaluationpackage
+"""
 
 from __future__ import absolute_import
 from __future__ import division

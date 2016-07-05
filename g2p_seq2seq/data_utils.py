@@ -234,27 +234,16 @@ def prepare_g2p_data(model_dir, train_path, valid_path, test_path):
   print("Creating vocabularies in %s" %model_dir)
   ph_vocab = create_vocabulary(train_ph)
   gr_vocab = create_vocabulary(train_gr)
+
   if model_dir:
     save_vocabulary(ph_vocab, os.path.join(model_dir, "vocab.phoneme"))
     save_vocabulary(gr_vocab, os.path.join(model_dir, "vocab.grapheme"))
 
   # Create ids for the training data.
-  train_ph_ids = []
-  for line in train_ph:
-    train_ph_ids.append(symbols_to_ids(line, ph_vocab))
-
-  train_gr_ids = []
-  for line in train_gr:
-    train_gr_ids.append(symbols_to_ids(line, gr_vocab))
-
-  # Create ids for the development data.
-  valid_ph_ids = []
-  for line in valid_ph:
-    valid_ph_ids.append(symbols_to_ids(line, ph_vocab))
-
-  valid_gr_ids = []
-  for line in valid_gr:
-    valid_gr_ids.append(symbols_to_ids(line, gr_vocab))
+  train_ph_ids = [symbols_to_ids(line, ph_vocab) for line in train_ph]
+  train_gr_ids = [symbols_to_ids(line, gr_vocab) for line in train_gr]
+  valid_ph_ids = [symbols_to_ids(line, ph_vocab) for line in valid_ph]
+  valid_gr_ids = [symbols_to_ids(line, gr_vocab) for line in valid_gr]
 
   return (train_gr_ids, train_ph_ids,
           valid_gr_ids, valid_ph_ids,

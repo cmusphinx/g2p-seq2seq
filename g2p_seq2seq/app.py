@@ -24,19 +24,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import math
-import os
-import sys
-import time
 import codecs
-
-import numpy as np
-
 import tensorflow as tf
 
-from g2p_seq2seq.g2p import *
+from g2p_seq2seq.g2p import G2PModel
+from g2p_seq2seq.g2p import TrainingParams
 
-from tensorflow.models.rnn.translate import seq2seq_model
 
 tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate.")
 tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99,
@@ -72,10 +65,6 @@ def main(_=[]):
       g2p_model = G2PModel(FLAGS.model)
       g2p_params = TrainingParams(FLAGS)
       g2p_model.train(g2p_params, FLAGS.train, FLAGS.valid, FLAGS.test)
-      test_lines = g2p_model.test_lines
-    with tf.Graph().as_default():
-      g2p_model_eval = G2PModel(FLAGS.model)
-      g2p_model_eval.evaluate(test_lines)
   else:
     with tf.Graph().as_default():
       g2p_model = G2PModel(FLAGS.model)

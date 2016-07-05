@@ -28,7 +28,6 @@ import math
 import os
 import sys
 import time
-import codecs
 
 import numpy as np
 
@@ -67,7 +66,8 @@ class G2PModel(object):
     self.model_dir = model_dir
 
     # Preliminary actions before model creation.
-    if not (model_dir and os.path.exists(os.path.join(self.model_dir, "model"))):
+    if not (model_dir and
+            os.path.exists(os.path.join(self.model_dir, "model"))):
       return
 
     #Load model parameters.
@@ -103,7 +103,7 @@ class G2PModel(object):
 
     # Preliminary actions before model creation.
     # Load model parameters.
-        
+
     if self.model_dir:
       data_utils.save_params(params.num_layers,
                              params.size,
@@ -211,12 +211,21 @@ class G2PModel(object):
 
         if self.model_dir:
           # Save checkpoint and zero timer and loss.
-          checkpoint_path = os.path.join(self.model_dir, "model")
-          self.model.saver.save(self.session, checkpoint_path,
+          self.model.saver.save(self.session, os.path.join(self.model_dir, "model"),
                                 write_meta_graph=False)
 
         self.__run_evals()
-    print('Training process stopped.')
+
+    if self.model_dir:
+      # Save checkpoint and zero timer and loss.
+      self.model.saver.save(self.session, os.path.join(self.model_dir, "model"),
+                            write_meta_graph=False)
+
+    print('Training done.')
+    if self.model_dir:
+      with tf.Graph().as_default():
+        g2p_model_eval = G2PModel(self.model_dir)
+        g2p_model_eval.evaluate(self.test_lines)
 
 
   def __calc_step_loss(self, train_buckets_scale):
@@ -258,32 +267,31 @@ class G2PModel(object):
     Returns:
       phonemes: decoded phoneme sequence for input word;
     """
-    phonemes = ""
     # Check if all graphemes attended in vocabulary
     gr_absent = set(gr for gr in word if gr not in self.gr_vocab)
-    if not gr_absent:
-      # Get token-ids for the input word.
-      token_ids = [self.gr_vocab.get(s, data_utils.UNK_ID) for s in word]
-      # Which bucket does it belong to?
-      bucket_id = min([b for b in xrange(len(self._BUCKETS))
-                       if self._BUCKETS[b][0] > len(token_ids)])
-      # Get a 1-element batch to feed the word to the model.
-      encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
-          {bucket_id: [(token_ids, [])]}, bucket_id)
-      # Get output logits for the word.
-      _, _, output_logits = self.model.step(self.session, encoder_inputs,
-                                            decoder_inputs, target_weights,
-                                            bucket_id, True)
-      # This is a greedy decoder - outputs are just argmaxes of output_logits.
-      outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
-      # If there is an EOS symbol in outputs, cut them at that point.
-      if data_utils.EOS_ID in outputs:
-        outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-      # Phoneme sequence corresponding to outputs.
-      phonemes = " ".join([self.rev_ph_vocab[output] for output in outputs])
-    else:
+    if gr_absent:
       print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent))
-    return phonemes
+      return ""
+
+    # Get token-ids for the input word.
+    token_ids = [self.gr_vocab.get(s, data_utils.UNK_ID) for s in word]
+    # Which bucket does it belong to?
+    bucket_id = min([b for b in xrange(len(self._BUCKETS))
+                     if self._BUCKETS[b][0] > len(token_ids)])
+    # Get a 1-element batch to feed the word to the model.
+    encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
+        {bucket_id: [(token_ids, [])]}, bucket_id)
+    # Get output logits for the word.
+    _, _, output_logits = self.model.step(self.session, encoder_inputs,
+                                          decoder_inputs, target_weights,
+                                          bucket_id, True)
+    # This is a greedy decoder - outputs are just argmaxes of output_logits.
+    outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
+    # If there is an EOS symbol in outputs, cut them at that point.
+    if data_utils.EOS_ID in outputs:
+      outputs = outputs[:outputs.index(data_utils.EOS_ID)]
+    # Phoneme sequence corresponding to outputs.
+    return " ".join([self.rev_ph_vocab[output] for output in outputs])
 
 
   def interactive(self):
@@ -366,7 +374,7 @@ class G2PModel(object):
 
 class TrainingParams(object):
   """Class with training parameters."""
-  def __init__(self, flags = None):
+  def __init__(self, flags=None):
     if flags:
       self.learning_rate = flags.learning_rate
       self.lr_decay_factor = flags.learning_rate_decay_factor
