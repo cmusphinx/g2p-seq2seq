@@ -118,7 +118,6 @@ def save_params(num_layers, size, model_dir):
   with open(os.path.join(model_dir, "model.params"), 'w') as param_file:
     param_file.write("num_layers:" + str(num_layers) + "\n")
     param_file.write("size:" + str(size))
-  return num_layers, size
 
 
 def load_params(model_path):
@@ -235,8 +234,9 @@ def prepare_g2p_data(model_dir, train_path, valid_path, test_path):
   print("Creating vocabularies in %s" %model_dir)
   ph_vocab = create_vocabulary(train_ph)
   gr_vocab = create_vocabulary(train_gr)
-  save_vocabulary(ph_vocab, os.path.join(model_dir, "vocab.phoneme"))
-  save_vocabulary(gr_vocab, os.path.join(model_dir, "vocab.grapheme"))
+  if model_dir:
+    save_vocabulary(ph_vocab, os.path.join(model_dir, "vocab.phoneme"))
+    save_vocabulary(gr_vocab, os.path.join(model_dir, "vocab.grapheme"))
 
   # Create ids for the training data.
   train_ph_ids = []

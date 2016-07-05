@@ -1,8 +1,5 @@
-.tests
 *.log
 *.pyc
 *.egg-info
 build
 dist
-tests/models/train
-

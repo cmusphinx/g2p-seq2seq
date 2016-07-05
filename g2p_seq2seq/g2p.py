@@ -67,7 +67,7 @@ class G2PModel(object):
     self.model_dir = model_dir
 
     # Preliminary actions before model creation.
-    if not os.path.exists(os.path.join(self.model_dir, "model")):
+    if not (model_dir and os.path.exists(os.path.join(self.model_dir, "model"))):
       return
 
     #Load model parameters.
@@ -103,9 +103,12 @@ class G2PModel(object):
 
     # Preliminary actions before model creation.
     # Load model parameters.
-    num_layers, size = data_utils.save_params(params.num_layers,
-                                              params.size,
-                                              self.model_dir)
+        
+    if self.model_dir:
+      data_utils.save_params(params.num_layers,
+                             params.size,
+                             self.model_dir)
+
     # Prepare G2P data.
     print("Preparing G2P data")
     train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, self.gr_vocab,\
@@ -117,18 +120,15 @@ class G2PModel(object):
     self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
     self.train_set = self.__put_into_buckets(train_gr_ids, train_ph_ids)
 
-    self.rev_ph_vocab =\
-        data_utils.load_vocabulary(os.path.join(self.model_dir,
-                                                "vocab.phoneme"),
-                                   reverse=True)
+    self.rev_ph_vocab = dict([(x, y) for (y, x) in enumerate(self.ph_vocab)])
 
     self.session = tf.Session()
 
     # Create model.
-    print("Creating %d layers of %d units." % (num_layers, size))
+    print("Creating %d layers of %d units." % (params.num_layers, params.size))
     self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
                                             len(self.ph_vocab), self._BUCKETS,
-                                            size, num_layers,
+                                            params.size, params.num_layers,
                                             params.max_gradient_norm,
                                             params.batch_size,
                                             params.learning_rate,
@@ -168,10 +168,7 @@ class G2PModel(object):
 
   def train(self, params, train_path, valid_path, test_path):
     """Train a gr->ph translation model using G2P data."""
-    if os.path.exists(os.path.join(self.model_dir, "model")):
-      raise RuntimeError("Model already exists in %s" % self.model_dir)
-    else:
-      self.__train_init(params, train_path, valid_path, test_path)
+    self.__train_init(params, train_path, valid_path, test_path)
 
     train_bucket_sizes = [len(self.train_set[b])
                           for b in xrange(len(self._BUCKETS))]
@@ -211,10 +208,13 @@ class G2PModel(object):
           break
         previous_losses.append(loss)
         step_time, loss = 0.0, 0.0
-        # Save checkpoint and zero timer and loss.
-        checkpoint_path = os.path.join(self.model_dir, "model")
-        self.model.saver.save(self.session, checkpoint_path,
-                              write_meta_graph=False)
+
+        if self.model_dir:
+          # Save checkpoint and zero timer and loss.
+          checkpoint_path = os.path.join(self.model_dir, "model")
+          self.model.saver.save(self.session, checkpoint_path,
+                                write_meta_graph=False)
+
         self.__run_evals()
     print('Training process stopped.')
 

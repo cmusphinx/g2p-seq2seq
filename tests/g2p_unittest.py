@@ -6,9 +6,8 @@ from g2p_seq2seq import data_utils
 class TestG2P(unittest.TestCase):
 
   def test_train(self):
-    model_dir = ".tests/models/train"
     with g2p.tf.Graph().as_default():
-      g2p_model = g2p.G2PModel(model_dir)
+      g2p_model = g2p.G2PModel(None)
       train_path = "tests/data/toydict.train"
       valid_path = "tests/data/toydict.test"
       test_path = "tests/data/toydict.test"
@@ -17,7 +16,6 @@ class TestG2P(unittest.TestCase):
       g2p_params.max_steps = 1
       g2p_params.num_layers = 1
       g2p_params.size = 2
-      g2p_params.write_model = False
       g2p_model.train(g2p_params, train_path, valid_path, test_path)
 
 
