@@ -6,28 +6,54 @@ sequence-to-sequence models were successfully applied in various tasks,
 including machine translation [1] and grapheme-to-phoneme [2].
 
 This implementation is based on python
-[TensorFlow](https://www.tensorflow.org/versions/r0.8/tutorials/seq2seq/index.html),
+[TensorFlow](https://www.tensorflow.org/versions/r0.9/tutorials/seq2seq/index.html),
 which allows an efficient training on both CPU and GPU.
 
-## Requirements
+## Installation
 
-The tool requires TensorFlow. Please see the installation
-[guide](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/g3doc/get_started/os_setup.md)
+The tool requires TensorFlow at least version 0.9. Please see the installation
+[guide](https://www.tensorflow.org/versions/r0.9/get_started/os_setup.html)
 for details
+
+You can install tensorflow with the following command:
+
+```
+sudo pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-0.9.0-cp27-none-linux_x86_64.whl
+```
+
+The package itself uses setuptools, so you can follow standard installation process:
+
+```
+sudo python setup.py install
+```
+
+You can also run the tests
+
+```
+python setup.py test
+```
+
 
 ## Running G2P
 
-A 2-layer LSTM with 64 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download).
-Unpack the model after download. It is trained on [CMU English dictionary](http://github.com/cmusphinx/cmudict)
-
-The easiest way to check how the tool works is to run it the interactive mode
-```
-  g2p-seq2seq --interactive --model model_folder_path
+A pretrained model 2-layer LSTM with 512 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download).
+Unpack the model after download. The model is trained on [CMU English dictionary](http://github.com/cmusphinx/cmudict)
 
 ```
+wget -O g2p-seq2seq-cmudict.tar.gz https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download 
+tar xf g2p-seq2seq-cmudict.tar.gz
+```
 
-then type the words
+The easiest way to check how the tool works is to run it the interactive mode and type the words
 
+```
+$ g2p-seq2seq --interactive --model g2p-seq2seq-cmudict
+Creating 2 layers of 512 units.
+Reading model parameters from g2p-seq2seq-cmudict
+> hello
+HH EH L OW
+>
+```
 
 To generate pronunciations for an English word list with a trained model, run
 
@@ -35,16 +61,16 @@ To generate pronunciations for an English word list with a trained model, run
   g2p-seq2seq --decode your_wordlist --model model_folder_path
 
 ```
-The wordlist is a text file: one word per line
+The wordlist is a text file with one word per line
 
 
-To count Word Error Rate  of the trained model, run
-
-```
-  g2p-seq2seq --evaluate your_wordlist --model model_folder_path
+To evaluate Word Error Rate of the trained model, run
 
 ```
-The wordlist is a text file: one word per line
+  g2p-seq2seq --evaluate your_test_dictionary --model model_folder_path
+
+```
+The test dictionary should be a dictionary in standard format.
 
 
 ## Training G2P system
