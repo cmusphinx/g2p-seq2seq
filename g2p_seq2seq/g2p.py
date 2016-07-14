@@ -154,9 +154,11 @@ class G2PModel(object):
         into the n-th bucket, i.e., such that len(source) < _BUCKETS[n][0] and
         len(target) < _BUCKETS[n][1]; source and target are lists of ids.
     """
-    data_set = [[] for _ in self._BUCKETS]
-    for i in range(len(source)):
-      source_ids = source[i]
+    
+    # By default unk to unk
+    data_set = [[[[4],[4]]] for _ in self._BUCKETS]
+
+    for i, source_ids in enumerate(source):
       target_ids = target[i]
       target_ids.append(data_utils.EOS_ID)
       for bucket_id, (source_size, target_size) in enumerate(self._BUCKETS):
@@ -168,6 +170,11 @@ class G2PModel(object):
 
   def train(self, params, train_path, valid_path, test_path):
     """Train a gr->ph translation model using G2P data."""
+
+    if hasattr(self, 'model'):
+	print("Model already exists in", self.model_dir)
+	return
+
     self.__train_init(params, train_path, valid_path, test_path)
 
     train_bucket_sizes = [len(self.train_set[b])
