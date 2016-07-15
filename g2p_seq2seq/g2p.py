@@ -338,14 +338,18 @@ class G2PModel(object):
       raise RuntimeError("Model not found in %s" % self.model_dir)
 
     test_dic = data_utils.collect_pronunciations(test_lines)
+    
+    if len(test_dic) < 1:
+	print("Test dictionary is empty")
+	return
 
     print('Beginning calculation word error rate (WER) on test sample.')
     errors = self.calc_error(test_dic)
 
-    print("Words : %d" % len(test_dic))
+    print("Words: %d" % len(test_dic))
     print("Errors: %d" % errors)
-    print("WER : %.3f" % (float(errors)/len(test_dic)))
-    print("Accuracy : %.3f" % float(1-(errors/len(test_dic))))
+    print("WER: %.3f" % (float(errors)/len(test_dic)))
+    print("Accuracy: %.3f" % float(1-(errors/len(test_dic))))
 
 
   def decode(self, decode_lines, output_file=None):
