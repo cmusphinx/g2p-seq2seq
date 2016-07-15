@@ -158,8 +158,7 @@ class G2PModel(object):
     # By default unk to unk
     data_set = [[[[4],[4]]] for _ in self._BUCKETS]
 
-    for i, source_ids in enumerate(source):
-      target_ids = target[i]
+    for source_ids, target_ids in zip(source, target):
       target_ids.append(data_utils.EOS_ID)
       for bucket_id, (source_size, target_size) in enumerate(self._BUCKETS):
         if len(source_ids) < source_size and len(target_ids) < target_size:
