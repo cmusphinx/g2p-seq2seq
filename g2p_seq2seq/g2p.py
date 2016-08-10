@@ -276,7 +276,7 @@ class G2PModel(object):
     # Check if all graphemes attended in vocabulary
     gr_absent = set(gr for gr in word if gr not in self.gr_vocab)
     if gr_absent:
-      print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent))
+      print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent).encode('utf-8'))
       return ""
 
     # Get token-ids for the input word.
