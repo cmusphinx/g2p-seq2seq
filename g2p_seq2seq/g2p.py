@@ -34,6 +34,7 @@ import numpy as np
 import tensorflow as tf
 
 from g2p_seq2seq import data_utils
+from g2p_seq2seq.compat import force_text
 
 from tensorflow.models.rnn.translate import seq2seq_model
 
@@ -307,7 +308,7 @@ class G2PModel(object):
       raise RuntimeError("Model not found in %s" % self.model_dir)
     while True:
       print("> ", end="")
-      word = sys.stdin.readline().decode("utf-8").strip()
+      word = force_text(sys.stdin.readline()).strip()
       if word:
         phonemes = self.decode_word(word)
         if phonemes:
