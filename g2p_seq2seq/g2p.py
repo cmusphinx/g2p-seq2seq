@@ -177,13 +177,13 @@ class G2PModel(object):
     self.__train_init(params, train_path, valid_path, test_path)
 
     train_bucket_sizes = [len(self.train_set[b])
-                          for b in xrange(len(self._BUCKETS))]
+                          for b in range(len(self._BUCKETS))]
     train_total_size = float(sum(train_bucket_sizes))
     # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
     # to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
     # the size if i-th training bucket, as used later.
     train_buckets_scale = [sum(train_bucket_sizes[:i + 1]) / train_total_size
-                           for i in xrange(len(train_bucket_sizes))]
+                           for i in range(len(train_bucket_sizes))]
 
     # This is the training loop.
     step_time, loss = 0.0, 0.0
@@ -239,7 +239,7 @@ class G2PModel(object):
     in [0, 1] and use the corresponding interval in train_buckets_scale.
     """
     random_number_01 = np.random.random_sample()
-    bucket_id = min([i for i in xrange(len(train_buckets_scale))
+    bucket_id = min([i for i in range(len(train_buckets_scale))
                      if train_buckets_scale[i] > random_number_01])
 
     # Get a batch and make a step.
@@ -254,7 +254,7 @@ class G2PModel(object):
   def __run_evals(self):
     """Run evals on development set and print their perplexity.
     """
-    for bucket_id in xrange(len(self._BUCKETS)):
+    for bucket_id in range(len(self._BUCKETS)):
       encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
           self.valid_set, bucket_id)
       _, eval_loss, _ = self.model.step(self.session, encoder_inputs,
@@ -282,7 +282,7 @@ class G2PModel(object):
     # Get token-ids for the input word.
     token_ids = [self.gr_vocab.get(s, data_utils.UNK_ID) for s in word]
     # Which bucket does it belong to?
-    bucket_id = min([b for b in xrange(len(self._BUCKETS))
+    bucket_id = min([b for b in range(len(self._BUCKETS))
                      if self._BUCKETS[b][0] > len(token_ids)])
     # Get a 1-element batch to feed the word to the model.
     encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
