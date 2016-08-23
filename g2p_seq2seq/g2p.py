@@ -171,8 +171,8 @@ class G2PModel(object):
     """Train a gr->ph translation model using G2P data."""
 
     if hasattr(self, 'model'):
-	print("Model already exists in", self.model_dir)
-	return
+      print("Model already exists in", self.model_dir)
+      return
 
     self.__train_init(params, train_path, valid_path, test_path)
 
@@ -340,8 +340,8 @@ class G2PModel(object):
     test_dic = data_utils.collect_pronunciations(test_lines)
     
     if len(test_dic) < 1:
-	print("Test dictionary is empty")
-	return
+      print("Test dictionary is empty")
+      return
 
     print('Beginning calculation word error rate (WER) on test sample.')
     errors = self.calc_error(test_dic)
