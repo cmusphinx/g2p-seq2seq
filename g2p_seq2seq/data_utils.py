@@ -179,7 +179,7 @@ def collect_pronunciations(dic_lines):
       else:
         dic[lst[0]].append(" ".join(lst[1:]))
     elif len(lst) == 1:
-	print("WARNING: No phonemes for word '%s' line ignored" % (lst[0]))
+      print("WARNING: No phonemes for word '%s' line ignored" % (lst[0]))
   return dic
 
 
