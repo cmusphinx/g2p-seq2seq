@@ -26,7 +26,6 @@ from __future__ import print_function
 
 import math
 import os
-import sys
 import time
 
 import numpy as np
@@ -155,9 +154,9 @@ class G2PModel(object):
         into the n-th bucket, i.e., such that len(source) < _BUCKETS[n][0] and
         len(target) < _BUCKETS[n][1]; source and target are lists of ids.
     """
-    
+
     # By default unk to unk
-    data_set = [[[[4],[4]]] for _ in self._BUCKETS]
+    data_set = [[[[4], [4]]] for _ in self._BUCKETS]
 
     for source_ids, target_ids in zip(source, target):
       target_ids.append(data_utils.EOS_ID)
