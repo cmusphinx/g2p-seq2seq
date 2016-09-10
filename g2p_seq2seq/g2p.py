@@ -305,7 +305,9 @@ class G2PModel(object):
     """
     while True:
       try:
-        word = text_type(input("> "), encoding="utf-8", errors="replace")
+        word = input("> ")
+        if not issubclass(type(word), text_type):
+          word = text_type(word, encoding='utf-8', errors='replace')
       except EOFError:
         break
       if not word:
@@ -335,7 +337,7 @@ class G2PModel(object):
       raise RuntimeError("Model not found in %s" % self.model_dir)
 
     test_dic = data_utils.collect_pronunciations(test_lines)
-    
+
     if len(test_dic) < 1:
       print("Test dictionary is empty")
       return
