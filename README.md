@@ -33,6 +33,7 @@ You can also run the tests
 python setup.py test
 ```
 
+The runnable script `g2p-seq2seq` is installed in  `/usr/local/bin` folder by default (you can adjust it with `setup.py` options if needed) . You need to make sure you have this folder included in your `PATH` so you can run this script from command line.
 
 ## Running G2P
 
