@@ -30,6 +30,7 @@ import time
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.core.protobuf import saver_pb2
 
 from g2p_seq2seq import data_utils
 from tensorflow.models.rnn.translate import seq2seq_model
@@ -134,7 +135,8 @@ class G2PModel(object):
                                             params.learning_rate,
                                             params.lr_decay_factor,
                                             forward_only=False)
-    self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1)
+    self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1,
+                                      write_version=saver_pb2.SaverDef.V1)
     print("Created model with fresh parameters.")
     self.session.run(tf.initialize_all_variables())
 
