@@ -62,18 +62,23 @@ class G2PModel(object):
   # See seq2seq_model.Seq2SeqModel for details of how they work.
   _BUCKETS = [(5, 10), (10, 15), (40, 50)]
 
-  def __init__(self, model_dir):
+  def __init__(self, model_dir, params):
     """Create G2P model and initialize or load parameters in session."""
     self.model_dir = model_dir
 
-    # Preliminary actions before model creation.
+    if params:
+      self.params = params
+    else:
+      self.params = TrainingParams()
+      self.params.batch_size = 1 # We decode one word at a time.
+
+    # Create model in case of its absent.
     if not (model_dir and
             os.path.exists(os.path.join(self.model_dir, "model"))):
       return
 
     #Load model parameters.
     num_layers, size = data_utils.load_params(self.model_dir)
-    batch_size = 1 # We decode one word at a time.
     # Load vocabularies
     self.gr_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
                                                             "vocab.grapheme"))
@@ -90,25 +95,22 @@ class G2PModel(object):
     print("Creating %d layers of %d units." % (num_layers, size))
     self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
                                             len(self.ph_vocab), self._BUCKETS,
-                                            size, num_layers, 0, batch_size,
-                                            0, 0, forward_only=True)
-    self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1)
+                                            size, num_layers,
+                                            self.params.max_gradient_norm,
+                                            self.params.batch_size,
+                                            self.params.learning_rate,
+                                            self.params.lr_decay_factor,
+                                            forward_only=self.params.decode)
+    self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1,
+                                      write_version=saver_pb2.SaverDef.V1)
     # Check for saved models and restore them.
     print("Reading model parameters from %s" % self.model_dir)
     self.model.saver.restore(self.session, os.path.join(self.model_dir,
                                                         "model"))
 
 
-  def __train_init(self, params, train_path, valid_path=None, test_path=None):
+  def __train_init(self, train_path, valid_path=None, test_path=None):
     """Create G2P model and initialize or load parameters in session."""
-
-    # Preliminary actions before model creation.
-    # Load model parameters.
-
-    if self.model_dir:
-      data_utils.save_params(params.num_layers,
-                             params.size,
-                             self.model_dir)
 
     # Prepare G2P data.
     print("Preparing G2P data")
@@ -123,17 +125,28 @@ class G2PModel(object):
 
     self.rev_ph_vocab = dict([(x, y) for (y, x) in enumerate(self.ph_vocab)])
 
+
+  def __create_model(self):
+
+    # Save model parameters.
+    if self.model_dir:
+      data_utils.save_params(self.params.num_layers,
+                             self.params.size,
+                             self.model_dir)
+
     self.session = tf.Session()
 
     # Create model.
-    print("Creating %d layers of %d units." % (params.num_layers, params.size))
+    print("Creating %d layers of %d units." % (self.params.num_layers,
+                                               self.params.size))
     self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
                                             len(self.ph_vocab), self._BUCKETS,
-                                            params.size, params.num_layers,
-                                            params.max_gradient_norm,
-                                            params.batch_size,
-                                            params.learning_rate,
-                                            params.lr_decay_factor,
+                                            self.params.size,
+                                            self.params.num_layers,
+                                            self.params.max_gradient_norm,
+                                            self.params.batch_size,
+                                            self.params.learning_rate,
+                                            self.params.lr_decay_factor,
                                             forward_only=False)
     self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1,
                                       write_version=saver_pb2.SaverDef.V1)
@@ -169,14 +182,12 @@ class G2PModel(object):
     return data_set
 
 
-  def train(self, params, train_path, valid_path, test_path):
+  def train(self, train_path, valid_path, test_path):
     """Train a gr->ph translation model using G2P data."""
 
-    if hasattr(self, 'model'):
-      print("Model already exists in", self.model_dir)
-      return
-
-    self.__train_init(params, train_path, valid_path, test_path)
+    self.__train_init(train_path, valid_path, test_path)
+    if not hasattr(self, 'model'):
+      self.__create_model()
 
     train_bucket_sizes = [len(self.train_set[b])
                           for b in xrange(len(self._BUCKETS))]
@@ -191,17 +202,18 @@ class G2PModel(object):
     step_time, loss = 0.0, 0.0
     current_step = 0
     previous_losses = []
-    while (params.max_steps == 0
-           or self.model.global_step.eval(self.session) <= params.max_steps):
+    while (self.params.max_steps == 0
+           or self.model.global_step.eval(self.session)
+           <= self.params.max_steps):
       # Get a batch and make a step.
       start_time = time.time()
       step_loss = self.__calc_step_loss(train_buckets_scale)
-      step_time += (time.time() - start_time) / params.steps_per_checkpoint
-      loss += step_loss / params.steps_per_checkpoint
+      step_time += (time.time() - start_time) / self.params.steps_per_checkpoint
+      loss += step_loss / self.params.steps_per_checkpoint
       current_step += 1
 
       # Once in a while, we save checkpoint, print statistics, and run evals.
-      if current_step % params.steps_per_checkpoint == 0:
+      if current_step % self.params.steps_per_checkpoint == 0:
         # Print statistics for the previous epoch.
         perplexity = math.exp(loss) if loss < 300 else float('inf')
         print ("global step %d learning rate %.4f step-time %.2f perplexity "
@@ -395,6 +407,7 @@ class TrainingParams(object):
       self.num_layers = flags.num_layers
       self.steps_per_checkpoint = flags.steps_per_checkpoint
       self.max_steps = flags.max_steps
+      self.decode = False if flags.train else True
     else:
       self.learning_rate = 0.5
       self.lr_decay_factor = 0.99
@@ -404,3 +417,4 @@ class TrainingParams(object):
       self.num_layers = 2
       self.steps_per_checkpoint = 200
       self.max_steps = 0
+      self.decode = False

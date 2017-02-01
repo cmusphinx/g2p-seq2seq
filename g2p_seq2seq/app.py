@@ -62,9 +62,9 @@ def main(_=[]):
   """
   if FLAGS.train:
     with tf.Graph().as_default():
-      g2p_model = G2PModel(FLAGS.model)
       g2p_params = TrainingParams(FLAGS)
-      g2p_model.train(g2p_params, FLAGS.train, FLAGS.valid, FLAGS.test)
+      g2p_model = G2PModel(FLAGS.model, g2p_params)
+      g2p_model.train(FLAGS.train, FLAGS.valid, FLAGS.test)
   else:
     with tf.Graph().as_default():
       g2p_model = G2PModel(FLAGS.model)
