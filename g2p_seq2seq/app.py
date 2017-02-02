@@ -24,6 +24,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
 import codecs
 import tensorflow as tf
 
@@ -54,20 +55,29 @@ tf.app.flags.DEFINE_string("test", "", "Test dictionary.")
 tf.app.flags.DEFINE_integer("max_steps", 0,
                             "How many training steps to do until stop training"
                             " (0: no limit).")
+tf.app.flags.DEFINE_boolean("reinit", False,
+                            "Set to True for training from scratch.")
 
 FLAGS = tf.app.flags.FLAGS
 
 def main(_=[]):
   """Main function.
   """
-  if FLAGS.train:
-    with tf.Graph().as_default():
+  with tf.Graph().as_default():
+    if FLAGS.train:
+      g2p_model = G2PModel(FLAGS.model, train_flag=True)
       g2p_params = TrainingParams(FLAGS)
-      g2p_model = G2PModel(FLAGS.model, g2p_params)
-      g2p_model.train(FLAGS.train, FLAGS.valid, FLAGS.test)
-  else:
-    with tf.Graph().as_default():
-      g2p_model = G2PModel(FLAGS.model)
+      if (not FLAGS.model
+          or not os.path.exists(os.path.join(FLAGS.model, "model"))
+          or FLAGS.reinit):
+        g2p_model.create_model_for_train(g2p_params, FLAGS.train, FLAGS.valid,
+                                         FLAGS.test)
+      else:
+        g2p_model.load_model_for_train(g2p_params, FLAGS.train, FLAGS.valid, 
+                                       FLAGS.test)
+      g2p_model.train()
+    else:
+      g2p_model = G2PModel(FLAGS.model, train_flag=False)
       if FLAGS.decode:
         decode_lines = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
         output_file = None

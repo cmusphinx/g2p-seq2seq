@@ -62,21 +62,14 @@ class G2PModel(object):
   # See seq2seq_model.Seq2SeqModel for details of how they work.
   _BUCKETS = [(5, 10), (10, 15), (40, 50)]
 
-  def __init__(self, model_dir, params):
+  def __init__(self, model_dir, train_flag):
     """Create G2P model and initialize or load parameters in session."""
     self.model_dir = model_dir
 
-    if params:
-      self.params = params
-    else:
-      self.params = TrainingParams()
-      self.params.batch_size = 1 # We decode one word at a time.
-
-    # Create model in case of its absent.
-    if not (model_dir and
-            os.path.exists(os.path.join(self.model_dir, "model"))):
+    if train_flag:
       return
 
+    self.batch_size = 1 # We decode one word at a time.
     #Load model parameters.
     num_layers, size = data_utils.load_params(self.model_dir)
     # Load vocabularies
@@ -91,67 +84,19 @@ class G2PModel(object):
 
     self.session = tf.Session()
 
-    # Create model.
+    # Restore model.
     print("Creating %d layers of %d units." % (num_layers, size))
     self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
                                             len(self.ph_vocab), self._BUCKETS,
-                                            size, num_layers,
-                                            self.params.max_gradient_norm,
-                                            self.params.batch_size,
-                                            self.params.learning_rate,
-                                            self.params.lr_decay_factor,
-                                            forward_only=self.params.decode)
+                                            size, num_layers, 0,
+                                            self.batch_size, 0, 0,
+                                            forward_only=True)
     self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1,
                                       write_version=saver_pb2.SaverDef.V1)
     # Check for saved models and restore them.
     print("Reading model parameters from %s" % self.model_dir)
     self.model.saver.restore(self.session, os.path.join(self.model_dir,
                                                         "model"))
-
-
-  def __train_init(self, train_path, valid_path=None, test_path=None):
-    """Create G2P model and initialize or load parameters in session."""
-
-    # Prepare G2P data.
-    print("Preparing G2P data")
-    train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, self.gr_vocab,\
-    self.ph_vocab, self.test_lines =\
-    data_utils.prepare_g2p_data(self.model_dir, train_path, valid_path,
-                                test_path)
-    # Read data into buckets and compute their sizes.
-    print ("Reading development and training data.")
-    self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
-    self.train_set = self.__put_into_buckets(train_gr_ids, train_ph_ids)
-
-    self.rev_ph_vocab = dict([(x, y) for (y, x) in enumerate(self.ph_vocab)])
-
-
-  def __create_model(self):
-
-    # Save model parameters.
-    if self.model_dir:
-      data_utils.save_params(self.params.num_layers,
-                             self.params.size,
-                             self.model_dir)
-
-    self.session = tf.Session()
-
-    # Create model.
-    print("Creating %d layers of %d units." % (self.params.num_layers,
-                                               self.params.size))
-    self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
-                                            len(self.ph_vocab), self._BUCKETS,
-                                            self.params.size,
-                                            self.params.num_layers,
-                                            self.params.max_gradient_norm,
-                                            self.params.batch_size,
-                                            self.params.learning_rate,
-                                            self.params.lr_decay_factor,
-                                            forward_only=False)
-    self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1,
-                                      write_version=saver_pb2.SaverDef.V1)
-    print("Created model with fresh parameters.")
-    self.session.run(tf.initialize_all_variables())
 
 
   def __put_into_buckets(self, source, target):
@@ -182,12 +127,73 @@ class G2PModel(object):
     return data_set
 
 
-  def train(self, train_path, valid_path, test_path):
-    """Train a gr->ph translation model using G2P data."""
+  def __prepare_model(self, params, train_path, valid_path, test_path):
+    """Prepare data and G2P model for training."""
 
-    self.__train_init(train_path, valid_path, test_path)
-    if not hasattr(self, 'model'):
-      self.__create_model()
+    self.params = params
+
+    # Prepare data.
+    print("Preparing G2P data")
+    train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, self.gr_vocab,\
+    self.ph_vocab, self.test_lines =\
+    data_utils.prepare_g2p_data(self.model_dir, train_path, valid_path,
+                                test_path)
+    # Read data into buckets and compute their sizes.
+    print ("Reading development and training data.")
+    self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
+    self.train_set = self.__put_into_buckets(train_gr_ids, train_ph_ids)
+
+    self.rev_ph_vocab = dict([(x, y) for (y, x) in enumerate(self.ph_vocab)])
+
+    self.session = tf.Session()
+
+    # Prepare model.
+    print("Creating %d layers of %d units." % (self.params.num_layers,
+                                               self.params.size))
+    self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
+                                            len(self.ph_vocab), self._BUCKETS,
+                                            self.params.size,
+                                            self.params.num_layers,
+                                            self.params.max_gradient_norm,
+                                            self.params.batch_size,
+                                            self.params.learning_rate,
+                                            self.params.lr_decay_factor,
+                                            forward_only=False)
+    self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1,
+                                      write_version=saver_pb2.SaverDef.V1)
+
+
+  def load_model_for_train(self, params, train_path, valid_path=None,
+                           test_path=None):
+    """Load G2P model for continuing train."""
+
+    # Load model parameters.
+    params.num_layers, params.size = data_utils.load_params(self.model_dir)
+
+    # Prepare data and G2P Model
+    self.__prepare_model(params, train_path, valid_path, test_path)
+
+    # Check for saved models and restore them.
+    print("Reading model parameters from %s" % self.model_dir)
+    self.model.saver.restore(self.session, os.path.join(self.model_dir,
+                                                        "model"))
+
+
+  def create_model_for_train(self, params, train_path, valid_path=None,
+                             test_path=None):
+    """Create G2P model for train from scratch."""
+    # Save model parameters.
+    data_utils.save_params(params.num_layers, params.size, self.model_dir)
+
+    # Prepare data and G2P Model
+    self.__prepare_model(params, train_path, valid_path, test_path)
+
+    print("Created model with fresh parameters.")
+    self.session.run(tf.initialize_all_variables())
+
+
+  def train(self):
+    """Train a gr->ph translation model using G2P data."""
 
     train_bucket_sizes = [len(self.train_set[b])
                           for b in xrange(len(self._BUCKETS))]
