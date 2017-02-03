@@ -62,13 +62,15 @@ class G2PModel(object):
   # See seq2seq_model.Seq2SeqModel for details of how they work.
   _BUCKETS = [(5, 10), (10, 15), (40, 50)]
 
-  def __init__(self, model_dir, train_flag):
-    """Create G2P model and initialize or load parameters in session."""
+  def __init__(self, model_dir):
+    """Initialize model directory."""
     self.model_dir = model_dir
+    if not os.path.exists(self.model_dir):
+      os.makedirs(self.model_dir)
 
-    if train_flag:
-      return
 
+  def load_decode_model(self):
+    """Load G2P model and initialize or load parameters in session."""
     self.batch_size = 1 # We decode one word at a time.
     #Load model parameters.
     num_layers, size = data_utils.load_params(self.model_dir)
@@ -127,11 +129,8 @@ class G2PModel(object):
     return data_set
 
 
-  def __prepare_model(self, params, train_path, valid_path, test_path):
-    """Prepare data and G2P model for training."""
-
-    self.params = params
-
+  def prepare_data(self, train_path, valid_path, test_path):
+    """Prepare train/validation/test sets. Create or load vocabularies."""
     # Prepare data.
     print("Preparing G2P data")
     train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, self.gr_vocab,\
@@ -144,6 +143,12 @@ class G2PModel(object):
     self.train_set = self.__put_into_buckets(train_gr_ids, train_ph_ids)
 
     self.rev_ph_vocab = dict([(x, y) for (y, x) in enumerate(self.ph_vocab)])
+
+
+  def __prepare_model(self, params):
+    """Prepare G2P model for training."""
+
+    self.params = params
 
     self.session = tf.Session()
 
@@ -163,15 +168,14 @@ class G2PModel(object):
                                       write_version=saver_pb2.SaverDef.V1)
 
 
-  def load_model_for_train(self, params, train_path, valid_path=None,
-                           test_path=None):
+  def load_train_model(self, params):
     """Load G2P model for continuing train."""
 
     # Load model parameters.
     params.num_layers, params.size = data_utils.load_params(self.model_dir)
 
     # Prepare data and G2P Model
-    self.__prepare_model(params, train_path, valid_path, test_path)
+    self.__prepare_model(params)
 
     # Check for saved models and restore them.
     print("Reading model parameters from %s" % self.model_dir)
@@ -179,14 +183,13 @@ class G2PModel(object):
                                                         "model"))
 
 
-  def create_model_for_train(self, params, train_path, valid_path=None,
-                             test_path=None):
+  def create_train_model(self, params):
     """Create G2P model for train from scratch."""
     # Save model parameters.
     data_utils.save_params(params.num_layers, params.size, self.model_dir)
 
     # Prepare data and G2P Model
-    self.__prepare_model(params, train_path, valid_path, test_path)
+    self.__prepare_model(params)
 
     print("Created model with fresh parameters.")
     self.session.run(tf.initialize_all_variables())
@@ -413,7 +416,6 @@ class TrainingParams(object):
       self.num_layers = flags.num_layers
       self.steps_per_checkpoint = flags.steps_per_checkpoint
       self.max_steps = flags.max_steps
-      self.decode = False if flags.train else True
     else:
       self.learning_rate = 0.5
       self.lr_decay_factor = 0.99
@@ -423,4 +425,3 @@ class TrainingParams(object):
       self.num_layers = 2
       self.steps_per_checkpoint = 200
       self.max_steps = 0
-      self.decode = False

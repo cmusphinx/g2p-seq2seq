@@ -64,20 +64,19 @@ def main(_=[]):
   """Main function.
   """
   with tf.Graph().as_default():
+    g2p_model = G2PModel(FLAGS.model)
     if FLAGS.train:
-      g2p_model = G2PModel(FLAGS.model, train_flag=True)
       g2p_params = TrainingParams(FLAGS)
+      g2p_model.prepare_data(FLAGS.train, FLAGS.valid, FLAGS.test)
       if (not FLAGS.model
           or not os.path.exists(os.path.join(FLAGS.model, "model"))
           or FLAGS.reinit):
-        g2p_model.create_model_for_train(g2p_params, FLAGS.train, FLAGS.valid,
-                                         FLAGS.test)
+        g2p_model.create_train_model(g2p_params)
       else:
-        g2p_model.load_model_for_train(g2p_params, FLAGS.train, FLAGS.valid, 
-                                       FLAGS.test)
+        g2p_model.load_train_model(g2p_params)
       g2p_model.train()
     else:
-      g2p_model = G2PModel(FLAGS.model, train_flag=False)
+      g2p_model.load_decode_model()
       if FLAGS.decode:
         decode_lines = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
         output_file = None

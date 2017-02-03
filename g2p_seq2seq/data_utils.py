@@ -112,8 +112,6 @@ def save_params(num_layers, size, model_dir):
     num_layers: Number of layers in the model;
     size: Size of each model layer.
   """
-  if not os.path.exists(model_dir):
-    os.makedirs(model_dir)
   # Save model's architecture
   with open(os.path.join(model_dir, "model.params"), 'w') as param_file:
     param_file.write("num_layers:" + str(num_layers) + "\n")
