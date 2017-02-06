@@ -65,7 +65,7 @@ class G2PModel(object):
   def __init__(self, model_dir):
     """Initialize model directory."""
     self.model_dir = model_dir
-    if not os.path.exists(self.model_dir):
+    if self.model_dir and not os.path.exists(self.model_dir):
       os.makedirs(self.model_dir)
 
 
@@ -187,7 +187,8 @@ class G2PModel(object):
   def create_train_model(self, params):
     """Create G2P model for train from scratch."""
     # Save model parameters.
-    data_utils.save_params(params.num_layers, params.size, self.model_dir)
+    if self.model_dir:
+      data_utils.save_params(params.num_layers, params.size, self.model_dir)
 
     # Prepare data and G2P Model
     self.__prepare_model(params)

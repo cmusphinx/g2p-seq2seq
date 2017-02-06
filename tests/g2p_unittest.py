@@ -16,13 +16,16 @@ class TestG2P(unittest.TestCase):
       g2p_params.max_steps = 1
       g2p_params.num_layers = 1
       g2p_params.size = 2
-      g2p_model.train(g2p_params, train_path, valid_path, test_path)
+      g2p_model.prepare_data(train_path, valid_path, test_path)
+      g2p_model.create_train_model(g2p_params)
+      g2p_model.train()
 
 
   def test_evaluate(self):
     model_dir = "tests/models/decode"
     with g2p.tf.Graph().as_default():
       g2p_model = g2p.G2PModel(model_dir)
+      g2p_model.load_decode_model()
       test_lines = open("tests/data/toydict.test").readlines()
       g2p_model.evaluate(test_lines)
       test_dic = data_utils.collect_pronunciations(test_lines)
@@ -34,6 +37,7 @@ class TestG2P(unittest.TestCase):
     model_dir = "tests/models/decode"
     with g2p.tf.Graph().as_default():
       g2p_model = g2p.G2PModel(model_dir)
+      g2p_model.load_decode_model()
       decode_lines = open("tests/data/toydict.graphemes").readlines()
       phoneme_lines = g2p_model.decode(decode_lines)
       self.assertEqual(phoneme_lines[0].strip(), u'C')

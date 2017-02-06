@@ -231,7 +231,8 @@ def prepare_g2p_data(model_dir, train_path, valid_path, test_path):
   valid_gr, valid_ph = split_to_grapheme_phoneme(valid_dic)
 
   # Load/Create vocabularies.
-  if (os.path.exists(os.path.join(model_dir, "vocab.grapheme"))
+  if (model_dir
+      and os.path.exists(os.path.join(model_dir, "vocab.grapheme"))
       and os.path.exists(os.path.join(model_dir, "vocab.phoneme"))):
     print("Loading vocabularies from %s" %model_dir)
     ph_vocab = load_vocabulary(os.path.join(model_dir, "vocab.phoneme"))
