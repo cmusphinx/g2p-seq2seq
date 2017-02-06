@@ -94,8 +94,7 @@ class G2PModel(object):
                                             size, num_layers, 0,
                                             self.batch_size, 0, 0,
                                             forward_only=True)
-    self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1,
-                                      write_version=saver_pb2.SaverDef.V1)
+    self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1)
     # Check for saved models and restore them.
     print("Reading model parameters from %s" % self.model_dir)
     self.model.saver.restore(self.session, os.path.join(self.model_dir,
@@ -165,8 +164,7 @@ class G2PModel(object):
                                             self.params.learning_rate,
                                             self.params.lr_decay_factor,
                                             forward_only=False)
-    self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1,
-                                      write_version=saver_pb2.SaverDef.V1)
+    self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1)
 
 
   def load_train_model(self, params):
@@ -247,15 +245,11 @@ class G2PModel(object):
 
         self.__run_evals()
 
-    if self.model_dir:
-      # Save checkpoint and zero timer and loss.
-      self.model.saver.save(self.session, os.path.join(self.model_dir, "model"),
-                            write_meta_graph=False)
-
     print('Training done.')
     if self.model_dir:
       with tf.Graph().as_default():
         g2p_model_eval = G2PModel(self.model_dir)
+        g2p_model_eval.load_decode_model()
         g2p_model_eval.evaluate(self.test_lines)
 
 
