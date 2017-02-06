@@ -109,6 +109,15 @@ You can manually point out Development and Test datasets:
   "--test" - Test dictionary (Default: created from train_dictionary.dic)
 ```
 
+If you need to continue train saved model just launch the following code:
+```
+  g2p-seq2seq --train train_dictionary.dic --model model_folder_path
+```
+
+And, if you want to start training from scratch:
+```
+  "--reinit" - Rewrite model in model_folder_path
+```
 
 #### Word error rate on CMU dictionary data sets
 

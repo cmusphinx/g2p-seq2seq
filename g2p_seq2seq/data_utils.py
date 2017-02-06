@@ -112,8 +112,6 @@ def save_params(num_layers, size, model_dir):
     num_layers: Number of layers in the model;
     size: Size of each model layer.
   """
-  if not os.path.exists(model_dir):
-    os.makedirs(model_dir)
   # Save model's architecture
   with open(os.path.join(model_dir, "model.params"), 'w') as param_file:
     param_file.write("num_layers:" + str(num_layers) + "\n")
@@ -232,14 +230,21 @@ def prepare_g2p_data(model_dir, train_path, valid_path, test_path):
   train_gr, train_ph = split_to_grapheme_phoneme(train_dic)
   valid_gr, valid_ph = split_to_grapheme_phoneme(valid_dic)
 
-  # Create vocabularies of the appropriate sizes.
-  print("Creating vocabularies in %s" %model_dir)
-  ph_vocab = create_vocabulary(train_ph)
-  gr_vocab = create_vocabulary(train_gr)
+  # Load/Create vocabularies.
+  if (os.path.exists(os.path.join(model_dir, "vocab.grapheme"))
+      and os.path.exists(os.path.join(model_dir, "vocab.phoneme"))):
+    print("Loading vocabularies from %s" %model_dir)
+    ph_vocab = load_vocabulary(os.path.join(model_dir, "vocab.phoneme"))
+    gr_vocab = load_vocabulary(os.path.join(model_dir, "vocab.grapheme"))
 
-  if model_dir:
-    save_vocabulary(ph_vocab, os.path.join(model_dir, "vocab.phoneme"))
-    save_vocabulary(gr_vocab, os.path.join(model_dir, "vocab.grapheme"))
+  else:
+    print("Creating vocabularies in %s" %model_dir)
+    ph_vocab = create_vocabulary(train_ph)
+    gr_vocab = create_vocabulary(train_gr)
+
+    if model_dir:
+      save_vocabulary(ph_vocab, os.path.join(model_dir, "vocab.phoneme"))
+      save_vocabulary(gr_vocab, os.path.join(model_dir, "vocab.grapheme"))
 
   # Create ids for the training data.
   train_ph_ids = [symbols_to_ids(line, ph_vocab) for line in train_ph]
