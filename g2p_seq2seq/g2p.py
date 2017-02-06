@@ -75,6 +75,7 @@ class G2PModel(object):
     #Load model parameters.
     num_layers, size = data_utils.load_params(self.model_dir)
     # Load vocabularies
+    print("Loading vocabularies from %s" %self.model_dir)
     self.gr_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
                                                             "vocab.grapheme"))
     self.ph_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
