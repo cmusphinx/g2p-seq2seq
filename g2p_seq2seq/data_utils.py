@@ -239,7 +239,6 @@ def prepare_g2p_data(model_dir, train_path, valid_path, test_path):
     gr_vocab = load_vocabulary(os.path.join(model_dir, "vocab.grapheme"))
 
   else:
-    print("Creating vocabularies in %s" %model_dir)
     ph_vocab = create_vocabulary(train_ph)
     gr_vocab = create_vocabulary(train_gr)
 
