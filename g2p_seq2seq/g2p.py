@@ -33,7 +33,6 @@ import tensorflow as tf
 from tensorflow.core.protobuf import saver_pb2
 
 from g2p_seq2seq import data_utils
-#from tensorflow.models.rnn.translate import seq2seq_model
 from g2p_seq2seq import seq2seq_model
 
 from six.moves import xrange, input  # pylint: disable=redefined-builtin
@@ -71,6 +70,9 @@ class G2PModel(object):
 
 
   def load_decode_model(self):
+    if (not self.model_dir
+        or not os.path.exists(os.path.join(self.model_dir, 'checkpoint'))):
+      raise RuntimeError("Model not found in %s" % self.model_dir)
     """Load G2P model and initialize or load parameters in session."""
     self.batch_size = 1 # We decode one word at a time.
     #Load model parameters.
@@ -95,7 +97,6 @@ class G2PModel(object):
                                             size, num_layers, 0,
                                             self.batch_size, 0, 0,
                                             forward_only=True)
-    #self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1)
     self.model.saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
     # Check for saved models and restore them.
     print("Reading model parameters from %s" % self.model_dir)
@@ -166,7 +167,6 @@ class G2PModel(object):
                                             self.params.learning_rate,
                                             self.params.lr_decay_factor,
                                             forward_only=False)
-    #self.model.saver = tf.train.Saver(tf.all_variables(), max_to_keep=1)
     self.model.saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
 
 
@@ -195,7 +195,6 @@ class G2PModel(object):
     self.__prepare_model(params)
 
     print("Created model with fresh parameters.")
-    #self.session.run(tf.initialize_all_variables())
     self.session.run(tf.global_variables_initializer())
 
 
