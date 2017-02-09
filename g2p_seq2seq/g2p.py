@@ -280,8 +280,8 @@ class G2PModel(object):
   def __calc_eval_loss(self):
     """Run evals on development set and print their perplexity.
     """
+    eval_loss = 0.0
     for bucket_id in xrange(len(self._BUCKETS)):
-      eval_loss = 0.0
       num_iter_cover_valid = int(len(self.valid_set[bucket_id])/\
           self.params.batch_size/len(self._BUCKETS))
       for _ in range(num_iter_cover_valid):
