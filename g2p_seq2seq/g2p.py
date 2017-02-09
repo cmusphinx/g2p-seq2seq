@@ -70,8 +70,9 @@ class G2PModel(object):
 
 
   def load_decode_model(self):
-    if (not self.model_dir
-        or not os.path.exists(os.path.join(self.model_dir, 'checkpoint'))):
+    if not self.model_dir:
+      raise RuntimeError("Model direction not specified.")
+    elif not os.path.exists(os.path.join(self.model_dir, 'checkpoint')):
       raise RuntimeError("Model not found in %s" % self.model_dir)
     """Load G2P model and initialize or load parameters in session."""
     self.batch_size = 1 # We decode one word at a time.
@@ -166,7 +167,8 @@ class G2PModel(object):
                                             self.params.batch_size,
                                             self.params.learning_rate,
                                             self.params.lr_decay_factor,
-                                            forward_only=False)
+                                            forward_only=False,
+                                            optimizer=self.params.optimizer)
     self.model.saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
 
 
@@ -211,7 +213,7 @@ class G2PModel(object):
                            for i in xrange(len(train_bucket_sizes))]
 
     # This is the training loop.
-    step_time, loss = 0.0, 0.0
+    step_time, train_loss = 0.0, 0.0
     current_step = 0
     previous_losses = []
     while (self.params.max_steps == 0
@@ -221,32 +223,34 @@ class G2PModel(object):
       start_time = time.time()
       step_loss = self.__calc_step_loss(train_buckets_scale)
       step_time += (time.time() - start_time) / self.params.steps_per_checkpoint
-      loss += step_loss / self.params.steps_per_checkpoint
+      train_loss += step_loss / self.params.steps_per_checkpoint
       current_step += 1
 
       # Once in a while, we save checkpoint, print statistics, and run evals.
       if current_step % self.params.steps_per_checkpoint == 0:
-        # Print statistics for the previous epoch.
-        perplexity = math.exp(loss) if loss < 300 else float('inf')
+        # Print statistics for the previous steps.
+        train_ppx = math.exp(train_loss) if train_loss < 300 else float('inf')
         print ("global step %d learning rate %.4f step-time %.2f perplexity "
                "%.2f" % (self.model.global_step.eval(self.session),
                          self.model.learning_rate.eval(self.session),
-                         step_time, perplexity))
+                         step_time, train_ppx))
+        eval_loss = self.__calc_eval_loss()
+        eval_ppx = math.exp(eval_loss) if eval_loss < 300 else float('inf')
+        print("  eval: perplexity %.2f" % (eval_ppx))
         # Decrease learning rate if no improvement was seen over last 3 times.
-        if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
+        if len(previous_losses) > 2 and eval_loss > max(previous_losses[-3:]):
           self.session.run(self.model.learning_rate_decay_op)
-        if len(previous_losses) > 34 and \
-        previous_losses[-35:-34] <= min(previous_losses[-35:]):
+        if (len(previous_losses) > 34
+            and previous_losses[-35:-34] <= min(previous_losses[-35:])):
           break
-        previous_losses.append(loss)
-        step_time, loss = 0.0, 0.0
+        previous_losses.append(eval_loss)
+        step_time, train_loss = 0.0, 0.0
 
         if self.model_dir:
           # Save checkpoint and zero timer and loss.
           self.model.saver.save(self.session, os.path.join(self.model_dir, "model"),
                                 write_meta_graph=False)
 
-        self.__run_evals()
 
     print('Training done.')
     if self.model_dir:
@@ -273,17 +277,21 @@ class G2PModel(object):
     return step_loss
 
 
-  def __run_evals(self):
+  def __calc_eval_loss(self):
     """Run evals on development set and print their perplexity.
     """
     for bucket_id in xrange(len(self._BUCKETS)):
-      encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
-          self.valid_set, bucket_id)
-      _, eval_loss, _ = self.model.step(self.session, encoder_inputs,
-                                        decoder_inputs, target_weights,
-                                        bucket_id, True)
-      eval_ppx = math.exp(eval_loss) if eval_loss < 300 else float('inf')
-      print("  eval: bucket %d perplexity %.2f" % (bucket_id, eval_ppx))
+      eval_loss = 0.0
+      num_iter_cover_valid = int(len(self.valid_set[bucket_id])/\
+          self.params.batch_size/len(self._BUCKETS))
+      for _ in range(num_iter_cover_valid):
+        encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
+            self.valid_set, bucket_id)
+        _, eval_batch_loss, _ = self.model.step(self.session, encoder_inputs,
+                                          decoder_inputs, target_weights,
+                                          bucket_id, True)
+        eval_loss += eval_batch_loss/num_iter_cover_valid
+    return eval_loss
 
 
   def decode_word(self, word):
@@ -335,6 +343,7 @@ class G2PModel(object):
       if not word:
         break
       print(self.decode_word(word))
+
 
   def calc_error(self, dictionary):
     """Calculate a number of prediction errors.
@@ -403,6 +412,7 @@ class G2PModel(object):
         phoneme_lines.append(phonemes)
     return phoneme_lines
 
+
 class TrainingParams(object):
   """Class with training parameters."""
   def __init__(self, flags=None):
@@ -415,6 +425,7 @@ class TrainingParams(object):
       self.num_layers = flags.num_layers
       self.steps_per_checkpoint = flags.steps_per_checkpoint
       self.max_steps = flags.max_steps
+      self.optimizer = flags.optimizer
     else:
       self.learning_rate = 0.5
       self.lr_decay_factor = 0.99
@@ -424,3 +435,4 @@ class TrainingParams(object):
       self.num_layers = 2
       self.steps_per_checkpoint = 200
       self.max_steps = 0
+      self.optimizer = "sgd"

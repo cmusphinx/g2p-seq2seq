@@ -56,6 +56,7 @@ class Seq2SeqModel(object):
                use_lstm=False,
                num_samples=512,
                forward_only=False,
+               optimizer="sgd",
                dtype=tf.float32):
     """Create the model.
 
@@ -89,6 +90,7 @@ class Seq2SeqModel(object):
     self.learning_rate_decay_op = self.learning_rate.assign(
         self.learning_rate * learning_rate_decay_factor)
     self.global_step = tf.Variable(0, trainable=False)
+    self.optimizer = optimizer
 
     # If we use sampled softmax, we need an output projection.
     output_projection = None
@@ -176,7 +178,14 @@ class Seq2SeqModel(object):
     if not forward_only:
       self.gradient_norms = []
       self.updates = []
-      opt = tf.train.GradientDescentOptimizer(self.learning_rate)
+      if self.optimizer == 'sgd':
+        opt = tf.train.GradientDescentOptimizer(self.learning_rate)
+      elif self.optimizer == 'adam':
+        opt = tf.train.AdamOptimizer(self.learning_rate)
+      elif self.optimizer == 'rms-prop':
+        opt = tf.train.RMSPropOptimizer(self.learning_rate)
+      else:
+        raise ValueError('No such type of optimizer: %s' % self.optimizer)
       for b in xrange(len(buckets)):
         gradients = tf.gradients(self.losses[b], params)
         clipped_gradients, norm = tf.clip_by_global_norm(gradients,

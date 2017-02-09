@@ -22,3 +22,4 @@ from __future__ import print_function
 
 from g2p_seq2seq import g2p
 from g2p_seq2seq import data_utils
+from g2p_seq2seq import seq2seq_model

@@ -57,6 +57,7 @@ tf.app.flags.DEFINE_integer("max_steps", 0,
                             " (0: no limit).")
 tf.app.flags.DEFINE_boolean("reinit", False,
                             "Set to True for training from scratch.")
+tf.app.flags.DEFINE_string("optimizer", "sgd", "Optimizer type: sgd, adam, rms-prop. Default: sgd.")
 
 FLAGS = tf.app.flags.FLAGS
 
