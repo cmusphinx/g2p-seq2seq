@@ -215,7 +215,7 @@ class G2PModel(object):
     # This is the training loop.
     step_time, train_loss = 0.0, 0.0
     current_step = 0
-    previous_losses = []
+    prev_train_losses, prev_valid_losses = [], []
     while (self.params.max_steps == 0
            or self.model.global_step.eval(self.session)
            <= self.params.max_steps):
@@ -237,13 +237,19 @@ class G2PModel(object):
         eval_loss = self.__calc_eval_loss()
         eval_ppx = math.exp(eval_loss) if eval_loss < 300 else float('inf')
         print("  eval: perplexity %.2f" % (eval_ppx))
-        # Decrease learning rate if no improvement was seen over last 3 times.
-        if len(previous_losses) > 2 and eval_loss > max(previous_losses[-3:]):
+        # Decrease learning rate if no improvement was seen on train set
+        # over last 3 times.
+        if (len(prev_train_losses) > 2
+            and train_loss > max(prev_train_losses[-3:])):
           self.session.run(self.model.learning_rate_decay_op)
-        if (len(previous_losses) > 34
-            and previous_losses[-35:-34] <= min(previous_losses[-35:])):
+        # Stop train if no improvement was seen on validation set
+        # over last 5 times
+        if (len(prev_valid_losses) > 34
+            and (prev_valid_losses[len(prev_valid_losses)-1] <=
+                 min(prev_valid_losses[-35:]))):
           break
-        previous_losses.append(eval_loss)
+        prev_train_losses.append(train_loss)
+        prev_valid_losses.append(round(eval_loss, 2))
         step_time, train_loss = 0.0, 0.0
 
         if self.model_dir:

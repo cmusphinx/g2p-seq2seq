@@ -6,19 +6,19 @@ sequence-to-sequence models were successfully applied in various tasks,
 including machine translation [1] and grapheme-to-phoneme [2].
 
 This implementation is based on python
-[TensorFlow](https://www.tensorflow.org/versions/r0.9/tutorials/seq2seq/index.html),
+[TensorFlow](https://www.tensorflow.org/tutorials/seq2seq/),
 which allows an efficient training on both CPU and GPU.
 
 ## Installation
 
-The tool requires TensorFlow at least version 0.9. Please see the installation
-[guide](https://www.tensorflow.org/versions/r0.9/get_started/os_setup.html)
+The tool requires TensorFlow at least version 1.0.0. Please see the installation
+[guide](https://www.tensorflow.org/install/)
 for details
 
 You can install tensorflow with the following command:
 
 ```
-sudo pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-0.9.0-cp27-none-linux_x86_64.whl
+sudo pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-1.0.0-cp27-none-linux_x86_64.whl
 ```
 
 The package itself uses setuptools, so you can follow standard installation process:
