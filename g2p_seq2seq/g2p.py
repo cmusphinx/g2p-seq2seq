@@ -253,7 +253,7 @@ class G2PModel(object):
         # Stop train if no improvement was seen on validation set
         # over last 35 times
         if (len(prev_valid_losses) > 34
-            and (eval_loss >= min(prev_valid_losses[-35:]))):
+            and (eval_loss >= max(prev_valid_losses[-35:]))):
           break
 
         prev_train_losses.append(train_loss)
