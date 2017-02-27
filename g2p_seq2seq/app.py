@@ -70,7 +70,8 @@ def main(_=[]):
       g2p_params = TrainingParams(FLAGS)
       g2p_model.prepare_data(FLAGS.train, FLAGS.valid, FLAGS.test)
       if (not FLAGS.model
-          or not os.path.exists(os.path.join(FLAGS.model, "model"))
+          or not os.path.exists(os.path.join(FLAGS.model,
+                                             "model.data-00000-of-00001"))
           or FLAGS.reinit):
         g2p_model.create_train_model(g2p_params)
       else:

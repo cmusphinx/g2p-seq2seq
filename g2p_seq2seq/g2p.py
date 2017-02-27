@@ -290,14 +290,15 @@ class G2PModel(object):
     """
     eval_loss = 0.0
     for bucket_id in xrange(len(self._BUCKETS)):
-      num_iter_cover_valid = int(len(self.valid_set[bucket_id])/\
-          self.params.batch_size/len(self._BUCKETS))
-      for _ in range(num_iter_cover_valid):
-        encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
-            self.valid_set, bucket_id)
+      num_iter_cover_valid = int(len(self.valid_set[bucket_id])/
+                                 self.params.batch_size)
+      for batch_id in xrange(num_iter_cover_valid):
+        encoder_inputs, decoder_inputs, target_weights =\
+            self.model.get_eval_set_batch(self.valid_set, bucket_id,
+                                          batch_id * self.params.batch_size)
         _, eval_batch_loss, _ = self.model.step(self.session, encoder_inputs,
-                                          decoder_inputs, target_weights,
-                                          bucket_id, True)
+                                                decoder_inputs, target_weights,
+                                                bucket_id, True)
         eval_loss += eval_batch_loss/num_iter_cover_valid
     return eval_loss
 
