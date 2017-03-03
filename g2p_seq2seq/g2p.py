@@ -244,7 +244,7 @@ class G2PModel(object):
           self.session.run(self.model.learning_rate_decay_op)
 
         if (self.model_dir and len(prev_valid_losses) > 0
-            and eval_loss < min(prev_valid_losses)):
+            and eval_loss <= min(prev_valid_losses)):
           # Save checkpoint and zero timer and loss.
           self.model.saver.save(self.session,
                                 os.path.join(self.model_dir, "model"),
@@ -257,7 +257,7 @@ class G2PModel(object):
           break
 
         prev_train_losses.append(train_loss)
-        prev_valid_losses.append(round(eval_loss, 2))
+        prev_valid_losses.append(eval_loss)
         step_time, train_loss = 0.0, 0.0
 
     print('Training done.')
@@ -288,10 +288,11 @@ class G2PModel(object):
   def __calc_eval_loss(self):
     """Run evals on development set and print their perplexity.
     """
-    eval_loss = 0.0
+    eval_loss, num_iter_total = 0.0, 0.0
     for bucket_id in xrange(len(self._BUCKETS)):
       num_iter_cover_valid = int(len(self.valid_set[bucket_id])/
                                  self.params.batch_size)
+      num_iter_total += num_iter_cover_valid
       for batch_id in xrange(num_iter_cover_valid):
         encoder_inputs, decoder_inputs, target_weights =\
             self.model.get_eval_set_batch(self.valid_set, bucket_id,
@@ -299,7 +300,8 @@ class G2PModel(object):
         _, eval_batch_loss, _ = self.model.step(self.session, encoder_inputs,
                                                 decoder_inputs, target_weights,
                                                 bucket_id, True)
-        eval_loss += eval_batch_loss/num_iter_cover_valid
+        eval_loss += eval_batch_loss
+    eval_loss /= num_iter_total
     return eval_loss
 
 
