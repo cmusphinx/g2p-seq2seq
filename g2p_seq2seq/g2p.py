@@ -290,8 +290,8 @@ class G2PModel(object):
     """
     eval_loss, num_iter_total = 0.0, 0.0
     for bucket_id in xrange(len(self._BUCKETS)):
-      num_iter_cover_valid = int(len(self.valid_set[bucket_id])/
-                                 self.params.batch_size)
+      num_iter_cover_valid = int(math.ceil(len(self.valid_set[bucket_id])/
+                                           self.params.batch_size))
       num_iter_total += num_iter_cover_valid
       for batch_id in xrange(num_iter_cover_valid):
         encoder_inputs, decoder_inputs, target_weights =\
@@ -301,7 +301,7 @@ class G2PModel(object):
                                                 decoder_inputs, target_weights,
                                                 bucket_id, True)
         eval_loss += eval_batch_loss
-    eval_loss /= num_iter_total
+    eval_loss = eval_loss/num_iter_total if num_iter_total > 0 else float('inf')
     return eval_loss
 
 
