@@ -65,21 +65,20 @@ class G2PModel(object):
   def __init__(self, model_dir):
     """Initialize model directory."""
     self.model_dir = model_dir
-    if self.model_dir and not os.path.exists(self.model_dir):
+    if not os.path.exists(self.model_dir):
       os.makedirs(self.model_dir)
 
 
   def load_decode_model(self):
-    if not self.model_dir:
-      raise RuntimeError("Model direction not specified.")
-    elif not os.path.exists(os.path.join(self.model_dir, 'checkpoint')):
-      raise RuntimeError("Model not found in %s" % self.model_dir)
     """Load G2P model and initialize or load parameters in session."""
+    if not os.path.exists(os.path.join(self.model_dir, 'checkpoint')):
+      raise RuntimeError("Model not found in %s" % self.model_dir)
+
     self.batch_size = 1 # We decode one word at a time.
     #Load model parameters.
     num_layers, size = data_utils.load_params(self.model_dir)
     # Load vocabularies
-    print("Loading vocabularies from %s" %self.model_dir)
+    print("Loading vocabularies from %s" % self.model_dir)
     self.gr_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
                                                             "vocab.grapheme"))
     self.ph_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
@@ -174,14 +173,17 @@ class G2PModel(object):
 
   def load_train_model(self, params):
     """Load G2P model for continuing train."""
+    # Check for saved model.
+    if not os.path.exists(os.path.join(self.model_dir, 'checkpoint')):
+      raise RuntimeError("Model not found in %s" % self.model_dir)
 
     # Load model parameters.
     params.num_layers, params.size = data_utils.load_params(self.model_dir)
 
-    # Prepare data and G2P Model
+    # Prepare data and G2P Model.
     self.__prepare_model(params)
 
-    # Check for saved models and restore them.
+    # Restore model.
     print("Reading model parameters from %s" % self.model_dir)
     self.model.saver.restore(self.session, os.path.join(self.model_dir,
                                                         "model"))
@@ -190,8 +192,7 @@ class G2PModel(object):
   def create_train_model(self, params):
     """Create G2P model for train from scratch."""
     # Save model parameters.
-    if self.model_dir:
-      data_utils.save_params(params.num_layers, params.size, self.model_dir)
+    data_utils.save_params(params.num_layers, params.size, self.model_dir)
 
     # Prepare data and G2P Model
     self.__prepare_model(params)
@@ -243,7 +244,7 @@ class G2PModel(object):
             and train_loss > max(prev_train_losses[-3:])):
           self.session.run(self.model.learning_rate_decay_op)
 
-        if (self.model_dir and len(prev_valid_losses) > 0
+        if (len(prev_valid_losses) > 0
             and eval_loss <= min(prev_valid_losses)):
           # Save checkpoint and zero timer and loss.
           self.model.saver.save(self.session,
@@ -261,11 +262,10 @@ class G2PModel(object):
         step_time, train_loss = 0.0, 0.0
 
     print('Training done.')
-    if self.model_dir:
-      with tf.Graph().as_default():
-        g2p_model_eval = G2PModel(self.model_dir)
-        g2p_model_eval.load_decode_model()
-        g2p_model_eval.evaluate(self.test_lines)
+    with tf.Graph().as_default():
+      g2p_model_eval = G2PModel(self.model_dir)
+      g2p_model_eval.load_decode_model()
+      g2p_model_eval.evaluate(self.test_lines)
 
 
   def __calc_step_loss(self, train_buckets_scale):
@@ -375,9 +375,6 @@ class G2PModel(object):
       test_lines: List of test dictionary. Each element of list must be String
                 containing word and its pronounciation (e.g., "word W ER D");
     """
-    if not hasattr(self, "model"):
-      raise RuntimeError("Model not found in %s" % self.model_dir)
-
     test_dic = data_utils.collect_pronunciations(test_lines)
 
     if len(test_dic) < 1:
@@ -400,10 +397,8 @@ class G2PModel(object):
       if [--output output_file] pointed out, write decoded word sequences in
       this file. Otherwise, print decoded words in standard output.
     """
-    if not hasattr(self, "model"):
-      raise RuntimeError("Model not found in %s" % self.model_dir)
-
     phoneme_lines = []
+
     # Decode from input file.
     if output_file:
       for word in decode_lines:

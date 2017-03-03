@@ -66,12 +66,13 @@ def main(_=[]):
   """
   with tf.Graph().as_default():
     g2p_model = G2PModel(FLAGS.model)
+    if not FLAGS.model:
+      raise RuntimeError("Model direction not specified.")
     if FLAGS.train:
       g2p_params = TrainingParams(FLAGS)
       g2p_model.prepare_data(FLAGS.train, FLAGS.valid, FLAGS.test)
-      if (not FLAGS.model
-          or not os.path.exists(os.path.join(FLAGS.model,
-                                             "model.data-00000-of-00001"))
+      if (not os.path.exists(os.path.join(FLAGS.model,
+                                          "model.data-00000-of-00001"))
           or FLAGS.reinit):
         g2p_model.create_train_model(g2p_params)
       else:
