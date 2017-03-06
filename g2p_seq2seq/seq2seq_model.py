@@ -220,7 +220,6 @@ class Seq2SeqModel(object):
         target_weights disagrees with bucket size for the specified bucket_id.
     """
 
-    batch_size_actual = len(encoder_inputs[0])
     # Check if the sizes match.
     encoder_size, decoder_size = self.buckets[bucket_id]
     if len(encoder_inputs) != encoder_size:
@@ -243,7 +242,8 @@ class Seq2SeqModel(object):
 
     # Since our targets are decoder inputs shifted by one, we need one more.
     last_target = self.decoder_inputs[decoder_size].name
-    input_feed[last_target] = np.zeros([batch_size_actual], dtype=np.int32)
+    input_feed[last_target] = np.zeros([len(encoder_inputs[0])],
+                                        dtype=np.int32)
 
     # Output feed: depends on whether we do a backward step or not.
     if not forward_only:
@@ -298,8 +298,8 @@ class Seq2SeqModel(object):
                                           encoder_inputs, decoder_inputs)
 
 
-  def get_eval_set_batch(self, data, bucket_id, from_row_id):
-    """Get a batch from data with rows started with from_row_id.
+  def get_eval_set_batch(self, data, bucket_id, from_row_idx):
+    """Get a batch from data with rows started with from_row_idx.
 
     To feed data in step(..) it must be a list of batch-major vectors, while
     data here contains single length-major cases. So the main logic of this
@@ -316,13 +316,14 @@ class Seq2SeqModel(object):
     """
     encoder_size, decoder_size = self.buckets[bucket_id]
     encoder_inputs, decoder_inputs = [], []
-    batch_row_id = 0
+    batch_row_idx = 0
 
-    # Get a random batch of encoder and decoder inputs from data,
+    # Get a batch of encoder and decoder inputs from data,
     # pad them if needed, reverse encoder inputs and add GO to decoder.
-    while (from_row_id+batch_row_id < len(data[bucket_id])
-           and batch_row_id < self.batch_size):
-      encoder_input, decoder_input = data[bucket_id][from_row_id+batch_row_id]
+    while (from_row_idx+batch_row_idx < len(data[bucket_id])
+           and batch_row_idx < self.batch_size):
+      encoder_input, decoder_input =\
+        data[bucket_id][from_row_idx+batch_row_idx]
 
       # Encoder inputs are padded and then reversed.
       encoder_pad = [PAD_ID] * (encoder_size - len(encoder_input))
@@ -332,18 +333,15 @@ class Seq2SeqModel(object):
       decoder_pad_size = decoder_size - len(decoder_input) - 1
       decoder_inputs.append([GO_ID] + decoder_input +
                             [PAD_ID] * decoder_pad_size)
-      batch_row_id += 1
-
-    return self.__create_batch_major_vecs(encoder_size, decoder_size,
-                                          encoder_inputs, decoder_inputs,
-                                          batch_row_id)
+      batch_row_idx += 1
+    return self.__create_batch_major_vecs(encoder_size,
+                                          decoder_size,
+                                          encoder_inputs,
+                                          decoder_inputs)
 
 
   def __create_batch_major_vecs(self, encoder_size, decoder_size,
-                                encoder_inputs, decoder_inputs,
-                                batch_size_actual=None):
-    batch_size_actual =\
-      self.batch_size if not batch_size_actual else batch_size_actual
+                                encoder_inputs, decoder_inputs):
     # Now we create batch-major vectors from the data selected above.
     batch_encoder_inputs, batch_decoder_inputs, batch_weights = [], [], []
 
@@ -351,17 +349,19 @@ class Seq2SeqModel(object):
     for length_idx in xrange(encoder_size):
       batch_encoder_inputs.append(
           np.array([encoder_inputs[batch_idx][length_idx]
-                    for batch_idx in xrange(batch_size_actual)], dtype=np.int32))
+                    for batch_idx in xrange(len(encoder_inputs))],
+                                            dtype=np.int32))
 
     # Batch decoder inputs are re-indexed decoder_inputs, we create weights.
     for length_idx in xrange(decoder_size):
       batch_decoder_inputs.append(
           np.array([decoder_inputs[batch_idx][length_idx]
-                    for batch_idx in xrange(batch_size_actual)], dtype=np.int32))
+                    for batch_idx in xrange(len(encoder_inputs))],
+                                            dtype=np.int32))
 
       # Create target_weights to be 0 for targets that are padding.
-      batch_weight = np.ones(batch_size_actual, dtype=np.float32)
-      for batch_idx in xrange(batch_size_actual):
+      batch_weight = np.ones(len(encoder_inputs), dtype=np.float32)
+      for batch_idx in xrange(len(encoder_inputs)):
         # We set weight to 0 if the corresponding target is a PAD symbol.
         # The corresponding target is decoder_input shifted by 1 forward.
         if length_idx < decoder_size - 1:
