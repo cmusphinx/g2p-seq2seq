@@ -243,6 +243,7 @@ def prepare_g2p_data(model_dir, train_path, valid_path, test_path):
     gr_vocab = create_vocabulary(train_gr)
 
     if model_dir:
+      os.makedirs(model_dir)
       save_vocabulary(ph_vocab, os.path.join(model_dir, "vocab.phoneme"))
       save_vocabulary(gr_vocab, os.path.join(model_dir, "vocab.grapheme"))
 

@@ -65,9 +65,9 @@ def main(_=[]):
   """Main function.
   """
   with tf.Graph().as_default():
-    g2p_model = G2PModel(FLAGS.model)
     if not FLAGS.model:
-      raise RuntimeError("Model direction not specified.")
+      raise RuntimeError("Model directory not specified.")
+    g2p_model = G2PModel(FLAGS.model)
     if FLAGS.train:
       g2p_params = TrainingParams(FLAGS)
       g2p_model.prepare_data(FLAGS.train, FLAGS.valid, FLAGS.test)

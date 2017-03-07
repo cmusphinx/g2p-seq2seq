@@ -65,9 +65,6 @@ class G2PModel(object):
   def __init__(self, model_dir):
     """Initialize model directory."""
     self.model_dir = model_dir
-    if not os.path.exists(self.model_dir):
-      os.makedirs(self.model_dir)
-
 
   def load_decode_model(self):
     """Load G2P model and initialize or load parameters in session."""
