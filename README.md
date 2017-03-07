@@ -125,9 +125,9 @@ And, if you want to start training from scratch:
 
 System | WER ([CMUdict PRONALSYL 2007](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/phonetisaurus-cmudict-split.tar.gz)), % | WER ([CMUdict latest\*](https://github.com/cmusphinx/cmudict)), %
 --- | --- | ---
-Baseline WFST (Phonetisaurus) | 24.40 | 33.89
-LSTM num_layers=2, size=64    | 0.31 | ~39
-LSTM num_layers=2, size=512   | 0.23 | ~31
+Baseline WFST (Phonetisaurus) | 24.4 | 33.89
+LSTM num_layers=2, size=64    | 31.3 | ~39
+LSTM num_layers=2, size=512   | 23.3 | ~31
 \* These results pointed out for dictionary without stress.
 
 ## References
