@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/cmusphinx/g2p-seq2seq.svg?branch=master)](https://travis-ci.org/cmusphinx/g2p-seq2seq)
+
 # Sequence-to-Sequence G2P toolkit
 
 The tool does Grapheme-to-Phoneme (G2P) conversion using recurrent
