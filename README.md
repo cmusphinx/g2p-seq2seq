@@ -121,6 +121,14 @@ And, if you want to start training from scratch:
   "--reinit" - Rewrite model in model_folder_path
 ```
 
+To reproduce the following results, set:
+```
+# for the model with size 64:
+--max_steps 80000
+# for the model with size 512:
+--max_steps 150000
+```
+
 #### Word error rate on CMU dictionary data sets
 
 System | WER ([CMUdict PRONALSYL 2007](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/phonetisaurus-cmudict-split.tar.gz)), % | WER ([CMUdict latest\*](https://github.com/cmusphinx/cmudict)), %
