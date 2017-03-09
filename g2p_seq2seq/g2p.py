@@ -241,12 +241,12 @@ class G2PModel(object):
             and train_loss > max(prev_train_losses[-3:])):
           self.session.run(self.model.learning_rate_decay_op)
 
-        if (len(prev_valid_losses) > 0
-            and eval_loss <= min(prev_valid_losses)):
+        #if (len(prev_valid_losses) > 0
+        #    and eval_loss <= min(prev_valid_losses)):
           # Save checkpoint and zero timer and loss.
-          self.model.saver.save(self.session,
-                                os.path.join(self.model_dir, "model"),
-                                write_meta_graph=False)
+        self.model.saver.save(self.session,
+                              os.path.join(self.model_dir, "model"),
+                              write_meta_graph=False)
 
         # Stop train if no improvement was seen on validation set
         # over last 35 times
