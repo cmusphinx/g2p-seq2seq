@@ -212,8 +212,11 @@ class G2PModel(object):
 
     # This is the training loop.
     step_time, train_loss = 0.0, 0.0
-    current_step = 0
+    current_step, num_iter_wo_improve = 0, 0
     prev_train_losses, prev_valid_losses = [], []
+    num_iter_cover_train = int(sum(train_bucket_sizes) /
+                               self.params.batch_size /
+                               self.params.steps_per_checkpoint)
     while (self.params.max_steps == 0
            or self.model.global_step.eval(self.session)
            <= self.params.max_steps):
@@ -248,10 +251,21 @@ class G2PModel(object):
                               os.path.join(self.model_dir, "model"),
                               write_meta_graph=False)
 
+        if (len(prev_valid_losses) > 0
+            and eval_loss >= min(prev_valid_losses)):
+          num_iter_wo_improve += 1
+        else:
+          num_iter_wo_improve = 0
+
+        if num_iter_wo_improve > num_iter_cover_train * 2:
+          print("No improvement over last %d times. Training will stop after %d"
+                "iterations if no improvement was seen."
+                % (num_iter_wo_improve,
+                   num_iter_cover_train - num_iter_wo_improve))
+
         # Stop train if no improvement was seen on validation set
-        # over last 35 times
-        if (len(prev_valid_losses) > 34
-            and (eval_loss >= max(prev_valid_losses[-35:]))):
+        # over last 3 epochs.
+        if num_iter_wo_improve > num_iter_cover_train * 3:
           break
 
         prev_train_losses.append(train_loss)
