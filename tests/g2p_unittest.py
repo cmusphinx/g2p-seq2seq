@@ -28,7 +28,8 @@ class TestG2P(unittest.TestCase):
     with g2p.tf.Graph().as_default():
       g2p_model = g2p.G2PModel(model_dir)
       g2p_model.load_decode_model()
-      test_lines = open("tests/data/toydict.test").readlines()
+      with open("tests/data/toydict.test") as f:
+        test_lines = f.readlines()
       g2p_model.evaluate(test_lines)
       test_dic = data_utils.collect_pronunciations(test_lines)
       errors = g2p_model.calc_error(test_dic)
@@ -39,7 +40,8 @@ class TestG2P(unittest.TestCase):
     with g2p.tf.Graph().as_default():
       g2p_model = g2p.G2PModel(model_dir)
       g2p_model.load_decode_model()
-      decode_lines = open("tests/data/toydict.graphemes").readlines()
+      with open("tests/data/toydict.graphemes") as f:
+        decode_lines = f.readlines()
       phoneme_lines = g2p_model.decode(decode_lines)
       self.assertEqual(phoneme_lines[0].strip(), u'B')
       self.assertEqual(phoneme_lines[1].strip(), u'A')

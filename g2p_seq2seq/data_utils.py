@@ -127,7 +127,8 @@ def load_params(model_path):
   """
   # Checking model's architecture for decode processes.
   if gfile.Exists(os.path.join(model_path, "model.params")):
-    params = open(os.path.join(model_path, "model.params")).readlines()
+    with open(os.path.join(model_path, "model.params")) as f:
+      params = f.readlines()
     for line in params:
       split_line = line.strip().split(":")
       if split_line[0] == "num_layers":
@@ -184,12 +185,15 @@ def collect_pronunciations(dic_lines):
 def split_dictionary(train_path, valid_path=None, test_path=None):
   """Split source dictionary to train, validation and test sets.
   """
-  source_dic = codecs.open(train_path, "r", "utf-8").readlines()
+  with codecs.open(train_path, "r", "utf-8") as f:
+    source_dic = f.readlines()
   train_dic, valid_dic, test_dic = [], [], []
   if valid_path:
-    valid_dic = codecs.open(valid_path, "r", "utf-8").readlines()
+    with codecs.open(valid_path, "r", "utf-8") as f:
+      valid_dic = f.readlines()
   if test_path:
-    test_dic = codecs.open(test_path, "r", "utf-8").readlines()
+    with codecs.open(test_path, "r", "utf-8") as f:
+      test_dic = f.readlines()
 
   dic = collect_pronunciations(source_dic)
 
