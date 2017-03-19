@@ -153,8 +153,8 @@ class G2PModel(object):
     self.session = tf.Session()
 
     # Prepare model.
-    print("Creating %d layers of %d units." % (self.params.num_layers,
-                                               self.params.size))
+    print("Creating model with parameters:")
+    print(params)
     self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
                                             len(self.ph_vocab), self._BUCKETS,
                                             self.params.size,
@@ -453,3 +453,23 @@ class TrainingParams(object):
       self.steps_per_checkpoint = 200
       self.max_steps = 0
       self.optimizer = "sgd"
+
+  def __str__(self):
+    return ("Learning rate:        {}\n"
+            "LR decay factor:      {}\n"
+            "Max gradient norm:    {}\n"
+            "Batch size:           {}\n"
+            "Size of layer:        {}\n"
+            "Number of layers:     {}\n"
+            "Steps per checkpoint: {}\n"
+            "Max steps:            {}\n"
+            "Optimizer:            {}\n").format(
+      self.learning_rate,
+      self.lr_decay_factor,
+      self.max_gradient_norm,
+      self.batch_size,
+      self.size,
+      self.num_layers,
+      self.steps_per_checkpoint,
+      self.max_steps,
+      self.optimizer)
