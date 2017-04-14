@@ -215,9 +215,9 @@ class G2PModel(object):
     current_step, iter_inx, num_epochs_last_impr, max_num_epochs,\
       num_up_trends, num_down_trends = 0, 0, 0, 2, 0, 0
     prev_train_losses, prev_valid_losses, prev_epoch_valid_losses = [], [], []
-    num_iter_cover_train = int(sum(train_bucket_sizes) /
-                               self.params.batch_size /
-                               self.params.steps_per_checkpoint)
+    num_iter_cover_train = max(1, int(sum(train_bucket_sizes) /
+                                      self.params.batch_size /
+                                      self.params.steps_per_checkpoint))
     while (self.params.max_steps == 0
            or self.model.global_step.eval(self.session)
            <= self.params.max_steps):
