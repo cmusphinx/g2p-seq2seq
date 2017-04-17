@@ -211,13 +211,12 @@ class G2PModel(object):
                            for i in xrange(len(train_bucket_sizes))]
 
     # This is the training loop.
-    step_time, train_loss = 0.0, 0.0
-    current_step, iter_inx, num_epochs_last_impr, max_num_epochs,\
-      num_up_trends, num_down_trends = 0, 0, 0, 2, 0, 0
+    step_time, train_loss, window_scale = 0.0, 0.0, 1.5
+    current_step, iter_idx, num_epochs_last_impr, max_num_epochs = 0, 0, 0, 2
     prev_train_losses, prev_valid_losses, prev_epoch_valid_losses = [], [], []
-    num_iter_cover_train = max(1, int(sum(train_bucket_sizes) /
-                                      self.params.batch_size /
-                                      self.params.steps_per_checkpoint))
+    iter_per_epoch = max(1, int(sum(train_bucket_sizes) /
+                                self.params.batch_size /
+                                self.params.steps_per_checkpoint))
     while (self.params.max_steps == 0
            or self.model.global_step.eval(self.session)
            <= self.params.max_steps):
@@ -254,41 +253,33 @@ class G2PModel(object):
 
         # After epoch pass, calculate average epoch loss
         # and then make a decision to continue/stop training.
-        if (iter_inx > 0
-            and iter_inx % num_iter_cover_train == 0):
+        if (iter_idx > 0
+            and iter_idx % iter_per_epoch == 0):
           # Calculate average validation loss during the previous epoch
           epoch_eval_loss = self.__calc_epoch_loss(
-            prev_valid_losses[-num_iter_cover_train:])
+            prev_valid_losses[-iter_per_epoch:])
           if len(prev_epoch_valid_losses) > 0:
-            print('Previous min epoch eval loss: %f, current epoch eval loss: %f' %
+            print('Prev min epoch eval loss: %f, curr epoch eval loss: %f' %
                   (min(prev_epoch_valid_losses), epoch_eval_loss))
-            # Check if there was improvement during last epoch
+            # Check if there was an improvement during last epoch
             if (epoch_eval_loss < min(prev_epoch_valid_losses)):
-              if num_epochs_last_impr > max_num_epochs/1.5:
-                max_num_epochs = int(1.5 * num_epochs_last_impr)
+              if num_epochs_last_impr > max_num_epochs/window_scale:
+                max_num_epochs = int(window_scale * num_epochs_last_impr)
               print('Improved during last epoch.')
               prev_min_level = prev_epoch_valid_losses[-1]
-              num_epochs_last_impr, num_up_trends, num_down_trends = 0, 0, 0
+              num_epochs_last_impr = 0
             else:
               print('No improvement during last epoch.')
               num_epochs_last_impr += 1
-              if (prev_epoch_valid_losses[-1] < epoch_eval_loss
-                  and num_up_trends <= num_down_trends):
-                num_up_trends += 1
-              elif (epoch_eval_loss < prev_epoch_valid_losses[-1]
-                    and num_down_trends <= num_up_trends):
-                num_down_trends += 1
-
-            print('Num up trends: %d, num down trends: %d' %
-                  (num_up_trends, num_down_trends))
 
             print('Number of the epochs passed from the last improvement: %d'
                   % num_epochs_last_impr)
             print('Max allowable number of epochs for improvement: %d'
                   % max_num_epochs)
 
-            if (num_epochs_last_impr > max_num_epochs
-                and num_up_trends > 1):
+            # Stop training if no improvement was seen during last
+            # max_num_epochs epochs
+            if num_epochs_last_impr > max_num_epochs:
               break
 
           prev_epoch_valid_losses.append(round(epoch_eval_loss, 3))
@@ -296,7 +287,7 @@ class G2PModel(object):
         prev_train_losses.append(train_loss)
         prev_valid_losses.append(eval_loss)
         step_time, train_loss = 0.0, 0.0
-        iter_inx += 1
+        iter_idx += 1
 
     print('Training done.')
     with tf.Graph().as_default():
@@ -325,12 +316,12 @@ class G2PModel(object):
   def __calc_eval_loss(self):
     """Run evals on development set and print their perplexity.
     """
-    eval_loss, num_iter_total = 0.0, 0.0
+    eval_loss, iter_total = 0.0, 0.0
     for bucket_id in xrange(len(self._BUCKETS)):
-      num_iter_cover_valid = int(math.ceil(len(self.valid_set[bucket_id])/
+      iter_per_valid = int(math.ceil(len(self.valid_set[bucket_id])/
                                            self.params.batch_size))
-      num_iter_total += num_iter_cover_valid
-      for batch_id in xrange(num_iter_cover_valid):
+      iter_total += iter_per_valid
+      for batch_id in xrange(iter_per_valid):
         encoder_inputs, decoder_inputs, target_weights =\
             self.model.get_eval_set_batch(self.valid_set, bucket_id,
                                           batch_id * self.params.batch_size)
@@ -338,7 +329,7 @@ class G2PModel(object):
                                                 decoder_inputs, target_weights,
                                                 bucket_id, True)
         eval_loss += eval_batch_loss
-    eval_loss = eval_loss/num_iter_total if num_iter_total > 0 else float('inf')
+    eval_loss = eval_loss/iter_total if iter_total > 0 else float('inf')
     return eval_loss
 
 
