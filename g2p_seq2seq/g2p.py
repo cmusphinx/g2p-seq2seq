@@ -333,18 +333,18 @@ class G2PModel(object):
     return eval_loss
 
 
-  def __calc_epoch_loss(self, epoch_losses):
-    """Calculate average loss during the epoch.
+  def __calc_epoch_loss(self, epoch_losses, allow_excess_min=1.5):
+    """Calculate an average loss without outliers during the epoch.
 
     Args:
       epoch_losses: list of the losses during the epoch;
 
     Returns:
-      average value of the losses during the period;
+      the average value of the losses without outliers during the period;
     """
     epoch_loss_sum, loss_num = 0, 0
     for loss in epoch_losses:
-      if loss < min(epoch_losses) * 1.5:
+      if loss < min(epoch_losses) * allow_excess_min:
         epoch_loss_sum += loss
         loss_num += 1
     if loss_num > 0:
