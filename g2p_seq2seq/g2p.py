@@ -212,11 +212,12 @@ class G2PModel(object):
 
     # This is the training loop.
     step_time, train_loss, window_scale = 0.0, 0.0, 1.5
-    current_step, iter_idx, num_epochs_last_impr, max_num_epochs = 0, 0, 0, 2
+    current_step, iter_idx, epochs_wo_improve, allow_epochs_wo_improve =\
+      0, 0, 0, 2
     prev_train_losses, prev_valid_losses, prev_epoch_valid_losses = [], [], []
-    iter_per_epoch = max(1, int(sum(train_bucket_sizes) /
-                                self.params.batch_size /
-                                self.params.steps_per_checkpoint))
+    steps_per_epoch = max(1, int(sum(train_bucket_sizes) /
+                                 self.params.batch_size))
+    iters_per_epoch = int(steps_per_epoch / self.params.steps_per_checkpoint)
     while (self.params.max_steps == 0
            or self.model.global_step.eval(self.session)
            <= self.params.max_steps):
@@ -251,43 +252,43 @@ class G2PModel(object):
                               os.path.join(self.model_dir, "model"),
                               write_meta_graph=False)
 
-        # After epoch pass, calculate average epoch loss
-        # and then make a decision to continue/stop training.
-        if (iter_idx > 0
-            and iter_idx % iter_per_epoch == 0):
-          # Calculate average validation loss during the previous epoch
-          epoch_eval_loss = self.__calc_epoch_loss(
-            prev_valid_losses[-iter_per_epoch:])
-          if len(prev_epoch_valid_losses) > 0:
-            print('Prev min epoch eval loss: %f, curr epoch eval loss: %f' %
-                  (min(prev_epoch_valid_losses), epoch_eval_loss))
-            # Check if there was an improvement during last epoch
-            if (epoch_eval_loss < min(prev_epoch_valid_losses)):
-              if num_epochs_last_impr > max_num_epochs/window_scale:
-                max_num_epochs = int(window_scale * num_epochs_last_impr)
-              print('Improved during last epoch.')
-              prev_min_level = prev_epoch_valid_losses[-1]
-              num_epochs_last_impr = 0
-            else:
-              print('No improvement during last epoch.')
-              num_epochs_last_impr += 1
-
-            print('Number of the epochs passed from the last improvement: %d'
-                  % num_epochs_last_impr)
-            print('Max allowable number of epochs for improvement: %d'
-                  % max_num_epochs)
-
-            # Stop training if no improvement was seen during last
-            # max_num_epochs epochs
-            if num_epochs_last_impr > max_num_epochs:
-              break
-
-          prev_epoch_valid_losses.append(round(epoch_eval_loss, 3))
-
         prev_train_losses.append(train_loss)
         prev_valid_losses.append(eval_loss)
         step_time, train_loss = 0.0, 0.0
-        iter_idx += 1
+
+      # After epoch pass, calculate average epoch loss
+      # and then make a decision to continue/stop training.
+      if (len(prev_valid_losses) > iters_per_epoch
+          and current_step % steps_per_epoch == 0):
+        # Calculate average validation loss during the previous epoch
+        epoch_eval_loss = self.__calc_epoch_loss(
+          prev_valid_losses[-iters_per_epoch:])
+        if len(prev_epoch_valid_losses) > 0:
+          print('Prev min epoch eval loss: %f, curr epoch eval loss: %f' %
+                (min(prev_epoch_valid_losses), epoch_eval_loss))
+          # Check if there was an improvement during last epoch
+          if (epoch_eval_loss < min(prev_epoch_valid_losses)):
+            if epochs_wo_improve > allow_epochs_wo_improve/window_scale:
+              allow_epochs_wo_improve = int(math.ceil(epochs_wo_improve *
+                                                      window_scale))
+            print('Improved during last epoch.')
+            prev_min_level = prev_epoch_valid_losses[-1]
+            epochs_wo_improve = 0
+          else:
+            print('No improvement during last epoch.')
+            epochs_wo_improve += 1
+
+          print('Number of the epochs passed from the last improvement: %d'
+                % epochs_wo_improve)
+          print('Max allowable number of epochs for improvement: %d'
+                % allow_epochs_wo_improve)
+
+          # Stop training if no improvement was seen during last
+          # max allowable number of epochs
+          if epochs_wo_improve > allow_epochs_wo_improve:
+            break
+
+        prev_epoch_valid_losses.append(epoch_eval_loss)
 
     print('Training done.')
     with tf.Graph().as_default():
@@ -305,8 +306,8 @@ class G2PModel(object):
                      if train_buckets_scale[i] > random_number_01])
 
     # Get a batch and make a step.
-    encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
-        self.train_set, bucket_id)
+    encoder_inputs, decoder_inputs, target_weights =\
+      self.model.get_random_batch(self.train_set, bucket_id)
     _, step_loss, _ = self.model.step(self.session, encoder_inputs,
                                       decoder_inputs, target_weights,
                                       bucket_id, False)
@@ -316,41 +317,35 @@ class G2PModel(object):
   def __calc_eval_loss(self):
     """Run evals on development set and print their perplexity.
     """
-    eval_loss, iter_total = 0.0, 0.0
+    eval_loss, steps_total = 0.0, 0.0
     for bucket_id in xrange(len(self._BUCKETS)):
-      iter_per_valid = int(math.ceil(len(self.valid_set[bucket_id])/
-                                           self.params.batch_size))
-      iter_total += iter_per_valid
-      for batch_id in xrange(iter_per_valid):
+      steps_per_bucket = int(math.ceil(len(self.valid_set[bucket_id])/
+                             self.params.batch_size))
+      steps_total += steps_per_bucket
+      for from_row_idx in xrange(0, steps_per_bucket, self.params.batch_size):
         encoder_inputs, decoder_inputs, target_weights =\
-            self.model.get_eval_set_batch(self.valid_set, bucket_id,
-                                          batch_id * self.params.batch_size)
+          self.model.get_not_random_batch(self.valid_set, bucket_id,
+                                          from_row_idx)
         _, eval_batch_loss, _ = self.model.step(self.session, encoder_inputs,
                                                 decoder_inputs, target_weights,
                                                 bucket_id, True)
         eval_loss += eval_batch_loss
-    eval_loss = eval_loss/iter_total if iter_total > 0 else float('inf')
-    return eval_loss
+    return eval_loss/steps_total if steps_total > 0 else float('inf')
 
 
-  def __calc_epoch_loss(self, epoch_losses, allow_excess_min=1.5):
+  def __calc_epoch_loss(self, prev_eval_losses, allow_excess_min=1.5):
     """Calculate an average loss without outliers during the epoch.
 
     Args:
-      epoch_losses: list of the losses during the epoch;
+      prev_eval_losses: list of the losses during the epoch;
 
     Returns:
       the average value of the losses without outliers during the period;
     """
-    epoch_loss_sum, loss_num = 0, 0
-    for loss in epoch_losses:
-      if loss < min(epoch_losses) * allow_excess_min:
-        epoch_loss_sum += loss
-        loss_num += 1
-    if loss_num > 0:
-      return epoch_loss_sum / loss_num
-    else:
-      return float(inf)
+    epoch_losses = [loss for loss in prev_eval_losses
+                    if (loss < (min(prev_eval_losses) * allow_excess_min))]
+    return sum(epoch_losses) / len(epoch_losses) if len(epoch_losses) > 0\
+      else float(inf)
 
 
   def decode_word(self, word):
@@ -374,8 +369,8 @@ class G2PModel(object):
     bucket_id = min([b for b in xrange(len(self._BUCKETS))
                      if self._BUCKETS[b][0] > len(token_ids)])
     # Get a 1-element batch to feed the word to the model.
-    encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
-        {bucket_id: [(token_ids, [])]}, bucket_id)
+    encoder_inputs, decoder_inputs, target_weights =\
+      self.model.get_random_batch({bucket_id: [(token_ids, [])]}, bucket_id)
     # Get output logits for the word.
     _, _, output_logits = self.model.step(self.session, encoder_inputs,
                                           decoder_inputs, target_weights,

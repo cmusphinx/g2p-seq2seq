@@ -262,7 +262,7 @@ class Seq2SeqModel(object):
       return None, outputs[0], outputs[1:]  # No gradient norm, loss, outputs.
 
 
-  def get_batch(self, data, bucket_id):
+  def get_random_batch(self, data, bucket_id):
     """Get a random batch of data from the specified bucket, prepare for step.
 
     To feed data in step(..) it must be a list of batch-major vectors, while
@@ -298,7 +298,7 @@ class Seq2SeqModel(object):
                                           encoder_inputs, decoder_inputs)
 
 
-  def get_eval_set_batch(self, data, bucket_id, from_row_idx):
+  def get_not_random_batch(self, data, bucket_id, from_row_idx):
     """Get a batch from data with rows started with from_row_idx.
 
     To feed data in step(..) it must be a list of batch-major vectors, while
@@ -334,10 +334,8 @@ class Seq2SeqModel(object):
       decoder_inputs.append([GO_ID] + decoder_input +
                             [PAD_ID] * decoder_pad_size)
       batch_row_idx += 1
-    return self.__create_batch_major_vecs(encoder_size,
-                                          decoder_size,
-                                          encoder_inputs,
-                                          decoder_inputs)
+    return self.__create_batch_major_vecs(encoder_size, decoder_size,
+                                          encoder_inputs, decoder_inputs)
 
 
   def __create_batch_major_vecs(self, encoder_size, decoder_size,
