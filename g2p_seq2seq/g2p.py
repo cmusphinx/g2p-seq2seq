@@ -30,7 +30,6 @@ import time
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.core.protobuf import saver_pb2
 
 from g2p_seq2seq import data_utils
 from g2p_seq2seq import seq2seq_model
@@ -211,13 +210,12 @@ class G2PModel(object):
                            for i in xrange(len(train_bucket_sizes))]
 
     # This is the training loop.
-    step_time, train_loss, window_scale = 0.0, 0.0, 1.5
-    current_step, iter_idx, epochs_wo_improve, allow_epochs_wo_improve =\
-      0, 0, 0, 2
-    prev_train_losses, prev_valid_losses, prev_epoch_valid_losses = [], [], []
+    step_time, train_loss, allow_excess_min = 0.0, 0.0, 1.5
+    current_step, self.epochs_wo_improvement,\
+      self.allow_epochs_wo_improvement = 0, 0, 2
+    train_losses, eval_losses, epoch_losses = [], [], []
     steps_per_epoch = max(1, int(sum(train_bucket_sizes) /
                                  self.params.batch_size))
-    iters_per_epoch = int(steps_per_epoch / self.params.steps_per_checkpoint)
     while (self.params.max_steps == 0
            or self.model.global_step.eval(self.session)
            <= self.params.max_steps):
@@ -241,60 +239,85 @@ class G2PModel(object):
         print("  eval: perplexity %.3f" % (eval_ppx))
         # Decrease learning rate if no improvement was seen on train set
         # over last 3 times.
-        if (len(prev_train_losses) > 2
-            and train_loss > max(prev_train_losses[-3:])):
+        if (len(train_losses) > 2
+            and train_loss > max(train_losses[-3:])):
           self.session.run(self.model.learning_rate_decay_op)
 
-        #if (len(prev_valid_losses) > 0
-        #    and eval_loss <= min(prev_valid_losses)):
         # Save checkpoint and zero timer and loss.
         self.model.saver.save(self.session,
                               os.path.join(self.model_dir, "model"),
                               write_meta_graph=False)
 
-        prev_train_losses.append(train_loss)
-        prev_valid_losses.append(eval_loss)
+        train_losses.append(train_loss)
+        eval_losses.append(eval_loss)
         step_time, train_loss = 0.0, 0.0
 
       # After epoch pass, calculate average epoch loss
       # and then make a decision to continue/stop training.
-      if (len(prev_valid_losses) > iters_per_epoch
-          and current_step % steps_per_epoch == 0):
+      if (current_step % steps_per_epoch == 0
+          and len(eval_losses) > 0):
         # Calculate average validation loss during the previous epoch
-        epoch_eval_loss = self.__calc_epoch_loss(
-          prev_valid_losses[-iters_per_epoch:])
-        if len(prev_epoch_valid_losses) > 0:
-          print('Prev min epoch eval loss: %f, curr epoch eval loss: %f' %
-                (min(prev_epoch_valid_losses), epoch_eval_loss))
-          # Check if there was an improvement during last epoch
-          if (epoch_eval_loss < min(prev_epoch_valid_losses)):
-            if epochs_wo_improve > allow_epochs_wo_improve/window_scale:
-              allow_epochs_wo_improve = int(math.ceil(epochs_wo_improve *
-                                                      window_scale))
-            print('Improved during last epoch.')
-            prev_min_level = prev_epoch_valid_losses[-1]
-            epochs_wo_improve = 0
-          else:
-            print('No improvement during last epoch.')
-            epochs_wo_improve += 1
+        eval_losses = [loss for loss in eval_losses
+                       if loss < (min(eval_losses) * allow_excess_min)]
+        epoch_loss = (sum(eval_losses) / len(eval_losses)
+                      if len(eval_losses) > 0 else float('inf'))
+        epoch_losses.append(epoch_loss)
 
-          print('Number of the epochs passed from the last improvement: %d'
-                % epochs_wo_improve)
-          print('Max allowable number of epochs for improvement: %d'
-                % allow_epochs_wo_improve)
+        stop_training = self.__should_stop_training(epoch_losses)
+        if stop_training:
+          break
 
-          # Stop training if no improvement was seen during last
-          # max allowable number of epochs
-          if epochs_wo_improve > allow_epochs_wo_improve:
-            break
-
-        prev_epoch_valid_losses.append(epoch_eval_loss)
+        eval_losses = []
 
     print('Training done.')
     with tf.Graph().as_default():
       g2p_model_eval = G2PModel(self.model_dir)
       g2p_model_eval.load_decode_model()
       g2p_model_eval.evaluate(self.test_lines)
+
+
+  def __should_stop_training(self, epoch_losses, window_scale=1.5):
+    """Check stop training condition.
+    Because models with different sizes need different number of epochs
+    for improvement, we implemented stop criteria based on a expanding window
+    of allowable number of epochs without improvement. Assuming how many
+    maximum epochs it was needed for the previous improvements, we may increase
+    allowable number of epochs without improvement. Model will stop training
+    if number of epochs passed from previous improvement exceed maximal
+    allowable number.
+
+      Args:
+        epoch_losses: losses on a validation set during the previous epochs;
+
+      Returns:
+        True/False: should or should not stop training;
+    """
+    if len(epoch_losses) > 0:
+      print('Prev min epoch eval loss: %f, curr epoch eval loss: %f' %
+            (min(epoch_losses[:-1]), epoch_losses[-1]))
+      # Check if there was an improvement during the last epoch
+      if epoch_losses[-1] < min(epoch_losses[:-1]):
+        # Increase window if major part of previous window have been passed
+        if (self.allow_epochs_wo_improvement <
+            (self.epochs_wo_improvement * window_scale)):
+          self.allow_epochs_wo_improvement =\
+            int(math.ceil(self.epochs_wo_improvement * window_scale))
+        print('Improved during the last epoch.')
+        self.epochs_wo_improvement = 0
+      else:
+        print('No improvement during the last epoch.')
+        self.epochs_wo_improvement += 1
+
+      print('Number of the epochs passed from the last improvement: %d'
+            % self.epochs_wo_improvement)
+      print('Max allowable number of epochs for improvement: %d'
+            % self.allow_epochs_wo_improvement)
+
+      # Stop training if no improvement was seen during last
+      # max allowable number of epochs
+      if self.epochs_wo_improvement > self.allow_epochs_wo_improvement:
+        return True
+    return False
 
 
   def __calc_step_loss(self, train_buckets_scale):
@@ -317,35 +340,19 @@ class G2PModel(object):
   def __calc_eval_loss(self):
     """Run evals on development set and print their perplexity.
     """
-    eval_loss, steps_total = 0.0, 0.0
+    eval_loss, steps = 0.0, 0
     for bucket_id in xrange(len(self._BUCKETS)):
-      steps_per_bucket = int(math.ceil(len(self.valid_set[bucket_id])/
-                             self.params.batch_size))
-      steps_total += steps_per_bucket
-      for from_row_idx in xrange(0, steps_per_bucket, self.params.batch_size):
+      for from_row in xrange(0, len(self.valid_set[bucket_id]),
+                             self.params.batch_size):
         encoder_inputs, decoder_inputs, target_weights =\
           self.model.get_not_random_batch(self.valid_set, bucket_id,
-                                          from_row_idx)
-        _, eval_batch_loss, _ = self.model.step(self.session, encoder_inputs,
-                                                decoder_inputs, target_weights,
-                                                bucket_id, True)
-        eval_loss += eval_batch_loss
-    return eval_loss/steps_total if steps_total > 0 else float('inf')
-
-
-  def __calc_epoch_loss(self, prev_eval_losses, allow_excess_min=1.5):
-    """Calculate an average loss without outliers during the epoch.
-
-    Args:
-      prev_eval_losses: list of the losses during the epoch;
-
-    Returns:
-      the average value of the losses without outliers during the period;
-    """
-    epoch_losses = [loss for loss in prev_eval_losses
-                    if (loss < (min(prev_eval_losses) * allow_excess_min))]
-    return sum(epoch_losses) / len(epoch_losses) if len(epoch_losses) > 0\
-      else float(inf)
+                                          from_row)
+        _, loss, _ = self.model.step(self.session, encoder_inputs,
+                                     decoder_inputs, target_weights,
+                                     bucket_id, True)
+        eval_loss += loss
+        steps += 1
+    return eval_loss/steps if steps > 0 else float('inf')
 
 
   def decode_word(self, word):
@@ -360,7 +367,8 @@ class G2PModel(object):
     # Check if all graphemes attended in vocabulary
     gr_absent = [gr for gr in word if gr not in self.gr_vocab]
     if gr_absent:
-      print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent).encode('utf-8'))
+      print("Symbols '%s' are not in vocabulary".format(
+          "','".join(gr_absent).encode('utf-8')))
       return ""
 
     # Get token-ids for the input word.
