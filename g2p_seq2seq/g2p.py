@@ -27,10 +27,10 @@ from __future__ import print_function
 import math
 import os
 import time
+import random
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.core.protobuf import saver_pb2
 
 from g2p_seq2seq import data_utils
 from g2p_seq2seq import seq2seq_model
@@ -126,6 +126,9 @@ class G2PModel(object):
         if len(source_ids) < source_size and len(target_ids) < target_size:
           data_set[bucket_id].append([source_ids, target_ids])
           break
+
+    for bucket_id in range(len(self._BUCKETS)):
+      random.shuffle(data_set[bucket_id])
     return data_set
 
 
@@ -135,8 +138,8 @@ class G2PModel(object):
     print("Preparing G2P data")
     train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, self.gr_vocab,\
     self.ph_vocab, self.test_lines =\
-    data_utils.prepare_g2p_data(self.model_dir, train_path, valid_path,
-                                test_path)
+      data_utils.prepare_g2p_data(self.model_dir, train_path, valid_path,
+                                  test_path)
     # Read data into buckets and compute their sizes.
     print ("Reading development and training data.")
     self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
@@ -203,74 +206,69 @@ class G2PModel(object):
 
     train_bucket_sizes = [len(self.train_set[b])
                           for b in xrange(len(self._BUCKETS))]
-    train_total_size = float(sum(train_bucket_sizes))
-    # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
-    # to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
-    # the size if i-th training bucket, as used later.
-    train_buckets_scale = [sum(train_bucket_sizes[:i + 1]) / train_total_size
-                           for i in xrange(len(train_bucket_sizes))]
-
     # This is the training loop.
-    step_time, train_loss = 0.0, 0.0
-    current_step, num_iter_wo_improve = 0, 0
-    prev_train_losses, prev_valid_losses = [], []
-    num_iter_cover_train = int(sum(train_bucket_sizes) /
-                               self.params.batch_size /
-                               self.params.steps_per_checkpoint)
+    step_time, train_loss, allow_excess_min = 0.0, 0.0, 1.5
+    current_step, self.epochs_wo_improvement,\
+      self.allow_epochs_wo_improvement = 0, 0, 2
+    train_losses, eval_losses, epoch_losses = [], [], []
     while (self.params.max_steps == 0
            or self.model.global_step.eval(self.session)
            <= self.params.max_steps):
       # Get a batch and make a step.
       start_time = time.time()
-      step_loss = self.__calc_step_loss(train_buckets_scale)
-      step_time += (time.time() - start_time) / self.params.steps_per_checkpoint
-      train_loss += step_loss / self.params.steps_per_checkpoint
-      current_step += 1
+      for from_row in range(0, max(train_bucket_sizes), self.params.batch_size):
+        for bucket_id in range(len(self._BUCKETS)):
+          if from_row <= train_bucket_sizes[bucket_id]:
+            step_loss = self.__calc_step_loss(bucket_id, from_row)
+            step_time += (time.time() - start_time) /\
+              self.params.steps_per_checkpoint
+            train_loss += step_loss / self.params.steps_per_checkpoint
+            current_step += 1
 
-      # Once in a while, we save checkpoint, print statistics, and run evals.
-      if current_step % self.params.steps_per_checkpoint == 0:
-        # Print statistics for the previous steps.
-        train_ppx = math.exp(train_loss) if train_loss < 300 else float('inf')
-        print ("global step %d learning rate %.4f step-time %.2f perplexity "
-               "%.2f" % (self.model.global_step.eval(self.session),
-                         self.model.learning_rate.eval(self.session),
-                         step_time, train_ppx))
-        eval_loss = self.__calc_eval_loss()
-        eval_ppx = math.exp(eval_loss) if eval_loss < 300 else float('inf')
-        print("  eval: perplexity %.2f" % (eval_ppx))
-        # Decrease learning rate if no improvement was seen on train set
-        # over last 3 times.
-        if (len(prev_train_losses) > 2
-            and train_loss > max(prev_train_losses[-3:])):
-          self.session.run(self.model.learning_rate_decay_op)
+            # Once in a while, we save checkpoint, print statistics,
+            # and run evals.
+            if current_step % self.params.steps_per_checkpoint == 0:
+              # Print statistics for the previous steps.
+              train_ppx =\
+                math.exp(train_loss) if train_loss < 300 else float('inf')
+              print ("global step %d learning rate %.4f step-time %.2f "
+                     "perplexity %.3f" %
+                     (self.model.global_step.eval(self.session),
+                      self.model.learning_rate.eval(self.session),
+                      step_time, train_ppx))
+              eval_loss = self.__calc_eval_loss()
+              eval_ppx =\
+                math.exp(eval_loss) if eval_loss < 300 else float('inf')
+              print("  eval: perplexity %.3f" % (eval_ppx))
+              # Decrease learning rate if no improvement was seen on train set
+              # over last 3 times.
+              if (len(train_losses) > 2
+                  and train_loss > max(train_losses[-3:])):
+                self.session.run(self.model.learning_rate_decay_op)
 
-        if (len(prev_valid_losses) > 0
-            and eval_loss <= min(prev_valid_losses)):
-          # Save checkpoint and zero timer and loss.
-          self.model.saver.save(self.session,
-                                os.path.join(self.model_dir, "model"),
-                                write_meta_graph=False)
+              # Save checkpoint and zero timer and loss.
+              self.model.saver.save(self.session,
+                                    os.path.join(self.model_dir, "model"),
+                                    write_meta_graph=False)
 
-        if (len(prev_valid_losses) > 0
-            and eval_loss >= min(prev_valid_losses)):
-          num_iter_wo_improve += 1
-        else:
-          num_iter_wo_improve = 0
+              train_losses.append(train_loss)
+              eval_losses.append(eval_loss)
+              step_time, train_loss = 0.0, 0.0
 
-        if num_iter_wo_improve > num_iter_cover_train * 2:
-          print("No improvement over last %d times. Training will stop after %d"
-                "iterations if no improvement was seen."
-                % (num_iter_wo_improve,
-                   num_iter_cover_train - num_iter_wo_improve))
+      # After epoch pass, calculate average validation loss during
+      # the previous epoch
+      eval_losses = [loss for loss in eval_losses
+                     if loss < (min(eval_losses) * allow_excess_min)]
+      epoch_loss = (sum(eval_losses) / len(eval_losses)
+                    if len(eval_losses) > 0 else float('inf'))
+      epoch_losses.append(epoch_loss)
 
-        # Stop train if no improvement was seen on validation set
-        # over last 3 epochs.
-        if num_iter_wo_improve > num_iter_cover_train * 3:
-          break
+      # Make a decision to continue/stop training.
+      stop_training = self.__should_stop_training(epoch_losses)
+      if stop_training:
+        break
 
-        prev_train_losses.append(train_loss)
-        prev_valid_losses.append(eval_loss)
-        step_time, train_loss = 0.0, 0.0
+      eval_losses = []
 
     print('Training done.')
     with tf.Graph().as_default():
@@ -279,17 +277,57 @@ class G2PModel(object):
       g2p_model_eval.evaluate(self.test_lines)
 
 
-  def __calc_step_loss(self, train_buckets_scale):
+  def __should_stop_training(self, epoch_losses, window_scale=1.5):
+    """Check stop training condition.
+    Because models with different sizes need different number of epochs
+    for improvement, we implemented stop criteria based on a expanding window
+    of allowable number of epochs without improvement. Assuming how many
+    maximum epochs it was needed for the previous improvements, we may increase
+    allowable number of epochs without improvement. Model will stop training
+    if number of epochs passed from previous improvement exceed maximal
+    allowable number.
+
+      Args:
+        epoch_losses: losses on a validation set during the previous epochs;
+
+      Returns:
+        True/False: should or should not stop training;
+    """
+    if len(epoch_losses) > 1:
+      print('Prev min epoch eval loss: %f, curr epoch eval loss: %f' %
+            (min(epoch_losses[:-1]), epoch_losses[-1]))
+      # Check if there was an improvement during the last epoch
+      if epoch_losses[-1] < min(epoch_losses[:-1]):
+        # Increase window if major part of previous window have been passed
+        if (self.allow_epochs_wo_improvement <
+            (self.epochs_wo_improvement * window_scale)):
+          self.allow_epochs_wo_improvement =\
+            int(math.ceil(self.epochs_wo_improvement * window_scale))
+        print('Improved during the last epoch.')
+        self.epochs_wo_improvement = 0
+      else:
+        print('No improvement during the last epoch.')
+        self.epochs_wo_improvement += 1
+
+      print('Number of the epochs passed from the last improvement: %d'
+            % self.epochs_wo_improvement)
+      print('Max allowable number of epochs for improvement: %d'
+            % self.allow_epochs_wo_improvement)
+
+      # Stop training if no improvement was seen during last
+      # max allowable number of epochs
+      if self.epochs_wo_improvement > self.allow_epochs_wo_improvement:
+        return True
+    return False
+
+
+  def __calc_step_loss(self, bucket_id, from_row):
     """Choose a bucket according to data distribution. We pick a random number
     in [0, 1] and use the corresponding interval in train_buckets_scale.
     """
-    random_number_01 = np.random.random_sample()
-    bucket_id = min([i for i in xrange(len(train_buckets_scale))
-                     if train_buckets_scale[i] > random_number_01])
-
     # Get a batch and make a step.
-    encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
-        self.train_set, bucket_id)
+    encoder_inputs, decoder_inputs, target_weights =\
+      self.model.get_batch(self.train_set, bucket_id, from_row)
     _, step_loss, _ = self.model.step(self.session, encoder_inputs,
                                       decoder_inputs, target_weights,
                                       bucket_id, False)
@@ -299,21 +337,18 @@ class G2PModel(object):
   def __calc_eval_loss(self):
     """Run evals on development set and print their perplexity.
     """
-    eval_loss, num_iter_total = 0.0, 0.0
+    eval_loss, steps = 0.0, 0
     for bucket_id in xrange(len(self._BUCKETS)):
-      num_iter_cover_valid = int(math.ceil(len(self.valid_set[bucket_id])/
-                                           self.params.batch_size))
-      num_iter_total += num_iter_cover_valid
-      for batch_id in xrange(num_iter_cover_valid):
+      for from_row in xrange(0, len(self.valid_set[bucket_id]),
+                             self.params.batch_size):
         encoder_inputs, decoder_inputs, target_weights =\
-            self.model.get_eval_set_batch(self.valid_set, bucket_id,
-                                          batch_id * self.params.batch_size)
-        _, eval_batch_loss, _ = self.model.step(self.session, encoder_inputs,
-                                                decoder_inputs, target_weights,
-                                                bucket_id, True)
-        eval_loss += eval_batch_loss
-    eval_loss = eval_loss/num_iter_total if num_iter_total > 0 else float('inf')
-    return eval_loss
+          self.model.get_batch(self.valid_set, bucket_id, from_row)
+        _, loss, _ = self.model.step(self.session, encoder_inputs,
+                                     decoder_inputs, target_weights,
+                                     bucket_id, True)
+        eval_loss += loss
+        steps += 1
+    return eval_loss/steps if steps > 0 else float('inf')
 
 
   def decode_word(self, word):
@@ -326,9 +361,10 @@ class G2PModel(object):
       phonemes: decoded phoneme sequence for input word;
     """
     # Check if all graphemes attended in vocabulary
-    gr_absent = [gr for gr in word if gr not in self.gr_vocab]
+    gr_absent = set([gr for gr in word if gr not in self.gr_vocab])
     if gr_absent:
-      print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent).encode('utf-8'))
+      print("Symbols '%s' are not in vocabulary" % (
+          "','".join(gr_absent).encode('utf-8')))
       return ""
 
     # Get token-ids for the input word.
@@ -337,8 +373,8 @@ class G2PModel(object):
     bucket_id = min([b for b in xrange(len(self._BUCKETS))
                      if self._BUCKETS[b][0] > len(token_ids)])
     # Get a 1-element batch to feed the word to the model.
-    encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
-        {bucket_id: [(token_ids, [])]}, bucket_id)
+    encoder_inputs, decoder_inputs, target_weights =\
+      self.model.get_batch({bucket_id: [(token_ids, [])]}, bucket_id, 0)
     # Get output logits for the word.
     _, _, output_logits = self.model.step(self.session, encoder_inputs,
                                           decoder_inputs, target_weights,
