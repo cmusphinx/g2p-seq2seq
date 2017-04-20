@@ -323,7 +323,7 @@ class G2PModel(object):
     return False
 
 
-  def __calc_step_loss(self, bucket_id, from_row):#train_buckets_scale):
+  def __calc_step_loss(self, bucket_id, from_row):
     """Choose a bucket according to data distribution. We pick a random number
     in [0, 1] and use the corresponding interval in train_buckets_scale.
     """
