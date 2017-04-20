@@ -99,7 +99,8 @@ class Seq2SeqModel(object):
     softmax_loss_function = None
     # Sampled softmax only makes sense if we sample less than vocabulary size.
     if num_samples > 0 and num_samples < self.target_vocab_size:
-      w_t = tf.get_variable("proj_w", [self.target_vocab_size, size], dtype=dtype)
+      w_t = tf.get_variable("proj_w", [self.target_vocab_size, size],
+                            dtype=dtype)
       w = tf.transpose(w_t)
       b = tf.get_variable("proj_b", [self.target_vocab_size], dtype=dtype)
       output_projection = (w, b)
@@ -243,7 +244,7 @@ class Seq2SeqModel(object):
     # Since our targets are decoder inputs shifted by one, we need one more.
     last_target = self.decoder_inputs[decoder_size].name
     input_feed[last_target] = np.zeros([len(encoder_inputs[0])],
-                                        dtype=np.int32)
+                                       dtype=np.int32)
 
     # Output feed: depends on whether we do a backward step or not.
     if not forward_only:
@@ -312,14 +313,14 @@ class Seq2SeqModel(object):
       batch_encoder_inputs.append(
           np.array([encoder_inputs[batch_idx][length_idx]
                     for batch_idx in xrange(len(encoder_inputs))],
-                                            dtype=np.int32))
+                   dtype=np.int32))
 
     # Batch decoder inputs are re-indexed decoder_inputs, we create weights.
     for length_idx in xrange(decoder_size):
       batch_decoder_inputs.append(
           np.array([decoder_inputs[batch_idx][length_idx]
                     for batch_idx in xrange(len(encoder_inputs))],
-                                            dtype=np.int32))
+                   dtype=np.int32))
 
       # Create target_weights to be 0 for targets that are padding.
       batch_weight = np.ones(len(encoder_inputs), dtype=np.float32)

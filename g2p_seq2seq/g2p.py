@@ -138,8 +138,8 @@ class G2PModel(object):
     print("Preparing G2P data")
     train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, self.gr_vocab,\
     self.ph_vocab, self.test_lines =\
-    data_utils.prepare_g2p_data(self.model_dir, train_path, valid_path,
-                                test_path)
+      data_utils.prepare_g2p_data(self.model_dir, train_path, valid_path,
+                                  test_path)
     # Read data into buckets and compute their sizes.
     print ("Reading development and training data.")
     self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
@@ -211,8 +211,6 @@ class G2PModel(object):
     current_step, self.epochs_wo_improvement,\
       self.allow_epochs_wo_improvement = 0, 0, 2
     train_losses, eval_losses, epoch_losses = [], [], []
-    steps_per_epoch = max(1, int(sum(train_bucket_sizes) /
-                                 self.params.batch_size))
     while (self.params.max_steps == 0
            or self.model.global_step.eval(self.session)
            <= self.params.max_steps):
@@ -234,10 +232,10 @@ class G2PModel(object):
               train_ppx =\
                 math.exp(train_loss) if train_loss < 300 else float('inf')
               print ("global step %d learning rate %.4f step-time %.2f "
-                "perplexity %.3f" % (
-                self.model.global_step.eval(self.session),
-                self.model.learning_rate.eval(self.session),
-                step_time, train_ppx))
+                     "perplexity %.3f" %
+                     (self.model.global_step.eval(self.session),
+                      self.model.learning_rate.eval(self.session),
+                      step_time, train_ppx))
               eval_loss = self.__calc_eval_loss()
               eval_ppx =\
                 math.exp(eval_loss) if eval_loss < 300 else float('inf')
