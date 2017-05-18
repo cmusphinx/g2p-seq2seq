@@ -156,13 +156,19 @@ def split_to_grapheme_phoneme(inp_dictionary):
   Args:
     inp_dictionary: input dictionary.
   """
-  graphemes, phonemes = [], []
+  #graphemes, phonemes = [], []
+  #for line in inp_dictionary:
+  #  split_line = line.strip().split()
+  #  if len(split_line) > 1:
+  #    graphemes.append(list(split_line[0]))
+  #    phonemes.append(split_line[1:])
+  #return graphemes, phonemes
+  data = []
   for line in inp_dictionary:
     split_line = line.strip().split()
     if len(split_line) > 1:
-      graphemes.append(list(split_line[0]))
-      phonemes.append(split_line[1:])
-  return graphemes, phonemes
+      data.append([split_line[0], ' '.join(split_line[1:])])
+  return data
 
 
 def collect_pronunciations(dic_lines):
@@ -181,6 +187,14 @@ def collect_pronunciations(dic_lines):
   return dic
 
 
+def unify(dic_lines):
+  dic = []
+  for line in dic_lines:
+    lst = line.strip().split()
+    dic.append(" ".join(lst))
+  return dic
+
+
 def split_dictionary(train_path, valid_path=None, test_path=None):
   """Split source dictionary to train, validation and test sets.
   """
@@ -188,8 +202,10 @@ def split_dictionary(train_path, valid_path=None, test_path=None):
   train_dic, valid_dic, test_dic = [], [], []
   if valid_path:
     valid_dic = codecs.open(valid_path, "r", "utf-8").readlines()
+    valid_dic = unify(valid_dic)
   if test_path:
     test_dic = codecs.open(test_path, "r", "utf-8").readlines()
+    test_dic = unify(test_dic)
 
   dic = collect_pronunciations(source_dic)
 
@@ -227,33 +243,38 @@ def prepare_g2p_data(model_dir, train_path, valid_path, test_path):
   train_dic, valid_dic, test_dic = split_dictionary(train_path, valid_path,
                                                     test_path)
   # Split dictionaries into two separate lists with graphemes and phonemes.
-  train_gr, train_ph = split_to_grapheme_phoneme(train_dic)
-  valid_gr, valid_ph = split_to_grapheme_phoneme(valid_dic)
+  #train_dic = split_to_grapheme_phoneme(train_dic)
+  #valid_dic = split_to_grapheme_phoneme(valid_dic)
+  #test_dic = split_to_grapheme_phoneme(test_dic)
 
   # Load/Create vocabularies.
-  if (model_dir
-      and os.path.exists(os.path.join(model_dir, "vocab.grapheme"))
-      and os.path.exists(os.path.join(model_dir, "vocab.phoneme"))):
-    print("Loading vocabularies from %s" %model_dir)
-    ph_vocab = load_vocabulary(os.path.join(model_dir, "vocab.phoneme"))
-    gr_vocab = load_vocabulary(os.path.join(model_dir, "vocab.grapheme"))
+  #if (model_dir
+  #    and os.path.exists(os.path.join(model_dir, "vocab.grapheme"))
+  #    and os.path.exists(os.path.join(model_dir, "vocab.phoneme"))):
+  #  print("Loading vocabularies from %s" %model_dir)
+  #  ph_vocab = load_vocabulary(os.path.join(model_dir, "vocab.phoneme"))
+  #  gr_vocab = load_vocabulary(os.path.join(model_dir, "vocab.grapheme"))
 
-  else:
-    ph_vocab = create_vocabulary(train_ph)
-    gr_vocab = create_vocabulary(train_gr)
+  #else:
+  #  ph_vocab = create_vocabulary(train_dic)
+  #  gr_vocab = create_vocabulary(train_dic)
 
-    if model_dir:
-      os.makedirs(model_dir)
-      save_vocabulary(ph_vocab, os.path.join(model_dir, "vocab.phoneme"))
-      save_vocabulary(gr_vocab, os.path.join(model_dir, "vocab.grapheme"))
+  #  if model_dir:
+  #    os.makedirs(model_dir)
+  #    save_vocabulary(ph_vocab, os.path.join(model_dir, "vocab.phoneme"))
+  #    save_vocabulary(gr_vocab, os.path.join(model_dir, "vocab.grapheme"))
 
   # Create ids for the training data.
-  train_ph_ids = [symbols_to_ids(line, ph_vocab) for line in train_ph]
-  train_gr_ids = [symbols_to_ids(line, gr_vocab) for line in train_gr]
-  valid_ph_ids = [symbols_to_ids(line, ph_vocab) for line in valid_ph]
-  valid_gr_ids = [symbols_to_ids(line, gr_vocab) for line in valid_gr]
+  #train_ph_ids = [symbols_to_ids(line, ph_vocab) for line in train_ph]
+  #train_gr_ids = [symbols_to_ids(line, gr_vocab) for line in train_gr]
+  #valid_ph_ids = [symbols_to_ids(line, ph_vocab) for line in valid_ph]
+  #valid_gr_ids = [symbols_to_ids(line, gr_vocab) for line in valid_gr]
+  #test_ph_ids = [symbols_to_ids(line, ph_vocab) for line in test_ph]
+  #test_gr_ids = [symbols_to_ids(line, gr_vocab) for line in test_gr]
 
-  return (train_gr_ids, train_ph_ids,
-          valid_gr_ids, valid_ph_ids,
-          gr_vocab, ph_vocab,
+  #return (train_gr_ids, train_ph_ids,
+  #        valid_gr_ids, valid_ph_ids,
+  #        gr_vocab, ph_vocab,
+  #        test_dic, test_gr_ids, test_ph_ids)
+  return (train_dic, valid_dic, #gr_vocab, ph_vocab,
           test_dic)
