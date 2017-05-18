@@ -17,5 +17,7 @@
 """
 
 from g2p_seq2seq import g2p
-from g2p_seq2seq import data_utils
-from g2p_seq2seq import seq2seq_model
+#from g2p_seq2seq import g2p_new_tf
+#from g2p_seq2seq import data_utils
+from g2p_seq2seq import seq2seq_model_tf1
+from g2p_seq2seq import seq2seq_tf1_new_interface

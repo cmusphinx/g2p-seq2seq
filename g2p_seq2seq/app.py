@@ -28,9 +28,19 @@ import os
 import codecs
 import tensorflow as tf
 
-from g2p_seq2seq.g2p import G2PModel
-from g2p_seq2seq.g2p import TrainingParams
+#from g2p_seq2seq.g2p import G2PModel
+#from g2p_seq2seq.g2p import TrainingParams
+from g2p import G2PModel
+from g2p import TrainingParams
 
+import yaml
+from six import string_types
+
+from seq2seq import tasks, models
+from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict
+from seq2seq.data import input_pipeline
+from seq2seq.inference import create_inference_graph
+from seq2seq.training import utils as training_utils
 
 tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate.")
 tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99,
@@ -58,14 +68,46 @@ tf.app.flags.DEFINE_integer("max_steps", 0,
 tf.app.flags.DEFINE_boolean("reinit", False,
                             "Set to True for training from scratch.")
 tf.app.flags.DEFINE_string("optimizer", "sgd", "Optimizer type: sgd, adam, rms-prop. Default: sgd.")
-tf.app.flags.DEFINE_string("mode", "g2p", "mode type: g2p, p2g. Default: g2p.")
+tf.flags.DEFINE_integer("save_checkpoints_secs", None,
+                        """Save checkpoints every this many seconds.
+                        Can not be specified with save_checkpoints_steps.""")
+tf.flags.DEFINE_integer("save_checkpoints_steps", None,
+                        """Save checkpoints every this many steps.
+                        Can not be specified with save_checkpoints_secs.""")
+tf.flags.DEFINE_string("config_paths", "",
+                       """Path to a YAML configuration files defining FLAG
+                       values. Multiple files can be separated by commas.
+                       Files are merged recursively. Setting a key in these
+                       files is equivalent to setting the FLAG value with
+                       the same name.""")
+tf.flags.DEFINE_string("hooks", "",
+                       """YAML configuration string for the
+                       training hooks to use.""")
+tf.flags.DEFINE_string("metrics", "",
+                       """YAML configuration string for the
+                       training metrics to use.""")
+tf.flags.DEFINE_string("model_params", "",
+                       """YAML configuration string for the model
+                       parameters.""")
+
+tf.flags.DEFINE_string("input_pipeline_train", "",
+                       """YAML configuration string for the training
+                       data input pipeline.""")
+tf.flags.DEFINE_string("input_pipeline_dev", "",
+                       """YAML configuration string for the development
+                       data input pipeline.""")
+tf.flags.DEFINE_string("tasks", "", "List of inference tasks to run.")
+tf.flags.DEFINE_string("input_pipeline", None,
+                       """Defines how input data should be loaded.
+                       A YAML string.""")
+
 
 FLAGS = tf.app.flags.FLAGS
 
 # Below lines are added for supporting Tensorflow 1.5
-setattr(tf.contrib.rnn.GRUCell, '__deepcopy__', lambda self, _: self)
-setattr(tf.contrib.rnn.BasicLSTMCell, '__deepcopy__', lambda self, _: self)
-setattr(tf.contrib.rnn.MultiRNNCell, '__deepcopy__', lambda self, _: self)
+#setattr(tf.contrib.rnn.GRUCell, '__deepcopy__', lambda self, _: self)
+#setattr(tf.contrib.rnn.BasicLSTMCell, '__deepcopy__', lambda self, _: self)
+#setattr(tf.contrib.rnn.MultiRNNCell, '__deepcopy__', lambda self, _: self)
 
 def main(_=[]):
   """Main function.
@@ -73,20 +115,20 @@ def main(_=[]):
   with tf.Graph().as_default():    
     if not FLAGS.model:
       raise RuntimeError("Model directory not specified.")
-    if not FLAGS.mode:
-      mode = 'g2p'
-    else:
-      mode = FLAGS.mode
-    g2p_model = G2PModel(FLAGS.model, mode)
+    #if not FLAGS.mode:
+    #  mode = 'g2p'
+    #else:
+    #  mode = FLAGS.mode
+    g2p_model = G2PModel(FLAGS.model)#, mode)
     if FLAGS.train:
       g2p_params = TrainingParams(FLAGS)
-      g2p_model.prepare_data(FLAGS.train, FLAGS.valid, FLAGS.test)
-      if (not os.path.exists(os.path.join(FLAGS.model,
-                                          "model.data-00000-of-00001"))
-          or FLAGS.reinit):
-        g2p_model.create_train_model(g2p_params)
-      else:
-        g2p_model.load_train_model(g2p_params)
+      g2p_model.prepare_data(g2p_params, FLAGS.train, FLAGS.valid, FLAGS.test)
+      #if (not os.path.exists(os.path.join(FLAGS.model,
+      #                                    "model.data-00000-of-00001"))
+      #    or FLAGS.reinit):
+      #  g2p_model.create_train_model(g2p_params)
+      #else:
+      #  g2p_model.load_train_model(g2p_params)
       g2p_model.train()
     else:
       g2p_model.load_decode_model()
@@ -96,11 +138,12 @@ def main(_=[]):
         if FLAGS.output:
           output_file = codecs.open(FLAGS.output, "w", "utf-8")
         g2p_model.decode(decode_lines, output_file)
-      elif FLAGS.interactive:
-        g2p_model.interactive()
+      #elif FLAGS.interactive:
+      #  g2p_model.interactive()
       elif FLAGS.evaluate:
         test_lines = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
         g2p_model.evaluate(test_lines)
 
 if __name__ == "__main__":
+  tf.logging.set_verbosity(tf.logging.INFO)
   tf.app.run()

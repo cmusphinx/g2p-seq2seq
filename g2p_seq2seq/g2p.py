@@ -23,6 +23,7 @@ See the following papers for more information on neural translation models.
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import math
 import os
@@ -32,11 +33,31 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.core.protobuf import saver_pb2
 
-from g2p_seq2seq import data_utils
-from g2p_seq2seq import seq2seq_model
+#from g2p_seq2seq import data_utils
+#from g2p_seq2seq import seq2seq_model
+import data_utils
+import seq2seq_model
 
 from six.moves import xrange, input  # pylint: disable=redefined-builtin
-from six import text_type
+from six import text_type, string_types
+
+from pydoc import locate
+import yaml
+
+from seq2seq import tasks, models
+from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict, _create_from_dict
+from seq2seq.data import input_pipeline
+from seq2seq.inference import create_inference_graph
+from seq2seq.training import utils as training_utils
+
+from tensorflow.contrib.learn.python.learn import learn_runner
+from tensorflow.contrib.learn.python.learn.estimators import run_config
+from tensorflow import gfile
+from seq2seq.training import hooks
+from seq2seq.metrics import metric_specs
+
+from IPython.core.debugger import Tracer
+
 
 class G2PModel(object):
   """Grapheme-to-Phoneme translation model class.
@@ -60,12 +81,18 @@ class G2PModel(object):
   """
   # We use a number of buckets and pad to the closest one for efficiency.
   # See seq2seq_model.Seq2SeqModel for details of how they work.
-  _BUCKETS = [(5, 10), (10, 15), (40, 50)]
+  #_BUCKETS = [(5, 10), (10, 15), (40, 50)]
+  _BUCKETS = [6, 10, 50]
+#  _METRICS_DEFAULT_PARAMS = """
+#- {separator: ' '}
+#- {postproc_fn: seq2seq.data.postproc.strip_bpe}"""
 
-  def __init__(self, model_dir, mode = 'g2p'):
+  def __init__(self, model_dir):#, mode = 'g2p'):
     """Initialize model directory."""
     self.model_dir = model_dir
-    self.mode = mode
+    self.metrics_default_params = """
+- {separator: ' '}
+- {postproc_fn: seq2seq.data.postproc.strip_bpe}"""
 
   def load_decode_model(self):
     """Load G2P model and initialize or load parameters in session."""
@@ -73,465 +100,220 @@ class G2PModel(object):
       raise RuntimeError("Model not found in %s" % self.model_dir)
 
     self.batch_size = 1 # We decode one word at a time.
-    #Load model parameters.
-    num_layers, size = data_utils.load_params(self.model_dir)
     # Load vocabularies
     print("Loading vocabularies from %s" % self.model_dir)
     self.gr_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
                                                             "vocab.grapheme"))
     self.ph_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
                                                             "vocab.phoneme"))
-    if self.mode == 'g2p':
-      self.rev_ph_vocab =\
-        data_utils.load_vocabulary(os.path.join(self.model_dir, "vocab.phoneme"),
-                                  reverse=True)
-    else:
-      self.rev_gr_vocab =\
-        data_utils.load_vocabulary(os.path.join(self.model_dir, "vocab.grapheme"),
-                                  reverse=True)
+    #if self.mode == 'g2p':
+    self.rev_ph_vocab =\
+      data_utils.load_vocabulary(os.path.join(self.model_dir, "vocab.phoneme"),
+                                 reverse=True)
+    #else:
+    #  self.rev_gr_vocab =\
+    #    data_utils.load_vocabulary(os.path.join(self.model_dir, "vocab.grapheme"),
+    #                              reverse=True)
 
-    self.session = tf.Session()
+    tasks_ = """
+    - class: DecodeText"""
 
-    # Restore model.
-    print("Creating %d layers of %d units." % (num_layers, size))
-    self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
-                                            len(self.ph_vocab), self._BUCKETS,
-                                            size, num_layers, 0,
-                                            self.batch_size, 0, 0,
-                                            forward_only=True)
-    self.model.saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
-    # Check for saved models and restore them.
-    print("Reading model parameters from %s" % self.model_dir)
-    self.model.saver.restore(self.session, os.path.join(self.model_dir,
-                                                        "model"))
+    if isinstance(tasks_, string_types):
+      tasks_ = _maybe_load_yaml(tasks_)
+
+    inp_pipeline = """
+    class: ParallelTextInputPipeline
+    params:
+      source_files:
+        - /home/nurtas/data/g2p/cmudict-exp/initial_data/test.grapheme"""
+
+    if isinstance(inp_pipeline, string_types):
+      inp_pipeline = _maybe_load_yaml(inp_pipeline)
 
 
-  def __put_into_buckets(self, source, target):
-    """Put data from source and target into buckets.
+    input_pipeline_infer = input_pipeline.make_input_pipeline_from_def(
+      inp_pipeline, mode=tf.contrib.learn.ModeKeys.INFER,
+      shuffle=False, num_epochs=1)
+
+    # Load saved training options
+    train_options = training_utils.TrainOptions.load(self.model_dir)
+
+    # Create the model
+    model_cls = locate(train_options.model_class) or \
+      getattr(models, train_options.model_class)
+    model_params = train_options.model_params
+    model_params = _deep_merge_dict(
+        model_params, _maybe_load_yaml({}))
+    model = model_cls(
+        params=model_params,
+        mode=tf.contrib.learn.ModeKeys.INFER)
+
+    # Load inference tasks
+    hooks = []
+    for tdict in tasks_:
+      if not "params" in tdict:
+        tdict["params"] = {}
+      task_cls = locate(tdict["class"]) or getattr(tasks, tdict["class"])
+      task = task_cls(tdict["params"])
+      hooks.append(task)
+
+    # Create the graph used for inference
+    predictions, _, _ = create_inference_graph(
+        model=model,
+        input_pipeline=input_pipeline_infer,
+        batch_size=self.batch_size)
+
+    saver = tf.train.Saver()
+    checkpoint_path = tf.train.latest_checkpoint(self.model_dir)
+
+    def session_init_op(_scaffold, sess):
+      saver.restore(sess, checkpoint_path)
+      tf.logging.info("Restored model from %s", checkpoint_path)
+
+    scaffold = tf.train.Scaffold(init_fn=session_init_op)
+    session_creator = tf.train.ChiefSessionCreator(scaffold=scaffold)
+    with tf.train.MonitoredSession(
+        session_creator=session_creator,
+        hooks=hooks) as sess:
+
+      # Run until the inputs are exhausted
+      while not sess.should_stop():
+        sess.run([])
+
+
+  def prepare_data(self, params, train_path, valid_path, test_path):
+    """Prepare train/validation/test sets. Create or load vocabularies."""
+    self.params = params
+    # Prepare data.
+    self.buckets = "5,10,50"
+
+    # Parse YAML FLAGS
+    self.params.hooks = _maybe_load_yaml(self.params.hooks)
+    self.params.metrics = _maybe_load_yaml(self.params.metrics)
+    self.params.model_params = _maybe_load_yaml(self.params.model_params)
+    self.params.input_pipeline_train = _maybe_load_yaml(self.params.input_pipeline_train)
+    self.params.input_pipeline_dev = _maybe_load_yaml(self.params.input_pipeline_dev)
+    self.metrics_default_params = _maybe_load_yaml(self.metrics_default_params)
+
+    # Load flags from config file
+
+    tf.logging.info('default_params:\n%s', yaml.dump(self.metrics_default_params))
+    tf.logging.info('hooks:\n%s', yaml.dump(self.params.hooks))
+    tf.logging.info('metrics:\n%s', yaml.dump(self.params.metrics))
+    tf.logging.info('model_params:\n%s', yaml.dump(self.params.model_params))
+    tf.logging.info('input_pipeline_train:\n%s', yaml.dump(self.params.input_pipeline_train))
+    tf.logging.info('input_pipeline_dev:\n%s', yaml.dump(self.params.input_pipeline_dev))
+
+
+  def create_experiment(self, output_dir):
+    """
+    Creates a new Experiment instance.
 
     Args:
-      source: data with ids for graphemes;
-      target: data with ids for phonemes;
-        it must be aligned with the source data: n-th line contains the desired
-        output for n-th line from the source.
-
-    Returns:
-      data_set: a list of length len(_BUCKETS); data_set[n] contains a list of
-        (source, target) pairs read from the provided data that fit
-        into the n-th bucket, i.e., such that len(source) < _BUCKETS[n][0] and
-        len(target) < _BUCKETS[n][1]; source and target are lists of ids.
+      output_dir: Output directory for model checkpoints and summaries.
     """
 
-    # By default unk to unk
-    data_set = [[[[4], [4]]] for _ in self._BUCKETS]
+    config = run_config.RunConfig(
+        tf_random_seed=None,
+        save_checkpoints_secs=None,
+        save_checkpoints_steps=10,
+        keep_checkpoint_max=5,
+        keep_checkpoint_every_n_hours=0.01,
+        gpu_memory_fraction=1.0)
+    config.tf_config.gpu_options.allow_growth = False
+    config.tf_config.log_device_placement = False
 
-    for source_ids, target_ids in zip(source, target):
-      target_ids.append(data_utils.EOS_ID)
-      for bucket_id, (source_size, target_size) in enumerate(self._BUCKETS):
-        if len(source_ids) < source_size and len(target_ids) < target_size:
-          data_set[bucket_id].append([source_ids, target_ids])
-          break
-    return data_set
+    train_options = training_utils.TrainOptions(
+        model_class='AttentionSeq2Seq',
+        model_params=self.params.model_params)
+    # On the main worker, save training options
+    if config.is_chief:
+      gfile.MakeDirs(output_dir)
+      train_options.dump(output_dir)
 
-
-  def prepare_data(self, train_path, valid_path, test_path):
-    """Prepare train/validation/test sets. Create or load vocabularies."""
-    # Prepare data.
-    print("Preparing G2P data")
-    train_gr_ids, train_ph_ids, valid_gr_ids, valid_ph_ids, self.gr_vocab,\
-    self.ph_vocab, self.test_lines =\
-    data_utils.prepare_g2p_data(self.model_dir, train_path, valid_path,
-                                test_path)
-    # Read data into buckets and compute their sizes.
-    print ("Reading development and training data.")
-    if self.mode == 'g2p' :
-      self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
-      self.train_set = self.__put_into_buckets(train_gr_ids, train_ph_ids)
-
-      self.rev_ph_vocab = dict([(x, y) for (y, x) in enumerate(self.ph_vocab)])
-    else:
-      self.valid_set = self.__put_into_buckets(valid_ph_ids, valid_gr_ids)
-      self.train_set = self.__put_into_buckets(train_ph_ids, train_gr_ids)
-
-      self.rev_gr_vocab = dict([(x, y) for (y, x) in enumerate(self.gr_vocab)])
+    tf.logging.info('buckets: %s', self.buckets)
+    self.buckets = self.buckets.split(',')
+    bucket_boundaries = list(map(int, self.buckets))
 
 
-  def __prepare_model(self, params):
-    """Prepare G2P model for training."""
+    # Training data input pipeline
+    train_input_pipeline = input_pipeline.make_input_pipeline_from_def(
+        def_dict=self.params.input_pipeline_train,
+        mode=tf.contrib.learn.ModeKeys.TRAIN)
 
-    self.params = params
+    # Create training input function
+    train_input_fn = training_utils.create_input_fn(
+        pipeline=train_input_pipeline,
+        batch_size=64,
+        bucket_boundaries=None,#bucket_boundaries,
+        scope="train_input_fn")
 
-    self.session = tf.Session()
+    # Development data input pipeline
+    dev_input_pipeline = input_pipeline.make_input_pipeline_from_def(
+        def_dict=self.params.input_pipeline_dev,
+        mode=tf.contrib.learn.ModeKeys.EVAL,
+        shuffle=False, num_epochs=1)
 
-    # Prepare model.
-    print("Creating model with parameters:")
-    print(params)
-    if self.mode == 'g2p':
-      self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
-                                              len(self.ph_vocab), self._BUCKETS,
-                                              self.params.size,
-                                              self.params.num_layers,
-                                              self.params.max_gradient_norm,
-                                              self.params.batch_size,
-                                              self.params.learning_rate,
-                                              self.params.lr_decay_factor,
-                                              forward_only=False,
-                                              optimizer=self.params.optimizer)
-    else:
-      self.model = seq2seq_model.Seq2SeqModel(len(self.ph_vocab),
-                                              len(self.gr_vocab), self._BUCKETS,
-                                              self.params.size,
-                                              self.params.num_layers,
-                                              self.params.max_gradient_norm,
-                                              self.params.batch_size,
-                                              self.params.learning_rate,
-                                              self.params.lr_decay_factor,
-                                              forward_only=False,
-                                              optimizer=self.params.optimizer)
-    self.model.saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
+    # Create eval input function
+    eval_input_fn = training_utils.create_input_fn(
+        pipeline=dev_input_pipeline,
+        batch_size=64,
+        allow_smaller_final_batch=True,
+        scope="dev_input_fn")
 
 
-  def load_train_model(self, params):
-    """Load G2P model for continuing train."""
-    # Check for saved model.
-    if not os.path.exists(os.path.join(self.model_dir, 'checkpoint')):
-      raise RuntimeError("Model not found in %s" % self.model_dir)
+    def model_fn(features, labels, params, mode):
+      """Builds the model graph"""
+      model = _create_from_dict({
+          "class": train_options.model_class,
+          "params": train_options.model_params
+      }, models, mode=mode)
+      return model(features, labels, params)
 
-    # Load model parameters.
-    params.num_layers, params.size = data_utils.load_params(self.model_dir)
+    estimator = tf.contrib.learn.Estimator(
+        model_fn=model_fn,
+        model_dir=output_dir,
+        config=config,
+        params=self.params.model_params)
 
-    # Prepare data and G2P Model.
-    self.__prepare_model(params)
+    # Create hooks
+    train_hooks = []
+    for dict_ in self.params.hooks:
+      hook = _create_from_dict(
+          dict_, hooks,
+          model_dir=estimator.model_dir,
+          run_config=config)
+      train_hooks.append(hook)
 
-    # Restore model.
-    print("Reading model parameters from %s" % self.model_dir)
-    self.model.saver.restore(self.session, os.path.join(self.model_dir,
-                                                        "model"))
+    # Create metrics
+    eval_metrics = {}
 
+    for dict_ in self.params.metrics:
+      metric = _create_from_dict(dict_, metric_specs)
+      eval_metrics[metric.name] = metric
 
-  def create_train_model(self, params):
-    """Create G2P model for train from scratch."""
-    # Save model parameters.
-    data_utils.save_params(params.num_layers, params.size, self.model_dir)
+    experiment = tf.contrib.learn.Experiment(
+        estimator=estimator,
+        train_input_fn=train_input_fn,
+        eval_input_fn=eval_input_fn,
+        min_eval_frequency=1000,
+        train_steps=10000,
+        eval_steps=None,
+        eval_metrics=eval_metrics,
+        train_monitors=train_hooks)
 
-    # Prepare data and G2P Model
-    self.__prepare_model(params)
-
-    print("Created model with fresh parameters.")
-    self.session.run(tf.global_variables_initializer())
+    return experiment
 
 
   def train(self):
     """Train a gr->ph translation model using G2P data."""
 
-    train_bucket_sizes = [len(self.train_set[b])
-                          for b in xrange(len(self._BUCKETS))]
-    train_total_size = float(sum(train_bucket_sizes))
-    # A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
-    # to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
-    # the size if i-th training bucket, as used later.
-    train_buckets_scale = [sum(train_bucket_sizes[:i + 1]) / train_total_size
-                           for i in xrange(len(train_bucket_sizes))]
-
-    # This is the training loop.
-    step_time, train_loss = 0.0, 0.0
-    current_step, num_iter_wo_improve = 0, 0
-    prev_train_losses, prev_valid_losses = [], []
-    num_iter_cover_train = int(sum(train_bucket_sizes) /
-                               self.params.batch_size /
-                               self.params.steps_per_checkpoint)
-    while (self.params.max_steps == 0
-           or self.model.global_step.eval(self.session)
-           <= self.params.max_steps):
-      # Get a batch and make a step.
-      start_time = time.time()
-      step_loss = self.__calc_step_loss(train_buckets_scale)
-      step_time += (time.time() - start_time) / self.params.steps_per_checkpoint
-      train_loss += step_loss / self.params.steps_per_checkpoint
-      current_step += 1
-
-      # Once in a while, we save checkpoint, print statistics, and run evals.
-      if current_step % self.params.steps_per_checkpoint == 0:
-        # Print statistics for the previous steps.
-        train_ppx = math.exp(train_loss) if train_loss < 300 else float('inf')
-        print ("global step %d learning rate %.4f step-time %.2f perplexity "
-               "%.2f" % (self.model.global_step.eval(self.session),
-                         self.model.learning_rate.eval(self.session),
-                         step_time, train_ppx))
-        eval_loss = self.__calc_eval_loss()
-        eval_ppx = math.exp(eval_loss) if eval_loss < 300 else float('inf')
-        print("  eval: perplexity %.2f" % (eval_ppx))
-        # Decrease learning rate if no improvement was seen on train set
-        # over last 3 times.
-        if (len(prev_train_losses) > 2
-            and train_loss > max(prev_train_losses[-3:])):
-          self.session.run(self.model.learning_rate_decay_op)
-
-        #if (len(prev_valid_losses) > 0
-        #    and eval_loss <= min(prev_valid_losses)):
-          # Save checkpoint and zero timer and loss.
-        self.model.saver.save(self.session,
-                              os.path.join(self.model_dir, "model"),
-                              write_meta_graph=False)
-
-        if (len(prev_valid_losses) > 0
-            and eval_loss >= min(prev_valid_losses)):
-          num_iter_wo_improve += 1
-        else:
-          num_iter_wo_improve = 0
-
-        if num_iter_wo_improve > num_iter_cover_train * 2:
-          print("No improvement over last %d times. Training will stop after %d"
-                "iterations if no improvement was seen."
-                % (num_iter_wo_improve,
-                   num_iter_cover_train - num_iter_wo_improve))
-
-        # Stop train if no improvement was seen on validation set
-        # over last 3 epochs.
-        if num_iter_wo_improve > num_iter_cover_train * 3:
-          break
-
-        prev_train_losses.append(train_loss)
-        prev_valid_losses.append(eval_loss)
-        step_time, train_loss = 0.0, 0.0
+    learn_runner.run(
+        experiment_fn=self.create_experiment,
+        output_dir=self.model_dir,
+        schedule=None)
 
     print('Training done.')
-    with tf.Graph().as_default():
-      g2p_model_eval = G2PModel(self.model_dir, self.mode)
-      g2p_model_eval.load_decode_model()
-      g2p_model_eval.evaluate(self.test_lines)
-
-
-  def __calc_step_loss(self, train_buckets_scale):
-    """Choose a bucket according to data distribution. We pick a random number
-    in [0, 1] and use the corresponding interval in train_buckets_scale.
-    """
-    random_number_01 = np.random.random_sample()
-    bucket_id = min([i for i in xrange(len(train_buckets_scale))
-                     if train_buckets_scale[i] > random_number_01])
-
-    # Get a batch and make a step.
-    encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
-        self.train_set, bucket_id)
-    _, step_loss, _ = self.model.step(self.session, encoder_inputs,
-                                      decoder_inputs, target_weights,
-                                      bucket_id, False)
-    return step_loss
-
-
-  def __calc_eval_loss(self):
-    """Run evals on development set and print their perplexity.
-    """
-    eval_loss, num_iter_total = 0.0, 0.0
-    for bucket_id in xrange(len(self._BUCKETS)):
-      num_iter_cover_valid = int(math.ceil(len(self.valid_set[bucket_id])/
-                                           self.params.batch_size))
-      num_iter_total += num_iter_cover_valid
-      for batch_id in xrange(num_iter_cover_valid):
-        encoder_inputs, decoder_inputs, target_weights =\
-            self.model.get_eval_set_batch(self.valid_set, bucket_id,
-                                          batch_id * self.params.batch_size)
-        _, eval_batch_loss, _ = self.model.step(self.session, encoder_inputs,
-                                                decoder_inputs, target_weights,
-                                                bucket_id, True)
-        eval_loss += eval_batch_loss
-    eval_loss = eval_loss/num_iter_total if num_iter_total > 0 else float('inf')
-    return eval_loss
-  
-  
-  def decode_pronunciation(self, pronunciation):
-    """Decode input pronunciation to word.
-
-    Args:
-      word: input word;
-
-    Returns:
-      word: decoded word for input pronunciation;
-    """
-    # Check if all phonemes attended in vocabulary
-    ph_absent = [ph for ph in pronunciation if ph not in self.ph_vocab]
-    if ph_absent:
-      print("Symbols '%s' are not in vocabulary" % "','".join(ph_absent).encode('utf-8'))
-      return ""
-    # Get token-ids for the input word.
-    token_ids = [self.ph_vocab.get(s, data_utils.UNK_ID) for s in pronunciation]
-    #print("token_ids =", token_ids)
-    # Which bucket does it belong to?
-    bucket_id = min([b for b in xrange(len(self._BUCKETS))
-                     if self._BUCKETS[b][0] > len(token_ids)])
-    # Get a 1-element batch to feed the word to the model.
-    encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
-        {bucket_id: [(token_ids, [])]}, bucket_id)
-    # Get output logits for the word.
-    _, _, output_logits = self.model.step(self.session, encoder_inputs,
-                                          decoder_inputs, target_weights,
-                                          bucket_id, True)
-    # This is a greedy decoder - outputs are just argmaxes of output_logits.
-    outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
-    # If there is an EOS symbol in outputs, cut them at that point.
-    if data_utils.EOS_ID in outputs:
-      outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-    # Grapheme sequence corresponding to outputs.
-    return "".join([self.rev_gr_vocab[output] for output in outputs])
-
-
-  def decode_word(self, word):
-    """Decode input word to sequence of phonemes.
-
-    Args:
-      word: input word;
-
-    Returns:
-      phonemes: decoded phoneme sequence for input word;
-    """
-    # Check if all graphemes attended in vocabulary
-    gr_absent = [gr for gr in word if gr not in self.gr_vocab]
-    if gr_absent:
-      print("Symbols '%s' are not in vocabulary" % "','".join(gr_absent).encode('utf-8'))
-      return ""
-
-    # Get token-ids for the input word.
-    token_ids = [self.gr_vocab.get(s, data_utils.UNK_ID) for s in word]
-    # Which bucket does it belong to?
-    bucket_id = min([b for b in xrange(len(self._BUCKETS))
-                     if self._BUCKETS[b][0] > len(token_ids)])
-    # Get a 1-element batch to feed the word to the model.
-    encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
-        {bucket_id: [(token_ids, [])]}, bucket_id)
-    # Get output logits for the word.
-    _, _, output_logits = self.model.step(self.session, encoder_inputs,
-                                          decoder_inputs, target_weights,
-                                          bucket_id, True)
-    # This is a greedy decoder - outputs are just argmaxes of output_logits.
-    outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
-    # If there is an EOS symbol in outputs, cut them at that point.
-    if data_utils.EOS_ID in outputs:
-      outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-    # Phoneme sequence corresponding to outputs.
-    return " ".join([self.rev_ph_vocab[output] for output in outputs])
-
-
-  def interactive(self):
-    """Decode word from standard input.
-    """
-    while True:
-      try:
-        word = input("> ")
-        if not issubclass(type(word), text_type):
-          word = text_type(word, encoding='utf-8', errors='replace')
-      except EOFError:
-        break
-      if not word:
-        break
-      if self.mode == 'g2p':
-        print(self.decode_word(word))
-      else:
-        print(self.decode_pronunciation(word.split()))
-  
-  
-  def calc_edit_distance(self, s1, s2):
-    if len(s1) > len(s2):
-        s1, s2 = s2, s1
-
-    distances = range(len(s1) + 1)
-    for i2, c2 in enumerate(s2):
-        distances_ = [i2+1]
-        for i1, c1 in enumerate(s1):
-            if c1 == c2:
-                distances_.append(distances[i1])
-            else:
-                distances_.append(1 + min((distances[i1], distances[i1 + 1], distances_[-1])))
-        distances = distances_
-    return distances[-1]
-
-
-  def calc_error(self, dictionary):
-    """Calculate a number of prediction errors.
-    """
-    if self.mode == 'g2p':
-      errors = 0
-      for word, pronunciations in dictionary.items():
-        hyp = self.decode_word(word)
-        if hyp not in pronunciations:
-          errors += 1
-      return errors
-    else:
-      errors = 0
-      total = 0
-      total_pronunciations = 0
-      for word, pronunciations in dictionary.items():
-        for pronunciation in pronunciations:
-          hyp = self.decode_pronunciation(pronunciation.strip().split())
-          errors += self.calc_edit_distance(hyp, word)
-          total += max([len(hyp), len(word)])
-          total_pronunciations += 1
-      return (errors, total, total_pronunciations)
-
-
-  def evaluate(self, test_lines):
-    """Calculate and print out word error rate (WER) and Accuracy
-       on test sample.
-
-    Args:
-      test_lines: List of test dictionary. Each element of list must be String
-                containing word and its pronounciation (e.g., "word W ER D");
-    """
-    test_dic = data_utils.collect_pronunciations(test_lines)
-
-    if len(test_dic) < 1:
-      print("Test dictionary is empty")
-      return
-
-    if self.mode == 'g2p':
-      errors = self.calc_error(test_dic)
-
-      print("Words: %d" % len(test_dic))
-      print("Errors: %d" % errors)
-      print("WER: %.3f" % (float(errors)/len(test_dic)))
-      print("Accuracy: %.3f" % float(1-(errors/len(test_dic))))
-    else:
-      errors, total, total_pronunciations = self.calc_error(test_dic)
-
-      print("Pronunciations: %d" % total_pronunciations)
-      print("Errors: %d" % errors)
-      print("PER: ",float(errors)/float(total))
-      print("Accuracy: %.3f" % float(1-(float(errors)/total)))
-
-
-  def decode(self, decode_lines, output_file=None):
-    """Decode words from file.
-
-    Returns:
-      if [--output output_file] pointed out, write decoded word sequences in
-      this file. Otherwise, print decoded words in standard output.
-    """
-    phoneme_lines = []
-
-    # Decode from input file.
-    if output_file:
-      for word in decode_lines:
-        word = word.strip()
-        if self.mode == 'g2p':
-          phonemes = self.decode_word(word)
-        else:
-          phonemes = self.decode_pronunciation(word.split())
-        output_file.write(word)
-        output_file.write(' ')
-        output_file.write(phonemes)
-        output_file.write('\n')
-        phoneme_lines.append(phonemes)
-      output_file.close()
-    else:
-      for word in decode_lines:
-        word = word.strip()
-        if self.mode == 'g2p':
-          phonemes = self.decode_word(word)
-          print(word + ' ' + phonemes)
-        else:
-          phonemes = self.decode_pronunciation(word.split())
-          print(phonemes + ' ' + word)
-        phoneme_lines.append(phonemes)
-    return phoneme_lines
 
 
 class TrainingParams(object):
@@ -560,24 +342,112 @@ class TrainingParams(object):
       self.optimizer = "sgd"
       self.mode = "g2p"
 
-  def __str__(self):
-    return ("Learning rate:        {}\n"
-            "LR decay factor:      {}\n"
-            "Max gradient norm:    {}\n"
-            "Batch size:           {}\n"
-            "Size of layer:        {}\n"
-            "Number of layers:     {}\n"
-            "Steps per checkpoint: {}\n"
-            "Max steps:            {}\n"
-            "Optimizer:            {}\n"
-            "Mode:                 {}\n").format(
-      self.learning_rate,
-      self.lr_decay_factor,
-      self.max_gradient_norm,
-      self.batch_size,
-      self.size,
-      self.num_layers,
-      self.steps_per_checkpoint,
-      self.max_steps,
-      self.optimizer,
-      self.mode)
+    if flags.hooks:
+      self.hooks = flags.hooks
+    else:
+      self.hooks = """
+- class: PrintModelAnalysisHook
+- class: MetadataCaptureHook
+- class: SyncReplicasOptimizerHook
+- class: TrainSampleHook
+  params:
+    every_n_steps: 200
+"""
+    if flags.metrics:
+      self.metrics = flags.metrics
+    else:
+      self.metrics = """
+- class: LogPerplexityMetricSpec
+- class: BleuMetricSpec
+  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe}
+- class: RougeMetricSpec
+  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_1/f_score}
+- class: RougeMetricSpec
+  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_1/r_score}
+- class: RougeMetricSpec
+  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_1/p_score}
+- class: RougeMetricSpec
+  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_2/f_score}
+- class: RougeMetricSpec
+  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_2/r_score}
+- class: RougeMetricSpec
+  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_2/p_score}
+- class: RougeMetricSpec
+  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_l/f_score}"""
+    if flags.model_params:
+      self.model_params = flags.model_params
+    else:
+      self.model_params = """
+  attention.class: seq2seq.decoders.attention.AttentionLayerDot
+  attention.params:
+    num_units: 128
+  bridge.class: seq2seq.models.bridges.ZeroBridge
+  embedding.dim: 128
+  encoder.class: seq2seq.encoders.BidirectionalRNNEncoder
+  encoder.params:
+    rnn_cell:
+      cell_class: GRUCell
+      cell_params:
+        num_units: 128
+      dropout_input_keep_prob: 0.8
+      dropout_output_keep_prob: 1.0
+      num_layers: 1
+  decoder.class: seq2seq.decoders.AttentionDecoder
+  decoder.params:
+    rnn_cell:
+      cell_class: GRUCell
+      cell_params:
+        num_units: 128
+      dropout_input_keep_prob: 0.8
+      dropout_output_keep_prob: 1.0
+      num_layers: 1
+  optimizer.name: Adam
+  optimizer.params:
+    epsilon: 0.0000008
+  optimizer.learning_rate: 0.0001
+  source.max_seq_len: 50
+  source.reverse: false
+  target.max_seq_len: 50
+  vocab_source: /home/nurtas/data/g2p/cmudict-exp/vocab.grapheme_wo_spec_sym
+  vocab_target: /home/nurtas/data/g2p/cmudict-exp/vocab.phoneme_wo_spec_sym"""
+    if flags.input_pipeline_train:
+      self.input_pipeline_train = flags.input_pipeline_train
+    else:
+      self.input_pipeline_train = """
+class: DictionaryInputPipeline
+params:
+  model_dir:
+    /home/nurtas/models/g2p/tf1/train
+  train_path:
+    /home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.train-wo-valid
+  valid_path:
+    /home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.valid
+  test_path:
+    /home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.test"""
+    if flags.input_pipeline_dev:
+      self.input_pipeline_dev = flags.input_pipeline_dev
+    else:
+      self.input_pipeline_dev = """
+class: DictionaryInputPipeline
+params:
+  model_dir:
+    /home/nurtas/models/g2p/tf1/train
+  train_path:
+    /home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.train-wo-valid
+  valid_path:
+    /home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.valid
+  test_path:
+    /home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.test"""
+    if flags.tasks:
+      self.tasks = flags.tasks
+    else:
+      self.tasks = """
+    - class: DecodeText"""
+    if flags.input_pipeline:
+      self.input_pipeline = flags.input_pipeline
+    else:
+      self.input_pipeline = """
+    class: ParallelTextInputPipeline
+    params:
+      source_files:
+        - /home/nurtas/data/g2p/cmudict-exp/initial_data/test.grapheme"""
