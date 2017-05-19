@@ -18,8 +18,7 @@ class TestG2P(unittest.TestCase):
       g2p_params.max_steps = 1
       g2p_params.num_layers = 1
       g2p_params.size = 2
-      g2p_model.prepare_data(train_path, valid_path, test_path)
-      g2p_model.create_train_model(g2p_params)
+      g2p_model.prepare_data(g2p_params, train_path, valid_path, test_path)
       g2p_model.train()
     shutil.rmtree(model_dir)
 

@@ -31,11 +31,11 @@ import six
 import tensorflow as tf
 from tensorflow.contrib.slim.python.slim.data import tfexample_decoder
 
-from seq2seq.configurable import Configurable
-from seq2seq.data import split_tokens_decoder, split_graphemes_phonemes_decoder, parallel_data_provider, train_valid_split_data_provider
-from seq2seq.data.sequence_example_decoder import TFSEquenceExampleDecoder
+from g2p_seq2seq.seq2seq.configurable import Configurable
+from g2p_seq2seq.seq2seq.data import split_tokens_decoder, split_graphemes_phonemes_decoder, parallel_data_provider, train_valid_split_data_provider
+from g2p_seq2seq.seq2seq.data.sequence_example_decoder import TFSEquenceExampleDecoder
 
-import data_utils
+from g2p_seq2seq import data_utils
 
 
 def make_input_pipeline_from_def(def_dict, mode, **kwargs):

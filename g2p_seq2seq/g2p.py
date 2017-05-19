@@ -33,10 +33,10 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.core.protobuf import saver_pb2
 
-#from g2p_seq2seq import data_utils
-#from g2p_seq2seq import seq2seq_model
-import data_utils
-import seq2seq_model
+from g2p_seq2seq import data_utils
+from g2p_seq2seq import seq2seq_model
+#import data_utils
+#import seq2seq_model
 
 from six.moves import xrange, input  # pylint: disable=redefined-builtin
 from six import text_type, string_types
@@ -44,17 +44,22 @@ from six import text_type, string_types
 from pydoc import locate
 import yaml
 
-from seq2seq import tasks, models
-from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict, _create_from_dict
-from seq2seq.data import input_pipeline
-from seq2seq.inference import create_inference_graph
-from seq2seq.training import utils as training_utils
+from g2p_seq2seq.seq2seq import tasks, models
+from g2p_seq2seq.seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict, _create_from_dict
+from g2p_seq2seq.seq2seq.data import input_pipeline
+from g2p_seq2seq.seq2seq.inference import create_inference_graph
+from g2p_seq2seq.seq2seq.training import utils as training_utils
 
 from tensorflow.contrib.learn.python.learn import learn_runner
+#from seq2seq import learn_runner
 from tensorflow.contrib.learn.python.learn.estimators import run_config
+#from seq2seq import run_config
 from tensorflow import gfile
-from seq2seq.training import hooks
-from seq2seq.metrics import metric_specs
+from g2p_seq2seq.seq2seq.training import hooks
+from g2p_seq2seq.seq2seq.metrics import metric_specs
+
+#from g2p_seq2seq.seq2seq.experiment import Experiment
+#from g2p_seq2seq.seq2seq.estimator import Estimator
 
 from IPython.core.debugger import Tracer
 
@@ -191,8 +196,7 @@ class G2PModel(object):
     self.params.hooks = _maybe_load_yaml(self.params.hooks)
     self.params.metrics = _maybe_load_yaml(self.params.metrics)
     self.params.model_params = _maybe_load_yaml(self.params.model_params)
-    self.params.input_pipeline_train = _maybe_load_yaml(self.params.input_pipeline_train)
-    self.params.input_pipeline_dev = _maybe_load_yaml(self.params.input_pipeline_dev)
+    self.params.input_pipeline = _maybe_load_yaml(self.params.input_pipeline)
     self.metrics_default_params = _maybe_load_yaml(self.metrics_default_params)
 
     # Load flags from config file
@@ -201,8 +205,7 @@ class G2PModel(object):
     tf.logging.info('hooks:\n%s', yaml.dump(self.params.hooks))
     tf.logging.info('metrics:\n%s', yaml.dump(self.params.metrics))
     tf.logging.info('model_params:\n%s', yaml.dump(self.params.model_params))
-    tf.logging.info('input_pipeline_train:\n%s', yaml.dump(self.params.input_pipeline_train))
-    tf.logging.info('input_pipeline_dev:\n%s', yaml.dump(self.params.input_pipeline_dev))
+    tf.logging.info('input_pipeline:\n%s', yaml.dump(self.params.input_pipeline))
 
 
   def create_experiment(self, output_dir):
@@ -215,10 +218,10 @@ class G2PModel(object):
 
     config = run_config.RunConfig(
         tf_random_seed=None,
-        save_checkpoints_secs=None,
-        save_checkpoints_steps=10,
-        keep_checkpoint_max=5,
-        keep_checkpoint_every_n_hours=0.01,
+        save_checkpoints_secs=self.params.save_checkpoints_secs,
+        save_checkpoints_steps=self.params.save_checkpoints_steps,
+        keep_checkpoint_max=1,
+        keep_checkpoint_every_n_hours=None,
         gpu_memory_fraction=1.0)
     config.tf_config.gpu_options.allow_growth = False
     config.tf_config.log_device_placement = False
@@ -238,7 +241,7 @@ class G2PModel(object):
 
     # Training data input pipeline
     train_input_pipeline = input_pipeline.make_input_pipeline_from_def(
-        def_dict=self.params.input_pipeline_train,
+        def_dict=self.params.input_pipeline,
         mode=tf.contrib.learn.ModeKeys.TRAIN)
 
     # Create training input function
@@ -250,7 +253,7 @@ class G2PModel(object):
 
     # Development data input pipeline
     dev_input_pipeline = input_pipeline.make_input_pipeline_from_def(
-        def_dict=self.params.input_pipeline_dev,
+        def_dict=self.params.input_pipeline,
         mode=tf.contrib.learn.ModeKeys.EVAL,
         shuffle=False, num_epochs=1)
 
@@ -271,6 +274,7 @@ class G2PModel(object):
       return model(features, labels, params)
 
     estimator = tf.contrib.learn.Estimator(
+    #estimator = Estimator(
         model_fn=model_fn,
         model_dir=output_dir,
         config=config,
@@ -293,11 +297,12 @@ class G2PModel(object):
       eval_metrics[metric.name] = metric
 
     experiment = tf.contrib.learn.Experiment(
+    #experiment = Experiment(
         estimator=estimator,
         train_input_fn=train_input_fn,
         eval_input_fn=eval_input_fn,
-        min_eval_frequency=1000,
-        train_steps=10000,
+        min_eval_frequency=self.params.eval_every_n_steps,
+        train_steps=self.params.max_steps,
         eval_steps=None,
         eval_metrics=eval_metrics,
         train_monitors=train_hooks)
@@ -311,143 +316,7 @@ class G2PModel(object):
     learn_runner.run(
         experiment_fn=self.create_experiment,
         output_dir=self.model_dir,
-        schedule=None)
+        schedule="continuous_train_and_eval")#None)
 
     print('Training done.')
 
-
-class TrainingParams(object):
-  """Class with training parameters."""
-  def __init__(self, flags=None):
-    if flags:
-      self.learning_rate = flags.learning_rate
-      self.lr_decay_factor = flags.learning_rate_decay_factor
-      self.max_gradient_norm = flags.max_gradient_norm
-      self.batch_size = flags.batch_size
-      self.size = flags.size
-      self.num_layers = flags.num_layers
-      self.steps_per_checkpoint = flags.steps_per_checkpoint
-      self.max_steps = flags.max_steps
-      self.optimizer = flags.optimizer
-      self.mode = flags.mode
-    else:
-      self.learning_rate = 0.5
-      self.lr_decay_factor = 0.99
-      self.max_gradient_norm = 5.0
-      self.batch_size = 64
-      self.size = 64
-      self.num_layers = 2
-      self.steps_per_checkpoint = 200
-      self.max_steps = 0
-      self.optimizer = "sgd"
-      self.mode = "g2p"
-
-    if flags.hooks:
-      self.hooks = flags.hooks
-    else:
-      self.hooks = """
-- class: PrintModelAnalysisHook
-- class: MetadataCaptureHook
-- class: SyncReplicasOptimizerHook
-- class: TrainSampleHook
-  params:
-    every_n_steps: 200
-"""
-    if flags.metrics:
-      self.metrics = flags.metrics
-    else:
-      self.metrics = """
-- class: LogPerplexityMetricSpec
-- class: BleuMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_1/f_score}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_1/r_score}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_1/p_score}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_2/f_score}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_2/r_score}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_2/p_score}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_l/f_score}"""
-    if flags.model_params:
-      self.model_params = flags.model_params
-    else:
-      self.model_params = """
-  attention.class: seq2seq.decoders.attention.AttentionLayerDot
-  attention.params:
-    num_units: 128
-  bridge.class: seq2seq.models.bridges.ZeroBridge
-  embedding.dim: 128
-  encoder.class: seq2seq.encoders.BidirectionalRNNEncoder
-  encoder.params:
-    rnn_cell:
-      cell_class: GRUCell
-      cell_params:
-        num_units: 128
-      dropout_input_keep_prob: 0.8
-      dropout_output_keep_prob: 1.0
-      num_layers: 1
-  decoder.class: seq2seq.decoders.AttentionDecoder
-  decoder.params:
-    rnn_cell:
-      cell_class: GRUCell
-      cell_params:
-        num_units: 128
-      dropout_input_keep_prob: 0.8
-      dropout_output_keep_prob: 1.0
-      num_layers: 1
-  optimizer.name: Adam
-  optimizer.params:
-    epsilon: 0.0000008
-  optimizer.learning_rate: 0.0001
-  source.max_seq_len: 50
-  source.reverse: false
-  target.max_seq_len: 50
-  vocab_source: /home/nurtas/data/g2p/cmudict-exp/vocab.grapheme_wo_spec_sym
-  vocab_target: /home/nurtas/data/g2p/cmudict-exp/vocab.phoneme_wo_spec_sym"""
-    if flags.input_pipeline_train:
-      self.input_pipeline_train = flags.input_pipeline_train
-    else:
-      self.input_pipeline_train = """
-class: DictionaryInputPipeline
-params:
-  model_dir:
-    /home/nurtas/models/g2p/tf1/train
-  train_path:
-    /home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.train-wo-valid
-  valid_path:
-    /home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.valid
-  test_path:
-    /home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.test"""
-    if flags.input_pipeline_dev:
-      self.input_pipeline_dev = flags.input_pipeline_dev
-    else:
-      self.input_pipeline_dev = """
-class: DictionaryInputPipeline
-params:
-  model_dir:
-    /home/nurtas/models/g2p/tf1/train
-  train_path:
-    /home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.train-wo-valid
-  valid_path:
-    /home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.valid
-  test_path:
-    /home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.test"""
-    if flags.tasks:
-      self.tasks = flags.tasks
-    else:
-      self.tasks = """
-    - class: DecodeText"""
-    if flags.input_pipeline:
-      self.input_pipeline = flags.input_pipeline
-    else:
-      self.input_pipeline = """
-    class: ParallelTextInputPipeline
-    params:
-      source_files:
-        - /home/nurtas/data/g2p/cmudict-exp/initial_data/test.grapheme"""
