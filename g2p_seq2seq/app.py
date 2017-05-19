@@ -28,32 +28,19 @@ import os
 import codecs
 import tensorflow as tf
 
-#from g2p_seq2seq.g2p import G2PModel
-#from g2p_seq2seq.g2p import TrainingParams
-from g2p import G2PModel
-from g2p import TrainingParams
+from g2p_seq2seq.g2p import G2PModel
+from g2p_seq2seq.training_params import TrainingParams
 
 import yaml
 from six import string_types
 
-from seq2seq import tasks, models
-from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict
-from seq2seq.data import input_pipeline
-from seq2seq.inference import create_inference_graph
-from seq2seq.training import utils as training_utils
+from g2p_seq2seq.seq2seq import tasks, models
+from g2p_seq2seq.seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict
+from g2p_seq2seq.seq2seq.data import input_pipeline
+from g2p_seq2seq.seq2seq.inference import create_inference_graph
+from g2p_seq2seq.seq2seq.training import utils as training_utils
 
-tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate.")
-tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99,
-                          "Learning rate decays by this much.")
-tf.app.flags.DEFINE_float("max_gradient_norm", 5.0,
-                          "Clip gradients to this norm.")
-tf.app.flags.DEFINE_integer("batch_size", 64,
-                            "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("size", 64, "Size of each model layer.")
-tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 tf.app.flags.DEFINE_string("model", None, "Training directory.")
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 200,
-                            "How many training steps to do per checkpoint.")
 tf.app.flags.DEFINE_boolean("interactive", False,
                             "Set to True for interactive decoding.")
 tf.app.flags.DEFINE_string("evaluate", "", "Count word error rate for file.")
@@ -62,57 +49,54 @@ tf.app.flags.DEFINE_string("output", "", "Decoding result file.")
 tf.app.flags.DEFINE_string("train", "", "Train dictionary.")
 tf.app.flags.DEFINE_string("valid", "", "Development dictionary.")
 tf.app.flags.DEFINE_string("test", "", "Test dictionary.")
-tf.app.flags.DEFINE_integer("max_steps", 0,
-                            "How many training steps to do until stop training"
-                            " (0: no limit).")
 tf.app.flags.DEFINE_boolean("reinit", False,
                             "Set to True for training from scratch.")
-tf.app.flags.DEFINE_string("optimizer", "sgd", "Optimizer type: sgd, adam, rms-prop. Default: sgd.")
+# Training parameters
+tf.app.flags.DEFINE_integer("batch_size", 64,
+                            "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("max_steps", 10000,
+                            "How many training steps to do until stop training"
+                            " (0: no limit).")
+tf.app.flags.DEFINE_integer("eval_every_n_steps", 400,
+                            "Run evaluation on validation data every N steps.")
+tf.flags.DEFINE_string("hooks", "",
+                       """YAML configuration string for the
+                       training hooks to use.""")
+tf.flags.DEFINE_string("model_params", "",
+                       """YAML configuration string for the model
+                       parameters.""")
+tf.flags.DEFINE_string("metrics", "",
+                       """YAML configuration string for the
+                       training metrics to use.""")
+tf.flags.DEFINE_string("input_pipeline", None,
+                       """Defines how input data should be loaded.
+                       A YAML string.""")
+# RunConfig Flags
 tf.flags.DEFINE_integer("save_checkpoints_secs", None,
                         """Save checkpoints every this many seconds.
                         Can not be specified with save_checkpoints_steps.""")
 tf.flags.DEFINE_integer("save_checkpoints_steps", None,
                         """Save checkpoints every this many steps.
                         Can not be specified with save_checkpoints_secs.""")
-tf.flags.DEFINE_string("config_paths", "",
-                       """Path to a YAML configuration files defining FLAG
-                       values. Multiple files can be separated by commas.
-                       Files are merged recursively. Setting a key in these
-                       files is equivalent to setting the FLAG value with
-                       the same name.""")
-tf.flags.DEFINE_string("hooks", "",
-                       """YAML configuration string for the
-                       training hooks to use.""")
-tf.flags.DEFINE_string("metrics", "",
-                       """YAML configuration string for the
-                       training metrics to use.""")
-tf.flags.DEFINE_string("model_params", "",
-                       """YAML configuration string for the model
-                       parameters.""")
-
-tf.flags.DEFINE_string("input_pipeline_train", "",
-                       """YAML configuration string for the training
-                       data input pipeline.""")
-tf.flags.DEFINE_string("input_pipeline_dev", "",
-                       """YAML configuration string for the development
-                       data input pipeline.""")
-tf.flags.DEFINE_string("tasks", "", "List of inference tasks to run.")
-tf.flags.DEFINE_string("input_pipeline", None,
-                       """Defines how input data should be loaded.
-                       A YAML string.""")
-
 
 FLAGS = tf.app.flags.FLAGS
 
 def main(_=[]):
   """Main function.
   """
+
+  if FLAGS.save_checkpoints_secs is None \
+    and FLAGS.save_checkpoints_steps is None:
+    FLAGS.save_checkpoints_secs = 600
+    tf.logging.info("Setting save_checkpoints_secs to %d",
+                    FLAGS.save_checkpoints_secs)
+
   with tf.Graph().as_default():
     if not FLAGS.model:
       raise RuntimeError("Model directory not specified.")
     g2p_model = G2PModel(FLAGS.model)
     if FLAGS.train:
-      g2p_params = TrainingParams(FLAGS)
+      g2p_params = TrainingParams(flags=FLAGS)
       g2p_model.prepare_data(g2p_params, FLAGS.train, FLAGS.valid, FLAGS.test)
       #if (not os.path.exists(os.path.join(FLAGS.model,
       #                                    "model.data-00000-of-00001"))
