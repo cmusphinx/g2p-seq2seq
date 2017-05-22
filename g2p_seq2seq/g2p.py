@@ -35,8 +35,6 @@ from tensorflow.core.protobuf import saver_pb2
 
 from g2p_seq2seq import data_utils
 from g2p_seq2seq import seq2seq_model
-#import data_utils
-#import seq2seq_model
 
 from six.moves import xrange, input  # pylint: disable=redefined-builtin
 from six import text_type, string_types
@@ -44,19 +42,20 @@ from six import text_type, string_types
 from pydoc import locate
 import yaml
 
-from g2p_seq2seq.seq2seq import tasks, models
-from g2p_seq2seq.seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict, _create_from_dict
-from g2p_seq2seq.seq2seq.data import input_pipeline
-from g2p_seq2seq.seq2seq.inference import create_inference_graph
-from g2p_seq2seq.seq2seq.training import utils as training_utils
+from seq2seq import tasks, models
+from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict, _create_from_dict
+from seq2seq.data import input_pipeline
+from seq2seq.inference import create_inference_graph
+from seq2seq.training import utils as training_utils
+
+from seq2seq.training import hooks
+from seq2seq.metrics import metric_specs
 
 from tensorflow.contrib.learn.python.learn import learn_runner
 #from seq2seq import learn_runner
 from tensorflow.contrib.learn.python.learn.estimators import run_config
 #from seq2seq import run_config
 from tensorflow import gfile
-from g2p_seq2seq.seq2seq.training import hooks
-from g2p_seq2seq.seq2seq.metrics import metric_specs
 
 #from g2p_seq2seq.seq2seq.experiment import Experiment
 #from g2p_seq2seq.seq2seq.estimator import Estimator
@@ -312,7 +311,7 @@ class G2PModel(object):
     learn_runner.run(
         experiment_fn=self.create_experiment,
         output_dir=self.model_dir,
-        schedule="continuous_train_and_eval")#None)
+        schedule=None)
 
     print('Training done.')
 

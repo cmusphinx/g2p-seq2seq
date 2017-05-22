@@ -34,11 +34,11 @@ from g2p_seq2seq.training_params import TrainingParams
 import yaml
 from six import string_types
 
-from g2p_seq2seq.seq2seq import tasks, models
-from g2p_seq2seq.seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict
-from g2p_seq2seq.seq2seq.data import input_pipeline
-from g2p_seq2seq.seq2seq.inference import create_inference_graph
-from g2p_seq2seq.seq2seq.training import utils as training_utils
+from seq2seq import tasks, models
+from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict
+from seq2seq.data import input_pipeline
+from seq2seq.inference import create_inference_graph
+from seq2seq.training import utils as training_utils
 
 tf.app.flags.DEFINE_string("model", None, "Training directory.")
 tf.app.flags.DEFINE_boolean("interactive", False,
