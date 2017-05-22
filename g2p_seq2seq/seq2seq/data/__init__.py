@@ -13,13 +13,8 @@
 # limitations under the License.
 """Collection of input-related utlities.
 """
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
-from g2p_seq2seq.seq2seq.data import input_pipeline
-#from seq2seq.data import parallel_data_provider
-from g2p_seq2seq.seq2seq.data import train_valid_split_data_provider
-from g2p_seq2seq.seq2seq.data import postproc
-#from seq2seq.data import split_tokens_decoder
-from g2p_seq2seq.seq2seq.data import split_graphemes_phonemes_decoder
-from g2p_seq2seq.seq2seq.data import vocab
-from g2p_seq2seq.seq2seq.data import data_provider
-from g2p_seq2seq.seq2seq.data import reader
+from seq2seq.data import *

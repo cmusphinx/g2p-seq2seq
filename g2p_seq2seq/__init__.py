@@ -15,6 +15,13 @@
 
 """ G2P training and evaluationpackage
 """
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+import sys, os
+sys.path.insert(1, './g2p_seq2seq')
+sys.path.insert(1, './g2p_seq2seq/seq2seq')
 
 from g2p_seq2seq import g2p
 from g2p_seq2seq import data_utils

@@ -34,8 +34,12 @@ from tensorflow.python.training import session_manager # pylint: disable=E0611
 from tensorflow.python.client import timeline  # pylint: disable=E0611
 from tensorflow import gfile
 
-from g2p_seq2seq.seq2seq.configurable import Configurable, abstractstaticmethod
-from g2p_seq2seq.seq2seq import graph_utils, global_vars
+#from g2p_seq2seq.seq2seq.configurable import Configurable, abstractstaticmethod
+#from g2p_seq2seq.seq2seq import graph_utils, global_vars
+from configurable import Configurable, abstractstaticmethod
+import graph_utils, global_vars
+#from seq2seq.configurable import Configurable, abstractstaticmethod
+#from seq2seq import graph_utils, global_vars
 
 FLAGS = tf.flags.FLAGS
 

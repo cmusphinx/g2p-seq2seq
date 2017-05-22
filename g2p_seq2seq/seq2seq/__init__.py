@@ -11,10 +11,29 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Operatations and wrappers to help with model training.
 """
+seq2seq library base module
+"""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from seq2seq.training import *
+from seq2seq.graph_module import GraphModule
+
+from seq2seq import contrib
+from seq2seq import data
+from seq2seq import decoders
+from seq2seq import encoders
+from seq2seq import global_vars
+from seq2seq import graph_utils
+from seq2seq import inference
+from seq2seq import losses
+from seq2seq import metrics
+from seq2seq import models
+from seq2seq import test
+from seq2seq import training
+#from seq2seq import tasks
+#from seq2seq import learn_runner
+#from seq2seq import experiment
+#from seq2seq import estimator
