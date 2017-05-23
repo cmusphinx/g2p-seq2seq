@@ -22,8 +22,8 @@ class TrainingParams(object):
     # Set default parameters first. Then update the parameters that pointed out
     # in flags.
     self.batch_size = 64
-    self.max_steps = 10000
-    self.eval_every_n_steps = 400
+    self.max_steps = 1000
+    self.eval_every_n_steps = 200
     self.save_checkpoints_secs = None
     self.save_checkpoints_steps = None
     self.hooks = """
@@ -32,7 +32,7 @@ class TrainingParams(object):
 - class: SyncReplicasOptimizerHook
 - class: TrainSampleHook
   params:
-    every_n_steps: 400
+    every_n_steps: 200
 """
     self.model_params = """
   attention.class: seq2seq.decoders.attention.AttentionLayerDot
@@ -70,21 +70,7 @@ class TrainingParams(object):
     self.metrics = """
 - class: LogPerplexityMetricSpec
 - class: BleuMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_1/f_score}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_1/r_score}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_1/p_score}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_2/f_score}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_2/r_score}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_2/p_score}
-- class: RougeMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe, rouge_type: rouge_l/f_score}"""
+  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe}"""
     self.input_pipeline = """
 class: DictionaryInputPipeline
 params:

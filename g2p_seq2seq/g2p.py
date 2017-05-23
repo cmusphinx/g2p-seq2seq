@@ -51,14 +51,14 @@ from seq2seq.training import utils as training_utils
 from seq2seq.training import hooks
 from seq2seq.metrics import metric_specs
 
-from tensorflow.contrib.learn.python.learn import learn_runner
-#from seq2seq import learn_runner
-from tensorflow.contrib.learn.python.learn.estimators import run_config
-#from seq2seq import run_config
+#from tensorflow.contrib.learn.python.learn import learn_runner
+from seq2seq import learn_runner
+#from tensorflow.contrib.learn.python.learn.estimators import run_config
+from seq2seq import run_config
 from tensorflow import gfile
 
-#from g2p_seq2seq.seq2seq.experiment import Experiment
-#from g2p_seq2seq.seq2seq.estimator import Estimator
+from seq2seq.experiment import Experiment
+from seq2seq.estimator import Estimator
 
 from IPython.core.debugger import Tracer
 
@@ -272,8 +272,8 @@ class G2PModel(object):
       }, models, mode=mode)
       return model(features, labels, params)
 
-    estimator = tf.contrib.learn.Estimator(
-    #estimator = Estimator(
+    #estimator = tf.contrib.learn.Estimator(
+    estimator = Estimator(
         model_fn=model_fn,
         model_dir=output_dir,
         config=config,
@@ -295,8 +295,8 @@ class G2PModel(object):
       metric = _create_from_dict(dict_, metric_specs)
       eval_metrics[metric.name] = metric
 
-    experiment = tf.contrib.learn.Experiment(
-    #experiment = Experiment(
+    #experiment = tf.contrib.learn.Experiment(
+    experiment = Experiment(
         estimator=estimator,
         train_input_fn=train_input_fn,
         eval_input_fn=eval_input_fn,
