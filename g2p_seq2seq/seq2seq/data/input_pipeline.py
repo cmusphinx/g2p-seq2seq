@@ -36,6 +36,7 @@ from seq2seq.data import split_tokens_decoder, split_graphemes_phonemes_decoder,
 from seq2seq.data.sequence_example_decoder import TFSEquenceExampleDecoder
 
 from g2p_seq2seq import data_utils
+from seq2seq.data import batch_reader
 
 
 def make_input_pipeline_from_def(def_dict, mode, **kwargs):
@@ -225,6 +226,8 @@ class DictionaryInputPipeline(InputPipeline):
         append_token="SEQUENCE_END",
         delimiter=self.params["delimiter"])
 
+    br = batch_reader.BatchReader()
+
     return train_valid_split_data_provider.TrainValidSplitDataProvider(
         data=data,
         decoder1=decoder_source,
@@ -232,6 +235,7 @@ class DictionaryInputPipeline(InputPipeline):
         shuffle=self.params["shuffle"],
         num_epochs=self.params["num_epochs"],
         num_samples=64,
+        batch_reader=br,
         **kwargs)
 
   @property

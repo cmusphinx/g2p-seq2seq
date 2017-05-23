@@ -52,7 +52,8 @@ class TrainValidSplitDataProvider(data_provider.DataProvider):
                common_queue_capacity=4096,
                common_queue_min=1024,
                seed=None,
-               num_samples=None):
+               num_samples=None,
+               batch_reader=None):
 
     if seed is None:
       seed = np.random.randint(10e8)
@@ -72,11 +73,11 @@ class TrainValidSplitDataProvider(data_provider.DataProvider):
 
     # Decode source items
     items = decoder1.list_items()
-    tensors = decoder1.decode(data, items)
+    tensors = decoder1.decode(data, items, batch_reader)
 
     # Decode target items
     items2 = decoder2.list_items()
-    tensors2 = decoder2.decode(data, items2)
+    tensors2 = decoder2.decode(data, items2, batch_reader)
 
     # Merge items and results
     items = items + items2
