@@ -195,30 +195,37 @@ def unify(dic_lines):
   return dic
 
 
-def split_dictionary(train_path, valid_path=None, test_path=None):
+def split_dictionary(train_path=None, valid_path=None, test_path=None):
   """Split source dictionary to train, validation and test sets.
   """
-  source_dic = codecs.open(train_path, "r", "utf-8").readlines()
-  train_dic, valid_dic, test_dic = [], [], []
-  if valid_path:
-    valid_dic = codecs.open(valid_path, "r", "utf-8").readlines()
-    valid_dic = unify(valid_dic)
-  if test_path:
+  if train_path:
+    source_dic = codecs.open(train_path, "r", "utf-8").readlines()
+    train_dic, valid_dic, test_dic = [], [], []
+    if valid_path:
+      valid_dic = codecs.open(valid_path, "r", "utf-8").readlines()
+      valid_dic = unify(valid_dic)
+    if test_path:
+      test_dic = codecs.open(test_path, "r", "utf-8").readlines()
+      test_dic = unify(test_dic)
+
+    dic = collect_pronunciations(source_dic)
+
+    # Split dictionary to train, validation and test (if not assigned).
+    for i, word in enumerate(dic):
+      for pronunciations in dic[word]:
+        if i % 20 == 0 and not valid_path:
+          valid_dic.append(word + ' ' + pronunciations)
+        elif (i % 20 == 1 or i % 20 == 2) and not test_path:
+          test_dic.append(word + ' ' + pronunciations)
+        else:
+          train_dic.append(word + ' ' + pronunciations)
+    return train_dic, valid_dic, test_dic
+  else:
+    if not test_path:
+      raise RuntimeError("Path to the decode file not specified.")
     test_dic = codecs.open(test_path, "r", "utf-8").readlines()
     test_dic = unify(test_dic)
-
-  dic = collect_pronunciations(source_dic)
-
-  # Split dictionary to train, validation and test (if not assigned).
-  for i, word in enumerate(dic):
-    for pronunciations in dic[word]:
-      if i % 20 == 0 and not valid_path:
-        valid_dic.append(word + ' ' + pronunciations)
-      elif (i % 20 == 1 or i % 20 == 2) and not test_path:
-        test_dic.append(word + ' ' + pronunciations)
-      else:
-        train_dic.append(word + ' ' + pronunciations)
-  return train_dic, valid_dic, test_dic
+    return None, None, test_dic
 
 
 def prepare_g2p_data(model_dir, train_path, valid_path, test_path):

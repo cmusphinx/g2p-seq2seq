@@ -13,28 +13,44 @@
 # limitations under the License.
 # =============================================================================
 
-"""Training parameters class.
+"""Default Parameters class.
 """
 
-class TrainingParams(object):
+class Params(object):
   """Class with training parameters."""
-  def __init__(self, flags=None):
-    # Set default parameters first. Then update the parameters that pointed out
-    # in flags.
-    self.batch_size = 64
-    self.max_steps = 1000
-    self.eval_every_n_steps = 200
-    self.save_checkpoints_secs = None
-    self.save_checkpoints_steps = None
-    self.hooks = """
+  def __init__(self, decode_flag=True, flags=None):
+    if decode_flag:
+      self.tasks = """
+    - class: DecodeText"""
+      self.input_pipeline = """
+class: DictionaryInputPipeline
+params:
+  model_dir:\n"""
+      if flags:
+        if flags.decode:
+          self.input_pipeline += """    """ + flags.model + "\n" +\
+          "  test_path:\n    " + flags.decode + "\n"
+      else:
+          self.input_pipeline += """    tests/models/train
+  test_path:
+    tests/data/toydict.test"""
+    else:
+      # Set default parameters first. Then update the parameters that pointed out
+      # in flags.
+      self.batch_size = 64
+      self.max_steps = 1400
+      self.eval_every_n_steps = 1000
+      self.save_checkpoints_secs = None
+      self.save_checkpoints_steps = None
+      self.hooks = """
 - class: PrintModelAnalysisHook
 - class: MetadataCaptureHook
 - class: SyncReplicasOptimizerHook
 - class: TrainSampleHook
   params:
-    every_n_steps: 200
+    every_n_steps: 400
 """
-    self.model_params = """
+      self.model_params = """
   attention.class: seq2seq.decoders.attention.AttentionLayerDot
   attention.params:
     num_units: 128
@@ -67,34 +83,37 @@ class TrainingParams(object):
   target.max_seq_len: 50
   vocab_source: /home/nurtas/data/g2p/cmudict-exp/vocab.grapheme_wo_spec_sym
   vocab_target: /home/nurtas/data/g2p/cmudict-exp/vocab.phoneme_wo_spec_sym"""
-    self.metrics = """
+      self.metrics = """
 - class: LogPerplexityMetricSpec
 - class: BleuMetricSpec
   params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe}"""
-    self.input_pipeline = """
+      self.metrics_default_params = """
+- {separator: ' '}
+- {postproc_fn: seq2seq.data.postproc.strip_bpe}"""
+      self.input_pipeline = """
 class: DictionaryInputPipeline
 params:
   model_dir:\n"""
-    if flags:
-      self.batch_size = flags.batch_size
-      self.eval_every_n_steps = flags.eval_every_n_steps
-      self.max_steps = flags.max_steps
-      self.save_checkpoints_secs = flags.save_checkpoints_secs
-      self.save_checkpoints_steps = flags.save_checkpoints_steps
-      if flags.hooks:
-        self.hooks = flags.hooks
-      if flags.model_params:
-        self.model_params = flags.model_param
-      if flags.metrics:
-        self.metrics = flags.metrics
-      self.input_pipeline += "    " + flags.model + "\n" +\
-        "  train_path:\n    " + flags.train + "\n"
-      if flags.valid:
-        self.input_pipeline += "  valid_path:\n    " + flags.valid
-      if flags.test:
-        self.input_pipeline += "  test_path:\n    " + flags.test
-    else:
-      self.input_pipeline += """
+      if flags:
+        self.batch_size = flags.batch_size
+        self.eval_every_n_steps = flags.eval_every_n_steps
+        self.max_steps = flags.max_steps
+        self.save_checkpoints_secs = flags.save_checkpoints_secs
+        self.save_checkpoints_steps = flags.save_checkpoints_steps
+        if flags.hooks:
+          self.hooks = flags.hooks
+        if flags.model_params:
+          self.model_params = flags.model_param
+        if flags.metrics:
+          self.metrics = flags.metrics
+        self.input_pipeline += "    " + flags.model + "\n" +\
+          "  train_path:\n    " + flags.train + "\n"
+        if flags.valid:
+          self.input_pipeline += "  valid_path:\n    " + flags.valid
+        if flags.test:
+          self.input_pipeline += "  test_path:\n    " + flags.test
+      else:
+        self.input_pipeline += """
     tests/models/train
   train_path:
     tests/data/toydict.train

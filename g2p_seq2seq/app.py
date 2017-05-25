@@ -29,7 +29,7 @@ import codecs
 import tensorflow as tf
 
 from g2p_seq2seq.g2p import G2PModel
-from g2p_seq2seq.training_params import TrainingParams
+from g2p_seq2seq.params import Params
 
 import yaml
 from six import string_types
@@ -39,6 +39,8 @@ from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict
 from seq2seq.data import input_pipeline
 from seq2seq.inference import create_inference_graph
 from seq2seq.training import utils as training_utils
+
+from IPython.core.debugger import Tracer
 
 tf.app.flags.DEFINE_string("model", None, "Training directory.")
 tf.app.flags.DEFINE_boolean("interactive", False,
@@ -54,10 +56,10 @@ tf.app.flags.DEFINE_boolean("reinit", False,
 # Training parameters
 tf.app.flags.DEFINE_integer("batch_size", 64,
                             "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("max_steps", 10000,
+tf.app.flags.DEFINE_integer("max_steps", 1400,
                             "How many training steps to do until stop training"
                             " (0: no limit).")
-tf.app.flags.DEFINE_integer("eval_every_n_steps", 400,
+tf.app.flags.DEFINE_integer("eval_every_n_steps", 1000,
                             "Run evaluation on validation data every N steps.")
 tf.flags.DEFINE_string("hooks", "",
                        """YAML configuration string for the
@@ -96,8 +98,8 @@ def main(_=[]):
       raise RuntimeError("Model directory not specified.")
     g2p_model = G2PModel(FLAGS.model)
     if FLAGS.train:
-      g2p_params = TrainingParams(flags=FLAGS)
-      g2p_model.prepare_data(g2p_params, FLAGS.train, FLAGS.valid, FLAGS.test)
+      g2p_params = Params(decode_flag=False, flags=FLAGS)
+      g2p_model.load_train_model(g2p_params)
       #if (not os.path.exists(os.path.join(FLAGS.model,
       #                                    "model.data-00000-of-00001"))
       #    or FLAGS.reinit):
@@ -106,18 +108,21 @@ def main(_=[]):
       #  g2p_model.load_train_model(g2p_params)
       g2p_model.train()
     else:
-      g2p_model.load_decode_model()
-      if FLAGS.decode:
-        decode_lines = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
-        output_file = None
-        if FLAGS.output:
-          output_file = codecs.open(FLAGS.output, "w", "utf-8")
-        g2p_model.decode(decode_lines, output_file)
+      g2p_params = Params(decode_flag=True, flags=FLAGS)
+      g2p_model.load_decode_model(g2p_params)
+      #if FLAGS.decode:
+        #Tracer()()
+      #  g2p_model.decode()
+        #decode_lines = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
+        #output_file = None
+      #  if FLAGS.output:
+      #    output_file = codecs.open(FLAGS.output, "w", "utf-8")
+        #g2p_model.decode(decode_lines, output_file)
       #elif FLAGS.interactive:
       #  g2p_model.interactive()
-      elif FLAGS.evaluate:
-        test_lines = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
-        g2p_model.evaluate(test_lines)
+      #elif FLAGS.evaluate:
+      #  test_lines = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
+      #  g2p_model.evaluate(test_lines)
 
 if __name__ == "__main__":
   tf.logging.set_verbosity(tf.logging.INFO)

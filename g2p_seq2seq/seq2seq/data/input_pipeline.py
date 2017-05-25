@@ -38,6 +38,7 @@ from seq2seq.data.sequence_example_decoder import TFSEquenceExampleDecoder
 from g2p_seq2seq import data_utils
 from seq2seq.data import batch_reader
 
+from IPython.core.debugger import Tracer
 
 def make_input_pipeline_from_def(def_dict, mode, **kwargs):
   """Creates an InputPipeline object from a dictionary definition.
@@ -120,63 +121,6 @@ class InputPipeline(Configurable):
     return items_dict
 
 
-class DictionaryInputPipelineOld(InputPipeline):
-  """An input pipeline that reads two parallel (line-by-line aligned) text
-  files.
-
-  Params:
-    source_files: An array of file names for the source data.
-    target_files: An array of file names for the target data. These must
-      be aligned to the `source_files`.
-    source_delimiter: A character to split the source text on. Defaults
-      to  " " (space). For character-level training this can be set to the
-      empty string.
-    target_delimiter: Same as `source_delimiter` but for the target text.
-  """
-
-  @staticmethod
-  def default_params():
-    params = InputPipeline.default_params()
-    params.update({
-        "file_path": [],
-        #"valid_path": [],
-        #"test_path": [],
-        "delimiter": " ",
-    })
-    return params
-
-  def make_data_provider(self, **kwargs):
-    decoder = split_graphemes_phonemes_decoder.SplitGraphemesPhonemesDecoder(
-        source_feature_name="sources",
-        target_feature_name="targets",
-        source_len_feature_name="source_len",
-        target_len_feature_name="target_len",
-        prepend_token="SEQUENCE_START",
-        append_token="SEQUENCE_END",
-        delimiter=self.params["delimiter"])
-
-    dataset = tf.contrib.slim.dataset.Dataset(
-        data_sources=self.params["file_path"],
-        reader=tf.TextLineReader,
-        decoder=decoder,
-        num_samples=None,
-        items_to_descriptions={})
-
-    return tf.contrib.slim.dataset_data_provider.DatasetDataProvider(
-        dataset=dataset,
-        shuffle=self.params["shuffle"],
-        num_epochs=self.params["num_epochs"],
-        **kwargs)
-
-  @property
-  def feature_keys(self):
-    return set(["sources", "source_len"])
-
-  @property
-  def label_keys(self):
-    return set(["targets", "target_len"])
-
-
 class DictionaryInputPipeline(InputPipeline):
   """An input pipeline that reads two parallel (line-by-line aligned) text
   files.
@@ -211,7 +155,8 @@ class DictionaryInputPipeline(InputPipeline):
                                   self.params["valid_path"],
                                   self.params["test_path"])
 
-    data = train_dic if self.mode == 'train' else valid_dic
+    #Tracer()()
+    data = train_dic if self.mode == 'train' else test_dic
 
     decoder_source = split_graphemes_phonemes_decoder.SplitGraphemesPhonemesDecoder(
         feature_name="source_tokens",

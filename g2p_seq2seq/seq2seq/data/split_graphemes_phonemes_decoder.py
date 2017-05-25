@@ -65,18 +65,24 @@ class SplitGraphemesPhonemesDecoder(data_decoder.DataDecoder):
       #    name='filenames')
       dtypes = tf_dtypes.string#[tf_dtypes.string, tf_dtypes.string]
       common_queue = data_flow_ops.FIFOQueue(
-          capacity=256, dtypes=dtypes, name='common_queue')
+          capacity=256, dtypes=dtypes, name='common_queue')#, shapes=[()])
 
-      enqueue_ops = []
-      enqueue_ops.append(common_queue.enqueue(batch_reader.read(data)))#filename_queue)))
+      #enqueue_ops = []
+      #enqueue_ops.append(common_queue.enqueue(batch_reader.read(data)))#filename_queue)))
+      enqueue_op = common_queue.enqueue(batch_reader.read(data))
       queue_runner.add_queue_runner(
-        queue_runner.QueueRunner(common_queue, enqueue_ops))
+        queue_runner.QueueRunner(common_queue, [enqueue_op]))
 
       data_line = common_queue.dequeue(name=None)
+      print('data_line: ', data_line)
+      #data_batch = common_queue.dequeue_many(32)
 
+      #enqueue_op.run()
+      #print('data_line after run: ',  data_line)
 
     # Split lines with source and target sequences
     source_target_lines = tf.string_split([data_line], delimiter=self.delimiter)
+    #source_target_lines = tf.string_split(data_batch, delimiter=self.delimiter)
 
     if self.length_feature_name == "source_tokens":
       results = tf.slice(source_target_lines.values, [0], [1])
