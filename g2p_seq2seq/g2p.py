@@ -94,49 +94,23 @@ class G2PModel(object):
   def __init__(self, model_dir):#, mode = 'g2p'):
     """Initialize model directory."""
     self.model_dir = model_dir
-    self.metrics_default_params = """
-- {separator: ' '}
-- {postproc_fn: seq2seq.data.postproc.strip_bpe}"""
 
-  def load_decode_model(self):
+  def load_decode_model(self, params):
     """Load G2P model and initialize or load parameters in session."""
     if not os.path.exists(os.path.join(self.model_dir, 'checkpoint')):
       raise RuntimeError("Model not found in %s" % self.model_dir)
 
+    self.params = params
     self.batch_size = 1 # We decode one word at a time.
-    # Load vocabularies
-    print("Loading vocabularies from %s" % self.model_dir)
-    self.gr_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
-                                                            "vocab.grapheme"))
-    self.ph_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
-                                                            "vocab.phoneme"))
-    #if self.mode == 'g2p':
-    self.rev_ph_vocab =\
-      data_utils.load_vocabulary(os.path.join(self.model_dir, "vocab.phoneme"),
-                                 reverse=True)
-    #else:
-    #  self.rev_gr_vocab =\
-    #    data_utils.load_vocabulary(os.path.join(self.model_dir, "vocab.grapheme"),
-    #                              reverse=True)
 
-    tasks_ = """
-    - class: DecodeText"""
+    if isinstance(self.params.tasks, string_types):
+      self.params.tasks = _maybe_load_yaml(self.params.tasks)
 
-    if isinstance(tasks_, string_types):
-      tasks_ = _maybe_load_yaml(tasks_)
-
-    inp_pipeline = """
-    class: ParallelTextInputPipeline
-    params:
-      source_files:
-        - /home/nurtas/data/g2p/cmudict-exp/initial_data/test.grapheme"""
-
-    if isinstance(inp_pipeline, string_types):
-      inp_pipeline = _maybe_load_yaml(inp_pipeline)
-
+    if isinstance(self.params.input_pipeline, string_types):
+      self.params.input_pipeline = _maybe_load_yaml(self.params.input_pipeline)
 
     input_pipeline_infer = input_pipeline.make_input_pipeline_from_def(
-      inp_pipeline, mode=tf.contrib.learn.ModeKeys.INFER,
+      self.params.input_pipeline, mode=tf.contrib.learn.ModeKeys.INFER,
       shuffle=False, num_epochs=1)
 
     # Load saved training options
@@ -153,14 +127,14 @@ class G2PModel(object):
         mode=tf.contrib.learn.ModeKeys.INFER)
 
     # Load inference tasks
-    hooks = []
-    for tdict in tasks_:
+    self.hooks = []
+    for tdict in self.params.tasks:
       if not "params" in tdict:
         tdict["params"] = {}
       task_cls = locate(tdict["class"]) or getattr(tasks, tdict["class"])
       task = task_cls(tdict["params"])
-      hooks.append(task)
-
+      self.hooks.append(task)
+    #Tracer()()
     # Create the graph used for inference
     predictions, _, _ = create_inference_graph(
         model=model,
@@ -178,14 +152,15 @@ class G2PModel(object):
     session_creator = tf.train.ChiefSessionCreator(scaffold=scaffold)
     with tf.train.MonitoredSession(
         session_creator=session_creator,
-        hooks=hooks) as sess:
+        hooks=self.hooks) as sess:
 
       # Run until the inputs are exhausted
       while not sess.should_stop():
+        print('Sess Run')
         sess.run([])
 
 
-  def prepare_data(self, params, train_path, valid_path, test_path):
+  def load_train_model(self, params):
     """Prepare train/validation/test sets. Create or load vocabularies."""
     self.params = params
     # Prepare data.
@@ -196,11 +171,13 @@ class G2PModel(object):
     self.params.metrics = _maybe_load_yaml(self.params.metrics)
     self.params.model_params = _maybe_load_yaml(self.params.model_params)
     self.params.input_pipeline = _maybe_load_yaml(self.params.input_pipeline)
-    self.metrics_default_params = _maybe_load_yaml(self.metrics_default_params)
+    self.params.metrics_default_params = _maybe_load_yaml(
+      self.params.metrics_default_params)
 
     # Load flags from config file
 
-    tf.logging.info('default_params:\n%s', yaml.dump(self.metrics_default_params))
+    tf.logging.info('default_params:\n%s', yaml.dump(
+      self.params.metrics_default_params))
     tf.logging.info('hooks:\n%s', yaml.dump(self.params.hooks))
     tf.logging.info('metrics:\n%s', yaml.dump(self.params.metrics))
     tf.logging.info('model_params:\n%s', yaml.dump(self.params.model_params))
@@ -319,3 +296,23 @@ class G2PModel(object):
 
     print('Training done.')
 
+"""
+  def decode(self):
+    saver = tf.train.Saver()
+    checkpoint_path = tf.train.latest_checkpoint(self.model_dir)
+
+    def session_init_op(_scaffold, sess):
+      saver.restore(sess, checkpoint_path)
+      tf.logging.info("Restored model from %s", checkpoint_path)
+
+    scaffold = tf.train.Scaffold(init_fn=session_init_op)
+    session_creator = tf.train.ChiefSessionCreator(scaffold=scaffold)
+    with tf.train.MonitoredSession(
+        session_creator=session_creator,
+        hooks=self.hooks) as sess:
+
+      # Run until the inputs are exhausted
+      while not sess.should_stop():
+        print('Sess Run')
+        sess.run([])
+"""
