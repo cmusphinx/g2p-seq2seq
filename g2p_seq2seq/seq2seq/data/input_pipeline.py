@@ -157,21 +157,24 @@ class DictionaryInputPipeline(InputPipeline):
 
     #Tracer()()
     data = train_dic if self.mode == 'train' else test_dic
+    filename = self.params["train_path"] if self.mode == 'train' else self.params["test_path"]
 
     decoder_source = split_graphemes_phonemes_decoder.SplitGraphemesPhonemesDecoder(
         feature_name="source_tokens",
         length_feature_name="source_len",
         append_token="SEQUENCE_END",
-        delimiter=self.params["delimiter"])
+        delimiter=self.params["delimiter"],
+        filename=filename)
 
     decoder_target = split_graphemes_phonemes_decoder.SplitGraphemesPhonemesDecoder(
         feature_name="target_tokens",
         length_feature_name="target_len",
         prepend_token="SEQUENCE_START",
         append_token="SEQUENCE_END",
-        delimiter=self.params["delimiter"])
+        delimiter=self.params["delimiter"],
+        filename=filename)
 
-    br = batch_reader.BatchReader()
+    br = batch_reader.BatchReader(data)
 
     return train_valid_split_data_provider.TrainValidSplitDataProvider(
         data=data,

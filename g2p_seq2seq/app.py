@@ -56,10 +56,10 @@ tf.app.flags.DEFINE_boolean("reinit", False,
 # Training parameters
 tf.app.flags.DEFINE_integer("batch_size", 64,
                             "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("max_steps", 1400,
+tf.app.flags.DEFINE_integer("max_steps", 500,
                             "How many training steps to do until stop training"
                             " (0: no limit).")
-tf.app.flags.DEFINE_integer("eval_every_n_steps", 1000,
+tf.app.flags.DEFINE_integer("eval_every_n_steps", 200,
                             "Run evaluation on validation data every N steps.")
 tf.flags.DEFINE_string("hooks", "",
                        """YAML configuration string for the

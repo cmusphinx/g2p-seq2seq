@@ -30,6 +30,18 @@ from tensorflow.python.framework import ops
 from tensorflow.python.training import input as tf_input
 from tensorflow.python.training import queue_runner
 from tensorflow.python.ops import data_flow_ops
+from seq2seq.data import batch_reader as br
+
+
+def create_session():
+  """Resets local session, returns new InteractiveSession"""
+
+  config = tf.ConfigProto(log_device_placement=True)
+  config.gpu_options.per_process_gpu_memory_fraction=0.3 # don't hog all vRAM
+  config.operation_timeout_in_ms=5000   # terminate on long hangs
+  sess = tf.InteractiveSession("", config=config)
+  return sess
+
 
 class SplitGraphemesPhonemesDecoder(data_decoder.DataDecoder):
   """A DataProvider that splits a string tensor into individual tokens and
@@ -47,41 +59,63 @@ class SplitGraphemesPhonemesDecoder(data_decoder.DataDecoder):
                feature_name="source_tokens",
                length_feature_name="source_len",
                prepend_token=None,
-               append_token=None):
+               append_token=None,
+               filename=None):
     self.delimiter = delimiter
     self.feature_name = feature_name
     self.length_feature_name = length_feature_name
     self.prepend_token = prepend_token
     self.append_token = append_token
+    self.filename = filename
 
   def decode(self, data, items, batch_reader):
     decoded_items = {}
 
-    #data_line = random.choice(data)
+    #scope = None
+    #with ops.name_scope(scope, 'read'):
+    #  filename_queue = tf_input.string_input_producer(
+    #      [self.filename], num_epochs=1, shuffle=False, seed=None,
+    #      name='filenames')
+    #  dtypes = tf_dtypes.string#[tf_dtypes.string, tf_dtypes.string]
+    #  common_queue = data_flow_ops.FIFOQueue(
+    #      capacity=256, dtypes=dtypes, name='common_queue')#, shapes=[()])
+
+    #  enqueue_op = common_queue.enqueue(batch_reader.read2(filename_queue))
+    #  queue_runner.add_queue_runner(
+    #    queue_runner.QueueRunner(common_queue, [enqueue_op]))
+
+    #  data_line = common_queue.dequeue(name=None)
+    #  print('data_line: ', data_line)
+    #G = br.gen(data)
+    #dtypes = [tf_dtypes.string for _ in range(32)]
+    #shapes = [(50,) for _ in range(32)]
+    #I = br.read_batch_generator(G, dtypes, [(32,)], 32) #tf.float32,[(3,)],1)
+    #O = br.F(I)
+
     scope = None
     with ops.name_scope(scope, 'read'):
-      #filename_queue = tf_input.string_input_producer(
-      #    data_files, num_epochs=num_epochs, shuffle=shuffle, seed=seed,
-      #    name='filenames')
-      dtypes = tf_dtypes.string#[tf_dtypes.string, tf_dtypes.string]
+      filename_queue = tf_input.string_input_producer(
+          [self.filename], num_epochs=1, shuffle=False, seed=None,
+          name='filenames')
+      dtypes = [tf_dtypes.string]#[tf_dtypes.string, tf_dtypes.string]
+      G = br.gen(data)
+      I = br.read_batch_generator(filename_queue, G, dtypes, [()], 1) #tf.float32,[(3,)],1)
       common_queue = data_flow_ops.FIFOQueue(
           capacity=256, dtypes=dtypes, name='common_queue')#, shapes=[()])
 
-      #enqueue_ops = []
-      #enqueue_ops.append(common_queue.enqueue(batch_reader.read(data)))#filename_queue)))
-      enqueue_op = common_queue.enqueue(batch_reader.read(data))
+      enqueue_op = common_queue.enqueue(I)
       queue_runner.add_queue_runner(
         queue_runner.QueueRunner(common_queue, [enqueue_op]))
 
       data_line = common_queue.dequeue(name=None)
       print('data_line: ', data_line)
-      #data_batch = common_queue.dequeue_many(32)
 
-      #enqueue_op.run()
-      #print('data_line after run: ',  data_line)
+
+    sess = create_session()
+    sess.run(common_queue.close())
 
     # Split lines with source and target sequences
-    source_target_lines = tf.string_split([data_line], delimiter=self.delimiter)
+    source_target_lines = tf.string_split(data_line, delimiter=self.delimiter)
     #source_target_lines = tf.string_split(data_batch, delimiter=self.delimiter)
 
     if self.length_feature_name == "source_tokens":

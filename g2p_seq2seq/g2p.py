@@ -197,7 +197,7 @@ class G2PModel(object):
         save_checkpoints_secs=self.params.save_checkpoints_secs,
         save_checkpoints_steps=self.params.save_checkpoints_steps,
         keep_checkpoint_max=1,
-        keep_checkpoint_every_n_hours=None,
+        keep_checkpoint_every_n_hours=4,
         gpu_memory_fraction=1.0)
     config.tf_config.gpu_options.allow_growth = False
     config.tf_config.log_device_placement = False
@@ -243,6 +243,7 @@ class G2PModel(object):
 
     def model_fn(features, labels, params, mode):
       """Builds the model graph"""
+      #Tracer()()
       model = _create_from_dict({
           "class": train_options.model_class,
           "params": train_options.model_params
@@ -271,7 +272,7 @@ class G2PModel(object):
     for dict_ in self.params.metrics:
       metric = _create_from_dict(dict_, metric_specs)
       eval_metrics[metric.name] = metric
-
+    #Tracer()()
     #experiment = tf.contrib.learn.Experiment(
     experiment = Experiment(
         estimator=estimator,
