@@ -20,6 +20,7 @@ class Params(object):
   """Class with training parameters."""
   def __init__(self, decode_flag=True, flags=None):
     if decode_flag:
+      self.batch_size = 1
       self.tasks = """
     - class: DecodeText"""
       self.input_pipeline = """
@@ -38,7 +39,7 @@ params:
       # Set default parameters first. Then update the parameters that pointed out
       # in flags.
       self.batch_size = 64
-      self.max_steps = 1400
+      self.max_steps = 10000
       self.eval_every_n_steps = 1000
       self.save_checkpoints_secs = None
       self.save_checkpoints_steps = None
@@ -48,20 +49,20 @@ params:
 - class: SyncReplicasOptimizerHook
 - class: TrainSampleHook
   params:
-    every_n_steps: 400
+    every_n_steps: 200
 """
       self.model_params = """
   attention.class: seq2seq.decoders.attention.AttentionLayerDot
   attention.params:
-    num_units: 128
+    num_units: 1
   bridge.class: seq2seq.models.bridges.ZeroBridge
-  embedding.dim: 128
+  embedding.dim: 1
   encoder.class: seq2seq.encoders.BidirectionalRNNEncoder
   encoder.params:
     rnn_cell:
       cell_class: GRUCell
       cell_params:
-        num_units: 128
+        num_units: 2
       dropout_input_keep_prob: 0.8
       dropout_output_keep_prob: 1.0
       num_layers: 1
@@ -70,7 +71,7 @@ params:
     rnn_cell:
       cell_class: GRUCell
       cell_params:
-        num_units: 128
+        num_units: 2
       dropout_input_keep_prob: 0.8
       dropout_output_keep_prob: 1.0
       num_layers: 1
@@ -86,10 +87,9 @@ params:
       self.metrics = """
 - class: LogPerplexityMetricSpec
 - class: BleuMetricSpec
-  params: {separator: ' ', postproc_fn: seq2seq.data.postproc.strip_bpe}"""
-      self.metrics_default_params = """
-- {separator: ' '}
-- {postproc_fn: seq2seq.data.postproc.strip_bpe}"""
+  params:
+    separator: ' '
+    postproc_fn: seq2seq_lib.data.postproc.strip_bpe"""
       self.input_pipeline = """
 class: DictionaryInputPipeline
 params:

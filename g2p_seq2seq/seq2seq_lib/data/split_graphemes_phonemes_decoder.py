@@ -30,7 +30,7 @@ from tensorflow.python.framework import ops
 from tensorflow.python.training import input as tf_input
 from tensorflow.python.training import queue_runner
 from tensorflow.python.ops import data_flow_ops
-from seq2seq.data import batch_reader as br
+from seq2seq_lib.data import batch_reader as br
 
 
 def create_session():

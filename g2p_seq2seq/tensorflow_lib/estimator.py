@@ -63,7 +63,7 @@ from tensorflow.python.framework import random_seed
 from tensorflow.python.framework import sparse_tensor
 from tensorflow.python.ops import control_flow_ops
 #from tensorflow.python.ops import lookup_ops
-from seq2seq import lookup_ops
+from tensorflow_lib import lookup_ops
 from tensorflow.python.ops import resources
 from tensorflow.python.ops import variables
 from tensorflow.python.platform import gfile
@@ -78,11 +78,13 @@ from tensorflow.python.training import saver
 from tensorflow.python.training import summary_io
 from tensorflow.python.util import compat
 #from tensorflow.python.util import tf_decorator
-from seq2seq import tf_decorator
+from tensorflow_lib import tf_decorator
 #from tensorflow.python.util import tf_inspect
-from seq2seq import tf_inspect
+from tensorflow_lib import tf_inspect
 
 from IPython.core.debugger import Tracer
+from g2p_seq2seq import data_utils
+from seq2seq_lib.data import batch_reader
 
 AS_ITERABLE_DATE = '2016-09-15'
 AS_ITERABLE_INSTRUCTIONS = (
@@ -980,6 +982,7 @@ class BaseEstimator(
       features, labels = input_fn()
       self._check_inputs(features, labels)
       model_fn_ops = self._get_train_ops(features, labels)
+      #Tracer()()
       ops.add_to_collection(ops.GraphKeys.LOSSES, model_fn_ops.loss)
       all_hooks.extend([
           basic_session_run_hooks.NanTensorHook(model_fn_ops.loss),
@@ -1031,13 +1034,29 @@ class BaseEstimator(
       ) as mon_sess:
         loss = None
         k = 0
+        #coord = tf.train.Coordinator()
+        #threads = tf.train.start_queue_runners(coord=coord, sess=mon_sess)
         while not mon_sess.should_stop():
           print('~~~~~~~~~~~STEP: ', k)
           sys.stdout.flush()
+          #train_dic, valid_dic, test_dic =\
+          #  data_utils.prepare_g2p_data("/home/nurtas/models/g2p/tf1/g2p_eval_cut7",
+          #                              "/home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.train-wo-valid",
+          #                              "/home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.valid",
+          #                              "/home/nurtas/data/g2p/cmudict-exp/initial_data/cmudict.dic.test")
+
+          #Tracer()()
+          #data = train_dic
+          #br = batch_reader.BatchReader(data)
+          #input_feed, output_feed = br.read(session=mon_sess)
           #tf.train.start_queue_runners(mon_sess)
-          _, loss = mon_sess.run([model_fn_ops.train_op, model_fn_ops.loss])
+          _, loss = mon_sess.run([model_fn_ops.train_op, model_fn_ops.loss])#,
+                                 #feed_dict={output_feed, input_feed})
+                                 #)
           sys.stdout.flush()
           k += 1
+        #coord.request_stop()
+        #coord.join(threads)
       summary_io.SummaryWriterCache.clear()
       return loss
 
@@ -1171,6 +1190,7 @@ class Estimator(BaseEstimator):
     model_fn_results = self._model_fn(features, labels, **kwargs)
     print('MODEL_FN_1 ENDED')
 
+    #Tracer()()
     if isinstance(model_fn_results, model_fn_lib.ModelFnOps):
       print('STOP HERE 1')
       return model_fn_results

@@ -26,17 +26,17 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import math
-import os
+import sys, os
 import time
+
+sys.path.insert(1, './g2p_seq2seq')
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.core.protobuf import saver_pb2
 
 from g2p_seq2seq import data_utils
 from g2p_seq2seq import seq2seq_model
 
-from six.moves import xrange, input  # pylint: disable=redefined-builtin
 from six import text_type, string_types
 
 from pydoc import locate
@@ -44,52 +44,43 @@ import yaml
 
 from seq2seq import tasks, models
 from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict, _create_from_dict
-from seq2seq.data import input_pipeline
+from seq2seq_lib.data import input_pipeline
 from seq2seq.inference import create_inference_graph
 from seq2seq.training import utils as training_utils
 
 from seq2seq.training import hooks
 from seq2seq.metrics import metric_specs
 
-#from tensorflow.contrib.learn.python.learn import learn_runner
-from seq2seq import learn_runner
-#from tensorflow.contrib.learn.python.learn.estimators import run_config
-from seq2seq import run_config
+from tensorflow.contrib.learn.python.learn import learn_runner
+#from tensorflow_lib import learn_runner
+from tensorflow.contrib.learn.python.learn.estimators import run_config
+#from tensorflow_lib import run_config
 from tensorflow import gfile
 
-from seq2seq.experiment import Experiment
-from seq2seq.estimator import Estimator
-
-from IPython.core.debugger import Tracer
+#from tensorflow_lib.experiment import Experiment
+#from tensorflow_lib.estimator import Estimator
 
 
 class G2PModel(object):
   """Grapheme-to-Phoneme translation model class.
 
-  Constructor parameters (for training mode only):
-    train_lines: Train dictionary;
-    valid_lines: Development dictionary;
-    test_lines: Test dictionary.
+  Constructor parameters:
+    model_dir: Working directory where Model will (saved in)/(loaded from).
 
   Attributes:
-    gr_vocab: Grapheme vocabulary;
-    ph_vocab: Phoneme vocabulary;
-    train_set: Training buckets: words and sounds are mapped to ids;
-    valid_set: Validation buckets: words and sounds are mapped to ids;
-    session: Tensorflow session;
-    model: Tensorflow Seq2Seq model for G2PModel object.
+    params: Instance of g2p_seq2seq.params.Params class with all required
+      parameters;
+    _BUCKET_BOUNDARIES: Buckets input sequences according to these length.
+      A comma-separated list of sequence length buckets, e.g. "10,20,30" would
+      result in 4 buckets: <10, 10-20, 20-30, >30. None disabled bucketing. 
+    hooks: YAML configuration string for the training metrics to use.
     train: Train method.
-    interactive: Interactive decode method;
-    evaluate: Word-Error-Rate counting method;
     decode: Decode file method.
   """
   # We use a number of buckets and pad to the closest one for efficiency.
   # See seq2seq_model.Seq2SeqModel for details of how they work.
-  #_BUCKETS = [(5, 10), (10, 15), (40, 50)]
-  _BUCKETS = [6, 10, 50]
-#  _METRICS_DEFAULT_PARAMS = """
-#- {separator: ' '}
-#- {postproc_fn: seq2seq.data.postproc.strip_bpe}"""
+  _BUCKET_BOUNDARIES = [6, 10]
+  tf.logging.set_verbosity(tf.logging.INFO)
 
   def __init__(self, model_dir):#, mode = 'g2p'):
     """Initialize model directory."""
@@ -101,7 +92,6 @@ class G2PModel(object):
       raise RuntimeError("Model not found in %s" % self.model_dir)
 
     self.params = params
-    self.batch_size = 1 # We decode one word at a time.
 
     if isinstance(self.params.tasks, string_types):
       self.params.tasks = _maybe_load_yaml(self.params.tasks)
@@ -134,12 +124,11 @@ class G2PModel(object):
       task_cls = locate(tdict["class"]) or getattr(tasks, tdict["class"])
       task = task_cls(tdict["params"])
       self.hooks.append(task)
-    #Tracer()()
     # Create the graph used for inference
     predictions, _, _ = create_inference_graph(
         model=model,
         input_pipeline=input_pipeline_infer,
-        batch_size=self.batch_size)
+        batch_size=self.params.batch_size)
 
     saver = tf.train.Saver()
     checkpoint_path = tf.train.latest_checkpoint(self.model_dir)
@@ -163,21 +152,14 @@ class G2PModel(object):
   def load_train_model(self, params):
     """Prepare train/validation/test sets. Create or load vocabularies."""
     self.params = params
-    # Prepare data.
-    self.buckets = "5,10,50"
-
     # Parse YAML FLAGS
     self.params.hooks = _maybe_load_yaml(self.params.hooks)
     self.params.metrics = _maybe_load_yaml(self.params.metrics)
     self.params.model_params = _maybe_load_yaml(self.params.model_params)
     self.params.input_pipeline = _maybe_load_yaml(self.params.input_pipeline)
-    self.params.metrics_default_params = _maybe_load_yaml(
-      self.params.metrics_default_params)
 
     # Load flags from config file
 
-    tf.logging.info('default_params:\n%s', yaml.dump(
-      self.params.metrics_default_params))
     tf.logging.info('hooks:\n%s', yaml.dump(self.params.hooks))
     tf.logging.info('metrics:\n%s', yaml.dump(self.params.metrics))
     tf.logging.info('model_params:\n%s', yaml.dump(self.params.model_params))
@@ -210,21 +192,18 @@ class G2PModel(object):
       gfile.MakeDirs(output_dir)
       train_options.dump(output_dir)
 
-    tf.logging.info('buckets: %s', self.buckets)
-    self.buckets = self.buckets.split(',')
-    bucket_boundaries = list(map(int, self.buckets))
-
-
     # Training data input pipeline
     train_input_pipeline = input_pipeline.make_input_pipeline_from_def(
         def_dict=self.params.input_pipeline,
         mode=tf.contrib.learn.ModeKeys.TRAIN)
 
+    tf.logging.info('bucket boundaries: %s', self._BUCKET_BOUNDARIES)
+
     # Create training input function
     train_input_fn = training_utils.create_input_fn(
         pipeline=train_input_pipeline,
-        batch_size=64,
-        bucket_boundaries=None,#bucket_boundaries,
+        batch_size=self.params.batch_size,
+        bucket_boundaries=self._BUCKET_BOUNDARIES,
         scope="train_input_fn")
 
     # Development data input pipeline
@@ -236,22 +215,21 @@ class G2PModel(object):
     # Create eval input function
     eval_input_fn = training_utils.create_input_fn(
         pipeline=dev_input_pipeline,
-        batch_size=64,
+        batch_size=self.params.batch_size,
         allow_smaller_final_batch=True,
         scope="dev_input_fn")
 
 
     def model_fn(features, labels, params, mode):
       """Builds the model graph"""
-      #Tracer()()
       model = _create_from_dict({
           "class": train_options.model_class,
           "params": train_options.model_params
       }, models, mode=mode)
       return model(features, labels, params)
 
-    #estimator = tf.contrib.learn.Estimator(
-    estimator = Estimator(
+    estimator = tf.contrib.learn.Estimator(
+    #estimator = Estimator(
         model_fn=model_fn,
         model_dir=output_dir,
         config=config,
@@ -272,9 +250,8 @@ class G2PModel(object):
     for dict_ in self.params.metrics:
       metric = _create_from_dict(dict_, metric_specs)
       eval_metrics[metric.name] = metric
-    #Tracer()()
-    #experiment = tf.contrib.learn.Experiment(
-    experiment = Experiment(
+    experiment = tf.contrib.learn.Experiment(
+    #experiment = Experiment(
         estimator=estimator,
         train_input_fn=train_input_fn,
         eval_input_fn=eval_input_fn,
