@@ -20,7 +20,7 @@ from __future__ import print_function
 import inspect as _inspect
 
 #from tensorflow.python.util import tf_decorator
-from seq2seq import tf_decorator
+from tensorflow_lib import tf_decorator
 
 ArgSpec = _inspect.ArgSpec
 

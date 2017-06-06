@@ -34,33 +34,33 @@ from g2p_seq2seq.params import Params
 import yaml
 from six import string_types
 
-from seq2seq import tasks, models
-from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict
-from seq2seq.data import input_pipeline
-from seq2seq.inference import create_inference_graph
-from seq2seq.training import utils as training_utils
+#from seq2seq import tasks, models
+#from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict
+#from seq2seq.data import input_pipeline
+#from seq2seq.inference import create_inference_graph
+#from seq2seq.training import utils as training_utils
 
-from IPython.core.debugger import Tracer
+#from IPython.core.debugger import Tracer
 
-tf.app.flags.DEFINE_string("model", None, "Training directory.")
-tf.app.flags.DEFINE_boolean("interactive", False,
-                            "Set to True for interactive decoding.")
-tf.app.flags.DEFINE_string("evaluate", "", "Count word error rate for file.")
-tf.app.flags.DEFINE_string("decode", "", "Decode file.")
-tf.app.flags.DEFINE_string("output", "", "Decoding result file.")
-tf.app.flags.DEFINE_string("train", "", "Train dictionary.")
-tf.app.flags.DEFINE_string("valid", "", "Development dictionary.")
-tf.app.flags.DEFINE_string("test", "", "Test dictionary.")
-tf.app.flags.DEFINE_boolean("reinit", False,
+tf.flags.DEFINE_string("model", None, "Training directory.")
+tf.flags.DEFINE_boolean("interactive", False,
+                        "Set to True for interactive decoding.")
+tf.flags.DEFINE_string("evaluate", "", "Count word error rate for file.")
+tf.flags.DEFINE_string("decode", "", "Decode file.")
+tf.flags.DEFINE_string("output", "", "Decoding result file.")
+tf.flags.DEFINE_string("train", "", "Train dictionary.")
+tf.flags.DEFINE_string("valid", "", "Development dictionary.")
+tf.flags.DEFINE_string("test", "", "Test dictionary.")
+tf.flags.DEFINE_boolean("reinit", False,
                             "Set to True for training from scratch.")
 # Training parameters
-tf.app.flags.DEFINE_integer("batch_size", 64,
-                            "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("max_steps", 500,
-                            "How many training steps to do until stop training"
-                            " (0: no limit).")
-tf.app.flags.DEFINE_integer("eval_every_n_steps", 200,
-                            "Run evaluation on validation data every N steps.")
+tf.flags.DEFINE_integer("batch_size", 64,
+                        "Batch size to use during training.")
+tf.flags.DEFINE_integer("max_steps", 500,
+                        "How many training steps to do until stop training"
+                        " (0: no limit).")
+tf.flags.DEFINE_integer("eval_every_n_steps", 200,
+                        "Run evaluation on validation data every N steps.")
 tf.flags.DEFINE_string("hooks", "",
                        """YAML configuration string for the
                        training hooks to use.""")

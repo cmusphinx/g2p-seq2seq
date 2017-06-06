@@ -22,10 +22,11 @@ from tensorflow.contrib.framework.python.framework import experimental
 from tensorflow.contrib.learn.python.learn.estimators import run_config as run_config_lib
 #from seq2seq import run_config as run_config_lib
 #from tensorflow.contrib.learn.python.learn.experiment import Experiment
-from seq2seq.experiment import Experiment
+from tensorflow_lib.experiment import Experiment
 from tensorflow.contrib.training.python.training import hparam as hparam_lib
 from tensorflow.python.platform import tf_logging as logging
 
+from IPython.core.debugger import Tracer
 
 # TODO(xiejw): Refactor the learn_runner to make code reusable.
 def _execute_schedule(experiment, schedule):
@@ -191,9 +192,9 @@ def run(experiment_fn, output_dir=None, schedule=None, run_config=None,
                       'instance, got %s instead.' % type(experiment))
 
   # Get the schedule
+  #Tracer()()
   run_config = run_config or experiment.estimator.config
   schedule = schedule or _get_default_schedule(run_config)
-
   return _execute_schedule(experiment, schedule)
 
 

@@ -40,6 +40,7 @@ from tensorflow.python.training import saver
 from tensorflow.python.training import server_lib
 from tensorflow.python.util import compat
 
+from IPython.core.debugger import Tracer
 
 __all__ = ["Experiment"]
 
