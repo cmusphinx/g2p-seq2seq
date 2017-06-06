@@ -16,9 +16,11 @@
 """Default Parameters class.
 """
 
+import os
+
 class Params(object):
   """Class with training parameters."""
-  def __init__(self, decode_flag=True, flags=None):
+  def __init__(self, model_dir, decode_flag=True, flags=None):
     if decode_flag:
       self.batch_size = 1
       self.tasks = """
@@ -26,15 +28,13 @@ class Params(object):
       self.input_pipeline = """
 class: DictionaryInputPipeline
 params:
-  model_dir:\n"""
+  test_path:
+    """
       if flags:
         if flags.decode:
-          self.input_pipeline += """    """ + flags.model + "\n" +\
-          "  test_path:\n    " + flags.decode + "\n"
+          self.input_pipeline += flags.decode
       else:
-          self.input_pipeline += """    tests/models/train
-  test_path:
-    tests/data/toydict.test"""
+          self.input_pipeline += "tests/data/toydict.test"
     else:
       # Set default parameters first. Then update the parameters that pointed out
       # in flags.
@@ -49,20 +49,20 @@ params:
 - class: SyncReplicasOptimizerHook
 - class: TrainSampleHook
   params:
-    every_n_steps: 200
+    every_n_steps: 500
 """
       self.model_params = """
   attention.class: seq2seq.decoders.attention.AttentionLayerDot
   attention.params:
-    num_units: 1
+    num_units: 128
   bridge.class: seq2seq.models.bridges.ZeroBridge
-  embedding.dim: 1
+  embedding.dim: 128
   encoder.class: seq2seq.encoders.BidirectionalRNNEncoder
   encoder.params:
     rnn_cell:
       cell_class: GRUCell
       cell_params:
-        num_units: 2
+        num_units: 128
       dropout_input_keep_prob: 0.8
       dropout_output_keep_prob: 1.0
       num_layers: 1
@@ -71,7 +71,7 @@ params:
     rnn_cell:
       cell_class: GRUCell
       cell_params:
-        num_units: 2
+        num_units: 128
       dropout_input_keep_prob: 0.8
       dropout_output_keep_prob: 1.0
       num_layers: 1
@@ -81,9 +81,12 @@ params:
   optimizer.learning_rate: 0.0001
   source.max_seq_len: 50
   source.reverse: false
-  target.max_seq_len: 50
-  vocab_source: /home/nurtas/data/g2p/cmudict-exp/vocab.grapheme_wo_spec_sym
-  vocab_target: /home/nurtas/data/g2p/cmudict-exp/vocab.phoneme_wo_spec_sym"""
+  target.max_seq_len: 50"""
+      vocab_gr_path = os.path.abspath(os.path.join(model_dir, "vocab.grapheme"))
+      vocab_ph_path = os.path.abspath(os.path.join(model_dir, "vocab.phoneme"))
+      self.model_params += """
+  vocab_source: {}
+  vocab_target: {}""".format(vocab_gr_path, vocab_ph_path)
       self.metrics = """
 - class: LogPerplexityMetricSpec
 - class: BleuMetricSpec
@@ -93,7 +96,8 @@ params:
       self.input_pipeline = """
 class: DictionaryInputPipeline
 params:
-  model_dir:\n"""
+  train_path:
+    """
       if flags:
         self.batch_size = flags.batch_size
         self.eval_every_n_steps = flags.eval_every_n_steps
@@ -106,16 +110,13 @@ params:
           self.model_params = flags.model_param
         if flags.metrics:
           self.metrics = flags.metrics
-        self.input_pipeline += "    " + flags.model + "\n" +\
-          "  train_path:\n    " + flags.train + "\n"
+        self.input_pipeline += flags.train + "\n"
         if flags.valid:
           self.input_pipeline += "  valid_path:\n    " + flags.valid
         if flags.test:
           self.input_pipeline += "  test_path:\n    " + flags.test
       else:
         self.input_pipeline += """
-    tests/models/train
-  train_path:
     tests/data/toydict.train
   valid_path:
     tests/data/toydict.test

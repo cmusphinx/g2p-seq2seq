@@ -60,6 +60,7 @@ from tensorflow import gfile
 #from tensorflow_lib.experiment import Experiment
 #from tensorflow_lib.estimator import Estimator
 
+from IPython.core.debugger import Tracer
 
 class G2PModel(object):
   """Grapheme-to-Phoneme translation model class.

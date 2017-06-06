@@ -22,20 +22,8 @@ import os
 import codecs
 from tensorflow.python.platform import gfile
 
-# Special vocabulary symbols - we always put them at the start.
-_PAD = "_PAD"
-_GO = "_GO"
-_EOS = "_EOS"
-_UNK = "_UNK"
-_START_VOCAB = [_PAD, _GO, _EOS, _UNK]
 
-PAD_ID = 0
-GO_ID = 1
-EOS_ID = 2
-UNK_ID = 3
-
-
-def create_vocabulary(data):
+def create_vocabulary(data_path, save_dir):
   """Create vocabulary from input data.
   Input data is assumed to contain one word per line.
 
@@ -46,16 +34,27 @@ def create_vocabulary(data):
     vocab: vocabulary dictionary. In this dictionary keys are symbols
            and values are their indexes.
   """
-  vocab = {}
-  for line in data:
-    for item in line:
-      if item in vocab:
-        vocab[item] += 1
-      else:
-        vocab[item] = 1
-  vocab_list = _START_VOCAB + sorted(vocab)
-  vocab = dict([(x, y) for (y, x) in enumerate(vocab_list)])
-  return vocab
+  data_lines = codecs.open(data_path, "r", "utf-8").readlines()
+  vocab_gr, vocab_ph = {}, {}
+  for line in data_lines:
+    line_split = line.replace('\t', ' ').replace('\n', '')
+    line_split = line_split.split(' ')
+    graphemes, phonemes = line_split[0], line_split[1:]
+    for item in graphemes:
+      if item not in vocab_gr:
+        vocab_gr[item] = 1
+    for item in phonemes:
+      if item not in vocab_ph:
+        vocab_ph[item] = 1
+
+  #vocab = dict([(x, y) for (y, x) in enumerate(vocab_list)])
+  if not os.path.exists(save_dir):
+    os.mkdir(save_dir)
+  vocab_gr_path, vocab_ph_path = os.path.join(save_dir, "vocab.grapheme"),\
+    os.path.join(save_dir, "vocab.phoneme")
+  save_vocabulary(vocab_gr, vocab_gr_path)
+  save_vocabulary(vocab_ph, vocab_ph_path)
+
 
 
 def save_vocabulary(vocab, vocabulary_path):
@@ -71,104 +70,8 @@ def save_vocabulary(vocab, vocabulary_path):
   """
   print("Creating vocabulary %s" % (vocabulary_path))
   with codecs.open(vocabulary_path, "w", "utf-8") as vocab_file:
-    for symbol in sorted(vocab, key=vocab.get):
+    for symbol in sorted(vocab):
       vocab_file.write(symbol + '\n')
-
-
-def load_vocabulary(vocabulary_path, reverse=False):
-  """Load vocabulary from file.
-  We assume the vocabulary is stored one-item-per-line, so a file:
-    d
-    c
-  will result in a vocabulary {"d": 0, "c": 1}, and this function may
-  also return the reversed-vocabulary [0, 1].
-
-  Args:
-    vocabulary_path: path to the file containing the vocabulary.
-    reverse: flag managing what type of vocabulary to return.
-
-  Returns:
-    the vocabulary (a dictionary mapping string to integers), or
-    if set reverse to True the reversed vocabulary (a list, which reverses
-    the vocabulary mapping).
-
-  Raises:
-    ValueError: if the provided vocabulary_path does not exist.
-  """
-  rev_vocab = []
-  with codecs.open(vocabulary_path, "r", "utf-8") as vocab_file:
-    rev_vocab.extend(vocab_file.readlines())
-  rev_vocab = [line.strip() for line in rev_vocab]
-  if reverse:
-    return rev_vocab
-  else:
-    return dict([(x, y) for (y, x) in enumerate(rev_vocab)])
-
-
-def save_params(num_layers, size, model_dir):
-  """Save model parameters in model_dir directory.
-
-  Returns:
-    num_layers: Number of layers in the model;
-    size: Size of each model layer.
-  """
-  # Save model's architecture
-  with open(os.path.join(model_dir, "model.params"), 'w') as param_file:
-    param_file.write("num_layers:" + str(num_layers) + "\n")
-    param_file.write("size:" + str(size))
-
-
-def load_params(model_path):
-  """Load parameters from 'model.params' file.
-
-  Returns:
-    num_layers: Number of layers in the model;
-    size: Size of each model layer.
-  """
-  # Checking model's architecture for decode processes.
-  if gfile.Exists(os.path.join(model_path, "model.params")):
-    params = open(os.path.join(model_path, "model.params")).readlines()
-    for line in params:
-      split_line = line.strip().split(":")
-      if split_line[0] == "num_layers":
-        num_layers = int(split_line[1])
-      if split_line[0] == "size":
-        size = int(split_line[1])
-  return num_layers, size
-
-def symbols_to_ids(symbols, vocab):
-  """Turn symbols into ids sequence using given vocabulary file.
-
-  Args:
-    symbols: input symbols sequence;
-    vocab: vocabulary (a dictionary mapping string to integers).
-
-  Returns:
-    ids: output sequence of ids.
-  """
-  ids = [vocab.get(s, UNK_ID) for s in symbols]
-  return ids
-
-
-def split_to_grapheme_phoneme(inp_dictionary):
-  """Split input dictionary into two separate lists with graphemes and phonemes.
-
-  Args:
-    inp_dictionary: input dictionary.
-  """
-  #graphemes, phonemes = [], []
-  #for line in inp_dictionary:
-  #  split_line = line.strip().split()
-  #  if len(split_line) > 1:
-  #    graphemes.append(list(split_line[0]))
-  #    phonemes.append(split_line[1:])
-  #return graphemes, phonemes
-  data = []
-  for line in inp_dictionary:
-    split_line = line.strip().split()
-    if len(split_line) > 1:
-      data.append([split_line[0], ' '.join(split_line[1:])])
-  return data
 
 
 def collect_pronunciations(dic_lines):
@@ -195,7 +98,7 @@ def unify(dic_lines):
   return dic
 
 
-def split_dictionary(train_path=None, valid_path=None, test_path=None):
+def split_dictionaries(train_path=None, valid_path=None, test_path=None):
   """Split source dictionary to train, validation and test sets.
   """
   if train_path:
@@ -226,62 +129,3 @@ def split_dictionary(train_path=None, valid_path=None, test_path=None):
     test_dic = codecs.open(test_path, "r", "utf-8").readlines()
     test_dic = unify(test_dic)
     return None, None, test_dic
-
-
-def prepare_g2p_data(model_dir, train_path, valid_path, test_path):
-  """Create vocabularies into model_dir, create ids data lists.
-
-  Args:
-    model_dir: directory in which the data sets will be stored;
-    train_path: path to training dictionary;
-    valid_path: path to validation dictionary;
-    test_path: path to test dictionary.
-
-  Returns:
-    A tuple of 6 elements:
-      (1) Sequence of ids for Grapheme training data-set,
-      (2) Sequence of ids for Phoneme training data-set,
-      (3) Sequence of ids for Grapheme development data-set,
-      (4) Sequence of ids for Phoneme development data-set,
-      (5) Grapheme vocabulary,
-      (6) Phoneme vocabulary.
-  """
-  # Create train, validation and test sets.
-  train_dic, valid_dic, test_dic = split_dictionary(train_path, valid_path,
-                                                    test_path)
-  # Split dictionaries into two separate lists with graphemes and phonemes.
-  #train_dic = split_to_grapheme_phoneme(train_dic)
-  #valid_dic = split_to_grapheme_phoneme(valid_dic)
-  #test_dic = split_to_grapheme_phoneme(test_dic)
-
-  # Load/Create vocabularies.
-  #if (model_dir
-  #    and os.path.exists(os.path.join(model_dir, "vocab.grapheme"))
-  #    and os.path.exists(os.path.join(model_dir, "vocab.phoneme"))):
-  #  print("Loading vocabularies from %s" %model_dir)
-  #  ph_vocab = load_vocabulary(os.path.join(model_dir, "vocab.phoneme"))
-  #  gr_vocab = load_vocabulary(os.path.join(model_dir, "vocab.grapheme"))
-
-  #else:
-  #  ph_vocab = create_vocabulary(train_dic)
-  #  gr_vocab = create_vocabulary(train_dic)
-
-  #  if model_dir:
-  #    os.makedirs(model_dir)
-  #    save_vocabulary(ph_vocab, os.path.join(model_dir, "vocab.phoneme"))
-  #    save_vocabulary(gr_vocab, os.path.join(model_dir, "vocab.grapheme"))
-
-  # Create ids for the training data.
-  #train_ph_ids = [symbols_to_ids(line, ph_vocab) for line in train_ph]
-  #train_gr_ids = [symbols_to_ids(line, gr_vocab) for line in train_gr]
-  #valid_ph_ids = [symbols_to_ids(line, ph_vocab) for line in valid_ph]
-  #valid_gr_ids = [symbols_to_ids(line, gr_vocab) for line in valid_gr]
-  #test_ph_ids = [symbols_to_ids(line, ph_vocab) for line in test_ph]
-  #test_gr_ids = [symbols_to_ids(line, gr_vocab) for line in test_gr]
-
-  #return (train_gr_ids, train_ph_ids,
-  #        valid_gr_ids, valid_ph_ids,
-  #        gr_vocab, ph_vocab,
-  #        test_dic, test_gr_ids, test_ph_ids)
-  return (train_dic, valid_dic, #gr_vocab, ph_vocab,
-          test_dic)
