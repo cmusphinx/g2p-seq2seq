@@ -11,9 +11,10 @@ class TestG2P(unittest.TestCase):
     model_dir = "tests/models/train"
     g2p_model = g2p.G2PModel(model_dir)
     train_path = "tests/data/toydict.train"
-    valid_path = "tests/data/toydict.test"
-    test_path = "tests/data/toydict.test"
-    g2p_params = params.Params(decode_flag=False)
+    #valid_path = "tests/data/toydict.test"
+    #test_path = "tests/data/toydict.test"
+    data_utils.create_vocabulary(train_path, model_dir)
+    g2p_params = params.Params(model_dir, decode_flag=False)
     g2p_params.max_steps = 1
     g2p_model.load_train_model(g2p_params)
     g2p_model.train()
@@ -33,9 +34,10 @@ class TestG2P(unittest.TestCase):
   def test_decode(self):
     model_dir = "tests/models/decode"
     g2p_model = g2p.G2PModel(model_dir)
-    g2p_model.load_decode_model()
-    decode_lines = open("tests/data/toydict.graphemes").readlines()
-    phoneme_lines = g2p_model.decode(decode_lines)
+    g2p_params = params.Params(model_dir, decode_flag=True)
+    g2p_model.load_decode_model(g2p_params)
+    #decode_lines = open("tests/data/toydict.graphemes").readlines()
+    #phoneme_lines = g2p_model.decode(decode_lines)
     self.assertEqual(phoneme_lines[0].strip(), u'B')
     self.assertEqual(phoneme_lines[1].strip(), u'A')
     self.assertEqual(phoneme_lines[2].strip(), u'A')

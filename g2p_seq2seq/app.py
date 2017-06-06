@@ -28,6 +28,7 @@ import os
 import codecs
 import tensorflow as tf
 
+from g2p_seq2seq import data_utils
 from g2p_seq2seq.g2p import G2PModel
 from g2p_seq2seq.params import Params
 
@@ -56,10 +57,10 @@ tf.flags.DEFINE_boolean("reinit", False,
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 64,
                         "Batch size to use during training.")
-tf.flags.DEFINE_integer("max_steps", 500,
+tf.flags.DEFINE_integer("max_steps", 10000,
                         "How many training steps to do until stop training"
                         " (0: no limit).")
-tf.flags.DEFINE_integer("eval_every_n_steps", 200,
+tf.flags.DEFINE_integer("eval_every_n_steps", 1000,
                         "Run evaluation on validation data every N steps.")
 tf.flags.DEFINE_string("hooks", "",
                        """YAML configuration string for the
@@ -107,7 +108,8 @@ def main(_=[]):
     #  mode = FLAGS.mode
     g2p_model = G2PModel(FLAGS.model)#, mode)
     if FLAGS.train:
-      g2p_params = Params(decode_flag=False, flags=FLAGS)
+      data_utils.create_vocabulary(FLAGS.train, FLAGS.model)
+      g2p_params = Params(FLAGS.model, decode_flag=False, flags=FLAGS)
       g2p_model.load_train_model(g2p_params)
       #if (not os.path.exists(os.path.join(FLAGS.model,
       #                                    "model.data-00000-of-00001"))
@@ -117,7 +119,14 @@ def main(_=[]):
       #  g2p_model.load_train_model(g2p_params)
       g2p_model.train()
     else:
-      g2p_params = Params(decode_flag=True, flags=FLAGS)
+      vocab_source_path, vocab_target_path =\
+        os.path.join(FLAGS.model, "vocab.grapheme"),\
+        os.path.join(FLAGS.model, "vocab.phoneme")
+      if not (os.path.exists(vocab_source_path)
+              and os.path.exists(vocab_target_path)):
+        raise StandardError("Vocabularies: %s, %s not found."
+                            % (vocab_source_path, vocab_target_path))
+      g2p_params = Params(FLAGS.model, decode_flag=True, flags=FLAGS)
       g2p_model.load_decode_model(g2p_params)
       #if FLAGS.decode:
         #Tracer()()

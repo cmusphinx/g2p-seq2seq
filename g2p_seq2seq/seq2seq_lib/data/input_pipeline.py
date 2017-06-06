@@ -139,7 +139,6 @@ class DictionaryInputPipeline(InputPipeline):
   def default_params():
     params = InputPipeline.default_params()
     params.update({
-        "model_dir": "",
         "train_path": "",
         "valid_path": "",
         "test_path": "",
@@ -149,11 +148,9 @@ class DictionaryInputPipeline(InputPipeline):
 
   def make_data_provider(self, **kwargs):
     print("Preparing G2P data")
-    train_dic, valid_dic, test_dic =\
-      data_utils.prepare_g2p_data(self.params["model_dir"],
-                                  self.params["train_path"],
-                                  self.params["valid_path"],
-                                  self.params["test_path"])
+    train_dic, valid_dic, test_dic = data_utils.split_dictionaries(
+      self.params["train_path"], self.params["valid_path"],
+      self.params["test_path"])
 
     #Tracer()()
     data = train_dic if self.mode == 'train' else test_dic
