@@ -29,6 +29,7 @@ import yaml
 
 import tensorflow as tf
 
+from IPython.core.debugger import Tracer
 
 class abstractstaticmethod(staticmethod):  #pylint: disable=C0111,C0103
   """Decorates a method as abstract and static"""
@@ -46,6 +47,7 @@ def _create_from_dict(dict_, default_module, *args, **kwargs):
   "class" and "params" properties. The class can be either fully qualified, or
   it is looked up in the modules passed via `default_module`.
   """
+  #Tracer()()
   class_ = locate(dict_["class"]) or getattr(default_module, dict_["class"])
   params = {}
   if "params" in dict_:
