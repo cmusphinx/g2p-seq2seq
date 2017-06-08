@@ -35,7 +35,7 @@ class TestG2P(unittest.TestCase):
     model_dir = "tests/models/decode"
     g2p_model = g2p.G2PModel(model_dir)
     g2p_params = params.Params(model_dir, decode_flag=True)
-    g2p_model.load_decode_model(g2p_params)
+    phoneme_lines = g2p_model.load_decode_model(g2p_params)
     #decode_lines = open("tests/data/toydict.graphemes").readlines()
     #phoneme_lines = g2p_model.decode(decode_lines)
     self.assertEqual(phoneme_lines[0].strip(), u'B')

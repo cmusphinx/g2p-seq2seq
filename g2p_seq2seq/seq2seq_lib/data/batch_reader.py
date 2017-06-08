@@ -12,109 +12,81 @@ PAD_ID = 0
 GO_ID = 1
 
 class GeneratorRunner(object):
-    "Custom runner that that runs an generator in a thread and enqueues the outputs."
+  """Custom runner that that runs an generator in a thread and enqueues
+     the outputs."""
 
-    def __init__(self, generator, placeholders, enqueue_op, close_op):
-        self._generator = generator
-        self._placeholders = placeholders
-        self._enqueue_op = enqueue_op
-        self._close_op = close_op
+  def __init__(self, generator, placeholders, enqueue_op, close_op):
+    self._generator = generator
+    self._placeholders = placeholders
+    self._enqueue_op = enqueue_op
+    self._close_op = close_op
 
-    def _run(self, sess, coord):
+  def _run(self, sess, coord):
+    try:
+      while not coord.should_stop():
         try:
-            while not coord.should_stop():
-                try:
-                    values = next(self._generator)
-                    #print('@@@@@@@@@@@@VALUES: ', len(values))
-                    #print('@@@@@@@@@@@@PLACEHOLDERS: ', len(self._placeholders))
-                    #Tracer()()
-                    #print(values)
-                    #sys.stdout.flush()
+          values = next(self._generator)
+          assert len(values) == len(self._placeholders), \
+            'generator values and placeholders must have the same length'
+          feed_dict = {placeholder: value \
+            for placeholder, value in zip(self._placeholders, values)}
+          sess.run(self._enqueue_op, feed_dict=feed_dict)
+        except (StopIteration, tf.errors.OutOfRangeError):
+          try:
+            sess.run(self._close_op)
+          except Exception:
+            pass
+          return
+    except Exception as ex:
+      if coord:
+        coord.request_stop(ex)
+      else:
+        raise
 
-                    assert len(values) == len(self._placeholders), \
-                        'generator values and placeholders must have the same length'
-
-                    feed_dict = {placeholder: value \
-                        for placeholder, value in zip(self._placeholders, values)}
-                    sess.run(self._enqueue_op, feed_dict=feed_dict)
-                except (StopIteration, tf.errors.OutOfRangeError):
-                    try:
-                        sess.run(self._close_op)
-                    except Exception:
-                        pass
-                    return
-        except Exception as ex:
-            if coord:
-                coord.request_stop(ex)
-            else:
-                raise
-
-    def create_threads(self, sess, coord=None, daemon=False, start=False):
-        "Called by `start_queue_runners`."
-
-        thread = threading.Thread(
-            target=self._run,
-            args=(sess, coord))
-
-        if coord:
-            coord.register_thread(thread)
-
-        if daemon:
-            thread.daemon = True
-
-        if start:
-            thread.start()
-
-        return [thread]
+  def create_threads(self, sess, coord=None, daemon=False, start=False):
+    """Called by `start_queue_runners`."""
+    thread = threading.Thread(target=self._run, args=(sess, coord))
+    if coord:
+      coord.register_thread(thread)
+    if daemon:
+      thread.daemon = True
+    if start:
+      thread.start()
+    return [thread]
 
 
-def read_batch_generator(filename_queue,
-        generator, dtypes, shapes, batch_size,
-        queue_capacity=10000,
-        allow_smaller_final_batch=False):
-    "Reads values from an generator, queues, and batches."
+def read_batch_generator(filename_queue, generator, dtypes, shapes, batch_size,
+                         queue_capacity=10000, allow_smaller_final_batch=False):
+  """Reads values from an generator, queues, and batches."""
 
-    #print('!!!!!!!!!DTYPES:', len(dtypes))
-    #print('!!!!!!!!!SHAPES:', len(shapes))
-    #Tracer()()
-    assert len(dtypes) == len(shapes), 'dtypes and shapes must have the same length'
+  assert len(dtypes) == len(shapes), 'dtypes and shapes must have the same length'
 
-    queue = tf.FIFOQueue(
-        capacity=queue_capacity,
-        dtypes=dtypes,
-        shapes=shapes)
+  queue = tf.FIFOQueue(capacity=queue_capacity, dtypes=dtypes, shapes=shapes)
 
-    placeholders = [tf.placeholder(dtype, shape) for dtype, shape in zip(dtypes, shapes)]
+  placeholders = [tf.placeholder(dtype, shape)
+                  for dtype, shape in zip(dtypes, shapes)]
 
-    enqueue_op = queue.enqueue(placeholders)
-    #enqueue_op = filename_queue.enqueue(placeholders)
-    close_op = queue.close(cancel_pending_enqueues=True)
-    #close_op = filename_queue.close(cancel_pending_enqueues=True)
+  enqueue_op = queue.enqueue(placeholders)
+  close_op = queue.close(cancel_pending_enqueues=True)
 
-    queue_runner = GeneratorRunner(generator, placeholders, enqueue_op, close_op)
-    tf.train.add_queue_runner(queue_runner)
+  qr = GeneratorRunner(generator, placeholders, enqueue_op, close_op)
+  tf.train.add_queue_runner(qr)
 
-    if allow_smaller_final_batch:
-        return queue.dequeue_up_to(batch_size)
-        #return filename_queue.dequeue_up_to(batch_size)
-    else:
-        return queue.dequeue_many(batch_size)
-        #return filename_queue.dequeue_many(batch_size)
+  if allow_smaller_final_batch:
+    return queue.dequeue_up_to(batch_size)
+  else:
+    return queue.dequeue_many(batch_size)
 
-def gen(data):
-    #batch_data = []
+
+def gen(data, num_epochs=1):
+  for _ in range(num_epochs):
     for line_inx, line in enumerate(data):
-        #batch_data.append(random.choice(data))
-        if ((line_inx + 1) % 1 == 0):
-            yield [line]#batch_data
-            #batch_data = []
-    #while n < 32:
-    #    n += 1
-    #    yield random.choice(data)#[np.random.random([3])]
+      if ((line_inx + 1) % 1 == 0):
+        yield [line]
 
 
 def F(x):
-    return x
+  return x
 
 
 class BatchReader(object):

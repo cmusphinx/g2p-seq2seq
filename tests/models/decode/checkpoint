@@ -1,2 +1,2 @@
-model_checkpoint_path: "model"
-all_model_checkpoint_paths: "model"
+model_checkpoint_path: "/home/nurtas/models/g2p/tf1/unittest/model.ckpt-0"
+all_model_checkpoint_paths: "/home/nurtas/models/g2p/tf1/unittest/model.ckpt-0"
