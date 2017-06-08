@@ -60,48 +60,29 @@ class SplitGraphemesPhonemesDecoder(data_decoder.DataDecoder):
                length_feature_name="source_len",
                prepend_token=None,
                append_token=None,
-               filename=None):
+               filename=None,
+               num_epochs=None):
     self.delimiter = delimiter
     self.feature_name = feature_name
     self.length_feature_name = length_feature_name
     self.prepend_token = prepend_token
     self.append_token = append_token
     self.filename = filename
+    self._num_epochs = num_epochs
 
   def decode(self, data, items, batch_reader):
     decoded_items = {}
 
-    #scope = None
-    #with ops.name_scope(scope, 'read'):
-    #  filename_queue = tf_input.string_input_producer(
-    #      [self.filename], num_epochs=1, shuffle=False, seed=None,
-    #      name='filenames')
-    #  dtypes = tf_dtypes.string#[tf_dtypes.string, tf_dtypes.string]
-    #  common_queue = data_flow_ops.FIFOQueue(
-    #      capacity=256, dtypes=dtypes, name='common_queue')#, shapes=[()])
-
-    #  enqueue_op = common_queue.enqueue(batch_reader.read2(filename_queue))
-    #  queue_runner.add_queue_runner(
-    #    queue_runner.QueueRunner(common_queue, [enqueue_op]))
-
-    #  data_line = common_queue.dequeue(name=None)
-    #  print('data_line: ', data_line)
-    #G = br.gen(data)
-    #dtypes = [tf_dtypes.string for _ in range(32)]
-    #shapes = [(50,) for _ in range(32)]
-    #I = br.read_batch_generator(G, dtypes, [(32,)], 32) #tf.float32,[(3,)],1)
-    #O = br.F(I)
-
     scope = None
     with ops.name_scope(scope, 'read'):
       filename_queue = tf_input.string_input_producer(
-          [self.filename], num_epochs=1, shuffle=False, seed=None,
+          [self.filename], num_epochs=2, shuffle=False, seed=None,
           name='filenames')
-      dtypes = [tf_dtypes.string]#[tf_dtypes.string, tf_dtypes.string]
-      G = br.gen(data)
-      I = br.read_batch_generator(filename_queue, G, dtypes, [()], 1) #tf.float32,[(3,)],1)
+      dtypes = [tf_dtypes.string]
+      G = br.gen(data, num_epochs=self._num_epochs)
+      I = br.read_batch_generator(filename_queue, G, dtypes, [()], 1)
       common_queue = data_flow_ops.FIFOQueue(
-          capacity=256, dtypes=dtypes, name='common_queue')#, shapes=[()])
+          capacity=256, dtypes=dtypes, name='common_queue')
 
       enqueue_op = common_queue.enqueue(I)
       queue_runner.add_queue_runner(
@@ -116,7 +97,6 @@ class SplitGraphemesPhonemesDecoder(data_decoder.DataDecoder):
 
     # Split lines with source and target sequences
     source_target_lines = tf.string_split(data_line, delimiter=self.delimiter)
-    #source_target_lines = tf.string_split(data_batch, delimiter=self.delimiter)
 
     if self.length_feature_name == "source_tokens":
       results = tf.slice(source_target_lines.values, [0], [1])

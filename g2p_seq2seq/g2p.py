@@ -196,7 +196,7 @@ class G2PModel(object):
     # Training data input pipeline
     train_input_pipeline = input_pipeline.make_input_pipeline_from_def(
         def_dict=self.params.input_pipeline,
-        mode=tf.contrib.learn.ModeKeys.TRAIN)
+        mode=tf.contrib.learn.ModeKeys.TRAIN, num_epochs=self.params.max_epochs)
 
     tf.logging.info('bucket boundaries: %s', self._BUCKET_BOUNDARIES)
 
@@ -248,6 +248,7 @@ class G2PModel(object):
     # Create metrics
     eval_metrics = {}
 
+    #Tracer()()
     for dict_ in self.params.metrics:
       metric = _create_from_dict(dict_, metric_specs)
       eval_metrics[metric.name] = metric
@@ -257,7 +258,7 @@ class G2PModel(object):
         train_input_fn=train_input_fn,
         eval_input_fn=eval_input_fn,
         min_eval_frequency=self.params.eval_every_n_steps,
-        train_steps=self.params.max_steps,
+        #train_steps=self.params.max_steps,
         eval_steps=None,
         eval_metrics=eval_metrics,
         train_monitors=train_hooks)

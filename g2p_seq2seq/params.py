@@ -38,18 +38,18 @@ params:
     else:
       # Set default parameters first. Then update the parameters that pointed out
       # in flags.
-      self.batch_size = 64
-      self.max_steps = 10000
+      self.batch_size = 16
+      self.max_epochs = 1
       self.eval_every_n_steps = 1000
       self.save_checkpoints_secs = None
-      self.save_checkpoints_steps = None
+      self.save_checkpoints_steps = 1
       self.hooks = """
 - class: PrintModelAnalysisHook
 - class: MetadataCaptureHook
 - class: SyncReplicasOptimizerHook
 - class: TrainSampleHook
   params:
-    every_n_steps: 500
+    every_n_steps: 430
 """
       self.model_params = """
   attention.class: seq2seq.decoders.attention.AttentionLayerDot
@@ -101,7 +101,7 @@ params:
       if flags:
         self.batch_size = flags.batch_size
         self.eval_every_n_steps = flags.eval_every_n_steps
-        self.max_steps = flags.max_steps
+        self.max_epochs = flags.max_epochs
         self.save_checkpoints_secs = flags.save_checkpoints_secs
         self.save_checkpoints_steps = flags.save_checkpoints_steps
         if flags.hooks:

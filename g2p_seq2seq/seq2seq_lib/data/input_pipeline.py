@@ -152,8 +152,15 @@ class DictionaryInputPipeline(InputPipeline):
       self.params["train_path"], self.params["valid_path"],
       self.params["test_path"])
 
-    #Tracer()()
-    data = train_dic if self.mode == 'train' else test_dic
+    #num_epochs = 1
+    if self.mode == 'train':
+      data = train_dic
+      #num_epochs = 2
+    elif self.mode == 'infer':
+      data = test_dic
+    else:
+      data = valid_dic
+
     filename = self.params["train_path"] if self.mode == 'train' else self.params["test_path"]
 
     decoder_source = split_graphemes_phonemes_decoder.SplitGraphemesPhonemesDecoder(
@@ -161,7 +168,8 @@ class DictionaryInputPipeline(InputPipeline):
         length_feature_name="source_len",
         append_token="SEQUENCE_END",
         delimiter=self.params["delimiter"],
-        filename=filename)
+        filename=filename,
+        num_epochs=self.params["num_epochs"])
 
     decoder_target = split_graphemes_phonemes_decoder.SplitGraphemesPhonemesDecoder(
         feature_name="target_tokens",
@@ -169,7 +177,8 @@ class DictionaryInputPipeline(InputPipeline):
         prepend_token="SEQUENCE_START",
         append_token="SEQUENCE_END",
         delimiter=self.params["delimiter"],
-        filename=filename)
+        filename=filename,
+        num_epochs=self.params["num_epochs"])
 
     br = batch_reader.BatchReader(data)
 

@@ -57,7 +57,7 @@ tf.flags.DEFINE_boolean("reinit", False,
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 64,
                         "Batch size to use during training.")
-tf.flags.DEFINE_integer("max_steps", 10000,
+tf.flags.DEFINE_integer("max_epochs", 10,
                         "How many training steps to do until stop training"
                         " (0: no limit).")
 tf.flags.DEFINE_integer("eval_every_n_steps", 1000,
