@@ -35,6 +35,13 @@ params:
           self.input_pipeline += flags.decode
       else:
           self.input_pipeline += "tests/data/toydict.test"
+          vocab_gr_path = os.path.abspath(os.path.join(model_dir,
+              "vocab.grapheme"))
+          vocab_ph_path = os.path.abspath(os.path.join(model_dir,
+              "vocab.phoneme"))
+          self.model_params = """
+  vocab_source: {}
+  vocab_target: {}""".format(vocab_gr_path, vocab_ph_path)
     else:
       # Set default parameters first. Then update the parameters that pointed out
       # in flags.

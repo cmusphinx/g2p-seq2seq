@@ -44,7 +44,7 @@ import yaml
 
 from seq2seq import tasks, models
 from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict, _create_from_dict
-from seq2seq_lib.data import input_pipeline
+from data import input_pipeline
 from seq2seq.inference import create_inference_graph
 from seq2seq.training import utils as training_utils
 
@@ -60,7 +60,7 @@ from tensorflow import gfile
 #from tensorflow_lib.experiment import Experiment
 #from tensorflow_lib.estimator import Estimator
 
-from IPython.core.debugger import Tracer
+#from IPython.core.debugger import Tracer
 
 class G2PModel(object):
   """Grapheme-to-Phoneme translation model class.
@@ -126,7 +126,7 @@ class G2PModel(object):
       task = task_cls(tdict["params"])
       self.hooks.append(task)
     # Create the graph used for inference
-    predictions, _, _ = create_inference_graph(
+    self.predictions, _, _ = create_inference_graph(
         model=model,
         input_pipeline=input_pipeline_infer,
         batch_size=self.params.batch_size)
@@ -138,16 +138,10 @@ class G2PModel(object):
       saver.restore(sess, checkpoint_path)
       tf.logging.info("Restored model from %s", checkpoint_path)
 
+    #graph = tf.get_default_graph()
+    #self.prediction = graph.get_operation_by_name()
     scaffold = tf.train.Scaffold(init_fn=session_init_op)
-    session_creator = tf.train.ChiefSessionCreator(scaffold=scaffold)
-    with tf.train.MonitoredSession(
-        session_creator=session_creator,
-        hooks=self.hooks) as sess:
-
-      # Run until the inputs are exhausted
-      while not sess.should_stop():
-        print('Sess Run')
-        sess.run([])
+    self.session_creator = tf.train.ChiefSessionCreator(scaffold=scaffold)
 
 
   def load_train_model(self, params):
@@ -248,7 +242,6 @@ class G2PModel(object):
     # Create metrics
     eval_metrics = {}
 
-    #Tracer()()
     for dict_ in self.params.metrics:
       metric = _create_from_dict(dict_, metric_specs)
       eval_metrics[metric.name] = metric
@@ -276,8 +269,18 @@ class G2PModel(object):
 
     print('Training done.')
 
-"""
+
   def decode(self):
+    with tf.train.MonitoredSession(
+        session_creator=self.session_creator,
+        hooks=self.hooks) as sess:
+
+      # Run until the inputs are exhausted
+      while not sess.should_stop():
+        #sess.run([])
+        pred = sess.run(self.predictions["predicted_tokens"])
+        yield pred
+"""
     saver = tf.train.Saver()
     checkpoint_path = tf.train.latest_checkpoint(self.model_dir)
 

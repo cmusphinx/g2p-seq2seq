@@ -41,7 +41,7 @@ from six import string_types
 #from seq2seq.inference import create_inference_graph
 #from seq2seq.training import utils as training_utils
 
-#from IPython.core.debugger import Tracer
+from IPython.core.debugger import Tracer
 
 tf.flags.DEFINE_string("model", None, "Training directory.")
 tf.flags.DEFINE_boolean("interactive", False,
@@ -119,9 +119,8 @@ def main(_=[]):
                             % (vocab_source_path, vocab_target_path))
       g2p_params = Params(FLAGS.model, decode_flag=True, flags=FLAGS)
       g2p_model.load_decode_model(g2p_params)
-      #if FLAGS.decode:
-        #Tracer()()
-      #  g2p_model.decode()
+      if FLAGS.decode:
+        g2p_model.decode()
         #decode_lines = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
         #output_file = None
       #  if FLAGS.output:
