@@ -23,7 +23,9 @@ import sys, os
 #sys.path.insert(1, './g2p_seq2seq')
 #sys.path.insert(1, './g2p_seq2seq/seq2seq')
 #sys.path.insert(1, './g2p_seq2seq/tensorflow_lib')
+sys.path.insert(1, "./g2p_seq2seq/seq2seq_lib")
 
 from g2p_seq2seq import g2p
 from g2p_seq2seq import data_utils
 from g2p_seq2seq import training_params
+from seq2seq_lib import data
