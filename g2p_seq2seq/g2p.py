@@ -60,7 +60,7 @@ from tensorflow import gfile
 #from tensorflow_lib.experiment import Experiment
 #from tensorflow_lib.estimator import Estimator
 
-#from IPython.core.debugger import Tracer
+from IPython.core.debugger import Tracer
 
 class G2PModel(object):
   """Grapheme-to-Phoneme translation model class.
@@ -270,32 +270,22 @@ class G2PModel(object):
     print('Training done.')
 
 
-  def decode(self):
+  def decode(self, output_file=None, return_output_list=False):
+    output_list = []
     with tf.train.MonitoredSession(
         session_creator=self.session_creator,
         hooks=self.hooks) as sess:
-
       # Run until the inputs are exhausted
       while not sess.should_stop():
         #sess.run([])
-        pred = sess.run(self.predictions["predicted_tokens"])
-        yield pred
-"""
-    saver = tf.train.Saver()
-    checkpoint_path = tf.train.latest_checkpoint(self.model_dir)
-
-    def session_init_op(_scaffold, sess):
-      saver.restore(sess, checkpoint_path)
-      tf.logging.info("Restored model from %s", checkpoint_path)
-
-    scaffold = tf.train.Scaffold(init_fn=session_init_op)
-    session_creator = tf.train.ChiefSessionCreator(scaffold=scaffold)
-    with tf.train.MonitoredSession(
-        session_creator=session_creator,
-        hooks=self.hooks) as sess:
-
-      # Run until the inputs are exhausted
-      while not sess.should_stop():
-        print('Sess Run')
-        sess.run([])
-"""
+        try:
+          pred = sess.run(self.predictions["predicted_tokens"])
+          if output_file:
+            phonemes = pred[0][:-1]
+            output_file.write(" ".join(phonemes).encode("utf-8") + "\n")
+          elif return_output_list:
+            output_list.append(" ".join(pred[0]).encode("utf-8"))
+        except:
+          break
+      if return_output_list:
+        return output_list

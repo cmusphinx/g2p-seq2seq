@@ -6,7 +6,7 @@ from g2p_seq2seq import data_utils
 from g2p_seq2seq import params
 import inspect, os
 
-#from IPython.core.debugger import Tracer
+from IPython.core.debugger import Tracer
 
 class TestG2P(unittest.TestCase):
 
@@ -40,10 +40,9 @@ class TestG2P(unittest.TestCase):
     g2p_params = params.Params(model_dir, decode_flag=True)
     #phoneme_lines = g2p_model.load_decode_model(g2p_params)
     g2p_model.load_decode_model(g2p_params)
-    decode_lines = open("tests/data/toydict.graphemes").readlines()
-    phoneme_lines = []
-    for pred in g2p_model.decode():
-        phoneme_lines.append(pred)
-    self.assertEqual(phoneme_lines[0][0][0], u'SEQUENCE_END')
-    self.assertEqual(phoneme_lines[1][0][0], u'SEQUENCE_END')
-    self.assertEqual(phoneme_lines[2][0][0], u'SEQUENCE_END')
+    #decode_lines = open("tests/data/toydict.graphemes").readlines()
+    Tracer()()
+    phoneme_lines = g2p_model.decode(return_output_list=True)
+    self.assertEqual(phoneme_lines[0], u'SEQUENCE_END')
+    self.assertEqual(phoneme_lines[1], u'SEQUENCE_END')
+    self.assertEqual(phoneme_lines[2], u'SEQUENCE_END')

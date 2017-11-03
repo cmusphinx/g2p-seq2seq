@@ -129,7 +129,10 @@ def main(_=[]):
       g2p_params = Params(FLAGS.model, decode_flag=True, flags=FLAGS)
       g2p_model.load_decode_model(g2p_params)
       if FLAGS.decode:
-        g2p_model.decode()
+        output_file = None
+        if FLAGS.output:
+          output_file = codecs.open(FLAGS.output, "w", "utf-8")
+        g2p_model.decode(output_file)
         #decode_lines = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
         #output_file = None
       #  if FLAGS.output:
