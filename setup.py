@@ -38,7 +38,7 @@ setup(
     ],
     keywords='g2p seq2seq rnnlm',
 
-    install_requires=['tensorflow>=1.0.0'],
+    install_requires=['tensorflow-gpu>=1.1.0', 'pyyaml>=3.0'],
 
     entry_points={
         'console_scripts': [
