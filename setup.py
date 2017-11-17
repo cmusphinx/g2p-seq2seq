@@ -42,7 +42,7 @@ setup(
 
     entry_points={
         'console_scripts': [
-            'g2p-seq2seq=g2p_seq2seq.app:main',
+            'g2p-seq2seq=g2p_seq2seq.main:main',
         ],
     },
     test_suite = 'tests'
