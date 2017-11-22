@@ -27,6 +27,7 @@ from __future__ import print_function
 import os
 import codecs
 import tensorflow as tf
+import six
 
 from tensor2tensor.data_generators import text_encoder
 from tensor2tensor.data_generators import translate
@@ -35,25 +36,11 @@ from tensor2tensor.utils import trainer_utils
 from tensor2tensor.utils import usr_dir
 from tensor2tensor.utils import decoding
 
-from g2p_seq2seq import data_utils
-from g2p_seq2seq.g2p_t2t import G2PModel
-from g2p_seq2seq.params import Params
-
 EOS = text_encoder.EOS_ID
-
-#import yaml
-#from six import string_types
-
-#from seq2seq import tasks, models
-#from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict
-#from seq2seq.data import input_pipeline
-#from seq2seq.inference import create_inference_graph
-#from seq2seq.training import utils as training_utils
 
 from IPython.core.debugger import Tracer
 
 tf.flags.DEFINE_string("model_dir", None, "Training directory.")
-tf.flags.DEFINE_string("t2t_usr_dir", "/home/nurtas/projects/g2p-seq2seq/g2p_seq2seq", "Data directory.")
 tf.flags.DEFINE_boolean("interactive", False,
                         "Set to True for interactive decoding.")
 tf.flags.DEFINE_string("evaluate", "", "Count word error rate for file.")
@@ -63,7 +50,7 @@ tf.flags.DEFINE_string("train", "", "Train dictionary.")
 tf.flags.DEFINE_string("valid", "", "Development dictionary.")
 tf.flags.DEFINE_string("test", "", "Test dictionary.")
 tf.flags.DEFINE_boolean("reinit", False,
-                            "Set to True for training from scratch.")
+                        "Set to True for training from scratch.")
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 64,
                         "Batch size to use during training.")
@@ -72,63 +59,206 @@ tf.flags.DEFINE_integer("max_epochs", 10,
                         " (0: no limit).")
 tf.flags.DEFINE_integer("eval_every_n_steps", 1000,
                         "Run evaluation on validation data every N steps.")
-tf.flags.DEFINE_string("hooks", "",
-                       """YAML configuration string for the
-                       training hooks to use.""")
-tf.flags.DEFINE_string("model_params", "",
-                       """YAML configuration string for the model
-                       parameters.""")
 tf.flags.DEFINE_string("master", "", "Address of TensorFlow master.")
 tf.flags.DEFINE_string("schedule", "train_and_evaluate", "Set schedule.")
-#tf.flags.DEFINE_string("metrics", "",
-#                       """YAML configuration string for the
-#                       training metrics to use.""")
-#tf.flags.DEFINE_string("input_pipeline", None,
-#                       """Defines how input data should be loaded.
-#                       A YAML string.""")
-# RunConfig Flags
-#tf.flags.DEFINE_integer("save_checkpoints_secs", None,
-#                        """Save checkpoints every this many seconds.
-#                        Can not be specified with save_checkpoints_steps.""")
-#tf.flags.DEFINE_integer("save_checkpoints_steps", None,
-#                        """Save checkpoints every this many steps.
-#                        Can not be specified with save_checkpoints_secs.""")
 
 FLAGS = tf.app.flags.FLAGS
 
 
-def tabbed_parsing_character_generator(data_dir, train):
+class GraphemePhonemeEncoder(text_encoder.TextEncoder):
+  """Encodes each grapheme or phoneme to an id. For 8-bit strings only."""
+
+  def __init__(self,
+               vocab_filepath=None,
+               vocab_list=None,
+               separator="",
+               num_reserved_ids=text_encoder.NUM_RESERVED_TOKENS):
+    """Initialize from a file or list, one token per line.
+
+    Handling of reserved tokens works as follows:
+    - When initializing from a list, we add reserved tokens to the vocab.
+    - When initializing from a file, we do not add reserved tokens to the vocab.
+    - When saving vocab files, we save reserved tokens to the file.
+
+    Args:
+      vocab_filename: If not None, the full filename to read vocab from. If this
+         is not None, then vocab_list should be None.
+      vocab_list: If not None, a list of elements of the vocabulary. If this is
+         not None, then vocab_filename should be None.
+      num_reserved_ids: Number of IDs to save for reserved tokens like <EOS>.
+    """
+    super(GraphemePhonemeEncoder, self).__init__(num_reserved_ids=num_reserved_ids)
+    if vocab_filepath and os.path.exists(vocab_filepath):
+      self._init_vocab_from_file(vocab_filepath)
+    else:
+      assert vocab_list is not None
+      self._init_vocab_from_list(vocab_list)
+    self._separator = separator
+
+  def encode(self, symbols_line):
+    if isinstance(symbols_line, unicode):
+      symbols_line = symbols_line.encode("utf-8")
+    if self._separator:
+      symbols_list = symbols_line.strip().split(self._separator)
+    else:
+      symbols_list = list(symbols_line.strip())
+    return [self._sym_to_id[sym] for sym in symbols_list]
+
+  def decode(self, ids):
+    return " ".join(self.decode_list(ids))
+
+  def decode_list(self, ids):
+    return [self._id_to_sym[id_] for id_ in ids]
+
+  @property
+  def vocab_size(self):
+    return len(self._id_to_sym)
+
+  def _init_vocab_from_file(self, filename):
+    """Load vocab from a file.
+
+    Args:
+      filename: The file to load vocabulary from.
+    """
+    def sym_gen():
+      with tf.gfile.Open(filename) as f:
+        for line in f:
+          sym = line.strip()
+          yield sym
+
+    self._init_vocab(sym_gen(), add_reserved_symbols=False)
+
+  def _init_vocab_from_list(self, vocab_list):
+    """Initialize symbols from a list of symbols.
+
+    It is ok if reserved symbols appear in the vocab list. They will be
+    removed. The set of symbols in vocab_list should be unique.
+
+    Args:
+      vocab_list: A list of symbols.
+    """
+    def sym_gen():
+      for sym in vocab_list:
+        if sym not in text_encoder.RESERVED_TOKENS:
+          yield sym
+
+    self._init_vocab(sym_gen())
+
+  def _init_vocab(self, sym_generator, add_reserved_symbols=True):
+    """Initialize vocabulary with sym from sym_generator."""
+
+    self._id_to_sym = {}
+    non_reserved_start_index = 0
+
+    if add_reserved_symbols:
+      self._id_to_sym.update(enumerate(text_encoder.RESERVED_TOKENS))
+      non_reserved_start_index = len(text_encoder.RESERVED_TOKENS)
+
+    self._id_to_sym.update(
+        enumerate(sym_generator, start=non_reserved_start_index))
+
+    # _sym_to_id is the reverse of _id_to_sym
+    self._sym_to_id = dict((v, k)
+      for k, v in six.iteritems(self._id_to_sym))
+
+  def store_to_file(self, filename):
+    """Write vocab file to disk.
+
+    Vocab files have one symbol per line. The file ends in a newline. Reserved
+    symbols are written to the vocab file as well.
+
+    Args:
+      filename: Full path of the file to store the vocab to.
+    """
+    with tf.gfile.Open(filename, "w") as f:
+      for i in xrange(len(self._id_to_sym)):
+        f.write(self._id_to_sym[i] + "\n")
+
+
+def tabbed_parsing_character_generator(data_dir, train, model_dir):
   """Generate source and target data from a single file."""
-  character_vocab = text_encoder.ByteTextEncoder()
+  #character_vocab = text_encoder.ByteTextEncoder()
   filename = "cmudict.dic.{0}".format("train" if train else "dev")
   pair_filepath = os.path.join(data_dir, filename)
-  return translate.tabbed_generator(pair_filepath, character_vocab,
-                                    character_vocab, EOS)
+  src_vocab_path = os.path.join(model_dir, "vocab.gr")
+  tgt_vocab_path = os.path.join(model_dir, "vocab.ph")
+  if os.path.exists(src_vocab_path) and os.path.exists(tgt_vocab_path):
+    source_vocab = GraphemePhonemeEncoder(src_vocab_path)
+    target_vocab = GraphemePhonemeEncoder(tgt_vocab_path, separator=" ")
+    return tabbed_generator(pair_filepath, source_vocab, target_vocab, EOS)
+  elif train:
+    graphemes, phonemes = {}, {}
+    data_filepath = os.path.join(data_dir, "cmudict.dic.train")
+    with tf.gfile.GFile(data_filepath, mode="r") as data_file:
+      for line in data_file:
+        line_split = line.strip().split("\t")
+        line_grs, line_phs = list(line_split[0]), line_split[1].split(" ")
+        graphemes = update_vocab_symbols(graphemes, line_grs)
+        phonemes = update_vocab_symbols(phonemes, line_phs)
+    graphemes, phonemes = sorted(graphemes.keys()), sorted(phonemes.keys())
+    source_vocab = GraphemePhonemeEncoder(vocab_filepath=src_vocab_path,
+      vocab_list=graphemes)
+    target_vocab = GraphemePhonemeEncoder(vocab_filepath=tgt_vocab_path,
+      vocab_list=phonemes, separator=" ")
+    source_vocab.store_to_file(src_vocab_path)
+    target_vocab.store_to_file(tgt_vocab_path)
+    return tabbed_generator(pair_filepath, source_vocab, target_vocab, EOS)
+  else:
+    raise IOError("Vocabulary files {} and {} not found.".format(src_vocab_path,
+      tgt_vocab_path))
+
+
+def update_vocab_symbols(init_vocab, update_syms):
+  updated_vocab = init_vocab
+  for sym in update_syms:
+    updated_vocab.update({sym : 1})
+  return updated_vocab
+
+
+def tabbed_generator(source_path, source_vocab, target_vocab, eos=None):
+  r"""Generator for sequence-to-sequence tasks using tabbed files.
+
+  Tokens are derived from text files where each line contains both
+  a source and a target string. The two strings are separated by a tab
+  character ('\t'). It yields dictionaries of "inputs" and "targets" where
+  inputs are characters from the source lines converted to integers, and
+  targets are characters from the target lines, also converted to integers.
+
+  Args:
+    source_path: path to the file with source and target sentences.
+    source_vocab: a SubwordTextEncoder to encode the source string.
+    target_vocab: a SubwordTextEncoder to encode the target string.
+    eos: integer to append at the end of each sequence (default: None).
+  Yields:
+    A dictionary {"inputs": source-line, "targets": target-line} where
+    the lines are integer lists converted from characters in the file lines.
+  """
+  eos_list = [] if eos is None else [eos]
+  with tf.gfile.GFile(source_path, mode="r") as source_file:
+    for line in source_file:
+      if line and "\t" in line:
+        parts = line.split("\t", 1)
+        source, target = parts[0].strip(), parts[1].strip()
+        source_ints = source_vocab.encode(source) + eos_list
+        target_ints = target_vocab.encode(target) + eos_list
+        yield {"inputs": source_ints, "targets": target_ints}
 
 
 @registry.register_problem
 class Translate_g2p_cmu_pronalsyl(translate.TranslateProblem):
   """Problem spec for cmudict PRONALSYL Grapheme-to-Phoneme translation."""
 
-  @property
-  def targeted_vocab_size(self):
-    return 39
-
-  @property
-  def vocab_name(self):
-    return "vocab.grph"
-
-  def generator(self, data_dir, tmp_dir, train):
+  def generator(self, data_dir, model_dir, train):
     tag = True if train else False
-    return tabbed_parsing_character_generator(data_dir, tag)
+    return tabbed_parsing_character_generator(data_dir, tag, model_dir)
 
   @property
   def input_space_id(self):
-    return 0#problem.SpaceID.EN_TOK
+    return 0
 
   @property
   def target_space_id(self):
-    return 0#problem.SpaceID.DE_TOK
+    return 0
 
   @property
   def num_shards(self):
@@ -147,54 +277,53 @@ def main(_=[]):
   """Main function.
   """
 
-  #if FLAGS.save_checkpoints_secs is None \
-  #  and FLAGS.save_checkpoints_steps is None:
-  #  FLAGS.save_checkpoints_secs = 600
-  #  tf.logging.info("Setting save_checkpoints_secs to %d",
-  #                  FLAGS.save_checkpoints_secs)
   FLAGS.hparams_set = "transformer_small"
   FLAGS.schedule = "train_and_evaluate"
   FLAGS.problems = "translate_g2p_cmu_pronalsyl"
   FLAGS.decode_hparams = "beam_size=4,alpha=0.6"
   FLAGS.decode_to_file = "decode_output.txt"
 
+  usr_dir.import_usr_dir(os.path.dirname(os.path.abspath(__file__)))
   problem = registry.problem("translate_g2p_cmu_pronalsyl")
-  #problem = Translate_g2p_cmu_pronalsyl()
-  #task_id = None if FLAGS.task_id < 0 else FLAGS.task_id
-  #Tracer()()
-  problem.generate_data(os.path.expanduser(FLAGS.model_dir), None,
-    task_id=None)#task_id)
-  usr_dir.import_usr_dir(FLAGS.t2t_usr_dir)
+  #problem.generate_data(os.path.expanduser(FLAGS.model_dir), None, task_id=None)
   trainer_utils.log_registry()
-  #trainer_utils.validate_flags()
   output_dir = os.path.expanduser(FLAGS.model_dir)
-  data_dir = os.path.expanduser(FLAGS.train)
+  if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+  #data_dir = os.path.expanduser(FLAGS.train)
 
   if FLAGS.train:
+    problem.generate_data(os.path.dirname(os.path.expanduser(FLAGS.train)),
+      output_dir, task_id=None)
+    data_dir = os.path.expanduser(FLAGS.train)
     trainer_utils.run(
       data_dir=data_dir,
-      model="transformer",#FLAGS.model_dir,
+      model="transformer",
       output_dir=output_dir,
       train_steps=10000,
       eval_steps=10,
-      schedule=FLAGS.schedule)#"train_and_evaluate")
+      schedule=FLAGS.schedule)
 
   else:
+    problem.generate_data(os.path.dirname(os.path.expanduser(FLAGS.decode)), 
+      output_dir, task_id=None)
+    data_dir = os.path.expanduser(FLAGS.decode)
     hparams = trainer_utils.create_hparams(
       FLAGS.hparams_set, data_dir, passed_hparams=FLAGS.hparams)
     trainer_utils.add_problem_hparams(hparams, FLAGS.problems)
     estimator, _ = trainer_utils.create_experiment_components(
       data_dir=data_dir,
-      model_name="transformer",#FLAGS.model,
+      model_name="transformer",
       hparams=hparams,
       run_config=trainer_utils.create_run_config(output_dir))
 
     decode_hp = decoding.decode_hparams(FLAGS.decode_hparams)
-    decode_hp.add_hparam("shards", 1)#FLAGS.decode_shards)
+    decode_hp.add_hparam("shards", 1)
     decode_hp.add_hparam("shard_id", FLAGS.worker_id)
-    if FLAGS.interactive:#decode_interactive:
+    if FLAGS.interactive:
       decoding.decode_interactively(estimator, decode_hp)
-    elif FLAGS.decode:#decode_from_file:
+    elif FLAGS.decode:
+      Tracer()()
       decoding.decode_from_file(estimator, FLAGS.decode, decode_hp,
                                 FLAGS.decode_to_file)
     #else:
@@ -204,31 +333,6 @@ def main(_=[]):
     #    decode_hp,
     #    decode_to_file=FLAGS.decode_to_file,
     #    dataset_split="test" if FLAGS.eval_use_test_set else None)
-
-  #with tf.Graph().as_default():
-  #  if not FLAGS.model:
-  #    raise RuntimeError("Model directory not specified.")
-  #  g2p_model = G2PModel(FLAGS.model)
-  #  if FLAGS.train:
-  #    data_utils.create_vocabulary(FLAGS.train, FLAGS.model)
-  #    g2p_params = Params(FLAGS.model, decode_flag=False, flags=FLAGS)
-  #    g2p_model.load_train_model(g2p_params)
-  #    g2p_model.train()
-  #  else:
-  #    vocab_source_path, vocab_target_path =\
-  #      os.path.join(FLAGS.model, "vocab.grapheme"),\
-  #      os.path.join(FLAGS.model, "vocab.phoneme")
-  #    if not (os.path.exists(vocab_source_path)
-  #            and os.path.exists(vocab_target_path)):
-  #      raise StandardError("Vocabularies: %s, %s not found."
-  #                          % (vocab_source_path, vocab_target_path))
-  #    g2p_params = Params(FLAGS.model, decode_flag=True, flags=FLAGS)
-  #    g2p_model.load_decode_model(g2p_params)
-  #    if FLAGS.decode:
-  #      output_file = None
-  #      if FLAGS.output:
-  #        output_file = codecs.open(FLAGS.output, "w", "utf-8")
-  #      g2p_model.decode(output_file)
 
 if __name__ == "__main__":
   tf.logging.set_verbosity(tf.logging.INFO)
