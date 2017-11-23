@@ -29,8 +29,10 @@ import codecs
 import tensorflow as tf
 import six
 
+from . import g2p_trainer_utils
 from tensor2tensor.data_generators import text_encoder
 from tensor2tensor.data_generators import translate
+from tensor2tensor.data_generators import problem
 from tensor2tensor.utils import registry
 from tensor2tensor.utils import trainer_utils
 from tensor2tensor.utils import usr_dir
@@ -245,8 +247,25 @@ def tabbed_generator(source_path, source_vocab, target_vocab, eos=None):
 
 
 @registry.register_problem
-class Translate_g2p_cmu_pronalsyl(translate.TranslateProblem):
+class Translate_g2p_cmu_pronalsyl(problem.Text2TextProblem):#translate.TranslateProblem):
   """Problem spec for cmudict PRONALSYL Grapheme-to-Phoneme translation."""
+
+  def __init__(self, model_dir):#, was_reversed, was_copy):
+    """Create a Problem.
+
+    Args:
+      was_reversed: bool, whether to reverse inputs and targets.
+      was_copy: bool, whether to copy inputs to targets. Can be composed with
+        was_reversed so that if both are true, the targets become the inputs,
+        which are then copied to targets so that the task is targets->targets.
+    """
+    super(Translate_g2p_cmu_pronalsyl, self).__init__()
+    #self._was_reversed = was_reversed
+    #self._was_copy = was_copy
+    self._encoders = None
+    self._hparams = None
+    self._feature_info = None
+    self._model_dir = model_dir#"/home/nurtas/models/g2p/cmudict-test2"
 
   def generator(self, data_dir, model_dir, train):
     tag = True if train else False
@@ -270,7 +289,21 @@ class Translate_g2p_cmu_pronalsyl(translate.TranslateProblem):
 
   @property
   def is_character_level(self):
-    return True
+    return False
+
+  def get_feature_encoders(self, data_dir=None):
+    if self._encoders is None:
+      self._encoders = self.feature_encoders(self._model_dir)
+    return self._encoders
+
+  def feature_encoders(self, model_dir):
+    tgt_vocab_path = os.path.join(model_dir, "vocab.ph")
+    targets_encoder = GraphemePhonemeEncoder(tgt_vocab_path, separator=" ")
+    if self.has_inputs:
+      src_vocab_path = os.path.join(model_dir, "vocab.gr")
+      inputs_encoder = GraphemePhonemeEncoder(src_vocab_path)
+      return {"inputs": inputs_encoder, "targets": targets_encoder}
+    return {"targets": targets_encoder}
 
 
 def main(_=[]):
@@ -282,9 +315,13 @@ def main(_=[]):
   FLAGS.problems = "translate_g2p_cmu_pronalsyl"
   FLAGS.decode_hparams = "beam_size=4,alpha=0.6"
   FLAGS.decode_to_file = "decode_output.txt"
+  problem_name = "translate_g2p_cmu_pronalsyl"
+  model_dir = "/home/nurtas/models/g2p/cmudict-test2"
 
+  tf.logging.set_verbosity(tf.logging.INFO)
   usr_dir.import_usr_dir(os.path.dirname(os.path.abspath(__file__)))
-  problem = registry.problem("translate_g2p_cmu_pronalsyl")
+  problem = registry._PROBLEMS[problem_name](model_dir)#problem("translate_g2p_cmu_pronalsyl")
+  #problem = reg_problem("translate_g2p_cmu_pronalsyl")
   #problem.generate_data(os.path.expanduser(FLAGS.model_dir), None, task_id=None)
   trainer_utils.log_registry()
   output_dir = os.path.expanduser(FLAGS.model_dir)
@@ -310,12 +347,16 @@ def main(_=[]):
     data_dir = os.path.expanduser(FLAGS.decode)
     hparams = trainer_utils.create_hparams(
       FLAGS.hparams_set, data_dir, passed_hparams=FLAGS.hparams)
-    trainer_utils.add_problem_hparams(hparams, FLAGS.problems)
-    estimator, _ = trainer_utils.create_experiment_components(
+    #trainer_utils.add_problem_hparams(hparams, FLAGS.problems)
+    g2p_trainer_utils.add_problem_hparams(hparams, problem_name, model_dir)#FLAGS.problems)
+    estimator, _ = g2p_trainer_utils.create_experiment_components(
+#trainer_utils.create_experiment_components(
+      problem_name=problem_name,
       data_dir=data_dir,
       model_name="transformer",
       hparams=hparams,
-      run_config=trainer_utils.create_run_config(output_dir))
+      run_config=trainer_utils.create_run_config(output_dir),
+      model_dir=model_dir)
 
     decode_hp = decoding.decode_hparams(FLAGS.decode_hparams)
     decode_hp.add_hparam("shards", 1)
@@ -323,7 +364,6 @@ def main(_=[]):
     if FLAGS.interactive:
       decoding.decode_interactively(estimator, decode_hp)
     elif FLAGS.decode:
-      Tracer()()
       decoding.decode_from_file(estimator, FLAGS.decode, decode_hp,
                                 FLAGS.decode_to_file)
     #else:
