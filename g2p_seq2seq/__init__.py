@@ -21,3 +21,7 @@ from __future__ import print_function
 
 import sys, os
 sys.path.insert(1, "./g2p_seq2seq")
+from g2p_seq2seq import main
+from g2p_seq2seq import g2p_trainer_utils
+from g2p_seq2seq import g2p_problem
+from g2p_seq2seq import g2p_encoder
