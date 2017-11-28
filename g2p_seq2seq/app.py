@@ -27,23 +27,19 @@ from __future__ import print_function
 import os
 import codecs
 import tensorflow as tf
+import six
 
-from g2p_seq2seq import data_utils
-from g2p_seq2seq.g2p import G2PModel
+from . import g2p_trainer_utils
 from g2p_seq2seq.params import Params
-
-import yaml
-from six import string_types
-
-#from seq2seq import tasks, models
-#from seq2seq.configurable import _maybe_load_yaml, _deep_merge_dict
-#from seq2seq.data import input_pipeline
-#from seq2seq.inference import create_inference_graph
-#from seq2seq.training import utils as training_utils
+from tensor2tensor.data_generators import problem
+from tensor2tensor.utils import registry
+from tensor2tensor.utils import trainer_utils
+from tensor2tensor.utils import usr_dir
+from tensor2tensor.utils import decoding
 
 from IPython.core.debugger import Tracer
 
-tf.flags.DEFINE_string("model", None, "Training directory.")
+tf.flags.DEFINE_string("model_dir", None, "Training directory.")
 tf.flags.DEFINE_boolean("interactive", False,
                         "Set to True for interactive decoding.")
 tf.flags.DEFINE_string("evaluate", "", "Count word error rate for file.")
@@ -53,96 +49,69 @@ tf.flags.DEFINE_string("train", "", "Train dictionary.")
 tf.flags.DEFINE_string("valid", "", "Development dictionary.")
 tf.flags.DEFINE_string("test", "", "Test dictionary.")
 tf.flags.DEFINE_boolean("reinit", False,
-                            "Set to True for training from scratch.")
+                        "Set to True for training from scratch.")
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 64,
                         "Batch size to use during training.")
 tf.flags.DEFINE_integer("max_epochs", 10,
                         "How many training steps to do until stop training"
                         " (0: no limit).")
-tf.flags.DEFINE_integer("eval_every_n_steps", 1000,
+tf.flags.DEFINE_integer("eval_steps", 10,
                         "Run evaluation on validation data every N steps.")
-tf.flags.DEFINE_string("hooks", "",
-                       """YAML configuration string for the
-                       training hooks to use.""")
-tf.flags.DEFINE_string("model_params", "",
-                       """YAML configuration string for the model
-                       parameters.""")
-tf.flags.DEFINE_string("metrics", "",
-                       """YAML configuration string for the
-                       training metrics to use.""")
-tf.flags.DEFINE_string("input_pipeline", None,
-                       """Defines how input data should be loaded.
-                       A YAML string.""")
-# RunConfig Flags
-tf.flags.DEFINE_integer("save_checkpoints_secs", None,
-                        """Save checkpoints every this many seconds.
-                        Can not be specified with save_checkpoints_steps.""")
-tf.flags.DEFINE_integer("save_checkpoints_steps", None,
-                        """Save checkpoints every this many steps.
-                        Can not be specified with save_checkpoints_secs.""")
+tf.flags.DEFINE_string("schedule", "train_and_evaluate", "Set schedule.")
+tf.flags.DEFINE_string("master", "", "Address of TensorFlow master.")
 
 FLAGS = tf.app.flags.FLAGS
 
-# Below lines are added for supporting Tensorflow 1.5
-#setattr(tf.contrib.rnn.GRUCell, '__deepcopy__', lambda self, _: self)
-#setattr(tf.contrib.rnn.BasicLSTMCell, '__deepcopy__', lambda self, _: self)
-#setattr(tf.contrib.rnn.MultiRNNCell, '__deepcopy__', lambda self, _: self)
 
 def main(_=[]):
   """Main function.
   """
 
-  if FLAGS.save_checkpoints_secs is None \
-    and FLAGS.save_checkpoints_steps is None:
-    FLAGS.save_checkpoints_secs = 600
-    tf.logging.info("Setting save_checkpoints_secs to %d",
-                    FLAGS.save_checkpoints_secs)
+  tf.logging.set_verbosity(tf.logging.INFO)
+  usr_dir.import_usr_dir(os.path.dirname(os.path.abspath(__file__)))
+  data_path = FLAGS.train if FLAGS.train else FLAGS.decode
+  params = Params(FLAGS.model_dir, data_path, flags=FLAGS)
+  problem = registry._PROBLEMS[params.problem_name](params.model_dir)
+  trainer_utils.log_registry()
+  if not os.path.exists(params.model_dir):
+    os.makedirs(params.model_dir)
 
-  with tf.Graph().as_default():
-    if not FLAGS.model:
-      raise RuntimeError("Model directory not specified.")
-    #if not FLAGS.mode:
-    #  mode = 'g2p'
+  if FLAGS.train:
+    train_preprocess_file_path = problem.generate_data(FLAGS.train,
+      params.model_dir, train_flag=True)
+    dev_preprocess_file_path = problem.generate_data(FLAGS.valid,
+      params.model_dir, train_flag=False)
+    g2p_trainer_utils.run(params=params,
+      train_preprocess_file_path=train_preprocess_file_path,
+      dev_preprocess_file_path=dev_preprocess_file_path)
+
+  else:
+    test_preprocess_file_path = problem.generate_data(FLAGS.decode,
+      params.model_dir, train_flag=False)
+    hparams = trainer_utils.create_hparams(params.hparams_set, params.data_dir)
+    g2p_trainer_utils.add_problem_hparams(hparams, params.problem_name,
+      params.model_dir)
+    estimator, _ = g2p_trainer_utils.create_experiment_components(
+      params=params,
+      hparams=hparams,
+      run_config=trainer_utils.create_run_config(params.model_dir),
+      dev_preprocess_file_path=test_preprocess_file_path)
+
+    decode_hp = decoding.decode_hparams(params.decode_hparams)
+    decode_hp.add_hparam("shards", 1)
+    if FLAGS.interactive:
+      decoding.decode_interactively(estimator, decode_hp)
+    elif FLAGS.decode:
+      decoding.decode_from_file(estimator, FLAGS.decode, decode_hp,
+                                FLAGS.output)
     #else:
-    #  mode = FLAGS.mode
-    g2p_model = G2PModel(FLAGS.model)#, mode)
-    if FLAGS.train:
-      data_utils.create_vocabulary(FLAGS.train, FLAGS.model)
-      g2p_params = Params(FLAGS.model, decode_flag=False, flags=FLAGS)
-      g2p_model.load_train_model(g2p_params)
-      #if (not os.path.exists(os.path.join(FLAGS.model,
-      #                                    "model.data-00000-of-00001"))
-      #    or FLAGS.reinit):
-      #  g2p_model.create_train_model(g2p_params)
-      #else:
-      #  g2p_model.load_train_model(g2p_params)
-      g2p_model.train()
-    else:
-      vocab_source_path, vocab_target_path =\
-        os.path.join(FLAGS.model, "vocab.grapheme"),\
-        os.path.join(FLAGS.model, "vocab.phoneme")
-      if not (os.path.exists(vocab_source_path)
-              and os.path.exists(vocab_target_path)):
-        raise StandardError("Vocabularies: %s, %s not found."
-                            % (vocab_source_path, vocab_target_path))
-      g2p_params = Params(FLAGS.model, decode_flag=True, flags=FLAGS)
-      g2p_model.load_decode_model(g2p_params)
-      if FLAGS.decode:
-        output_file = None
-        if FLAGS.output:
-          output_file = codecs.open(FLAGS.output, "w", "utf-8")
-        g2p_model.decode(output_file)
-        #decode_lines = codecs.open(FLAGS.decode, "r", "utf-8").readlines()
-        #output_file = None
-      #  if FLAGS.output:
-      #    output_file = codecs.open(FLAGS.output, "w", "utf-8")
-        #g2p_model.decode(decode_lines, output_file)
-      #elif FLAGS.interactive:
-      #  g2p_model.interactive()
-      #elif FLAGS.evaluate:
-      #  test_lines = codecs.open(FLAGS.evaluate, "r", "utf-8").readlines()
-      #  g2p_model.evaluate(test_lines)
+    #  decoding.decode_from_dataset(
+    #    estimator,
+    #    FLAGS.problems.split("-"),
+    #    decode_hp,
+    #    decode_to_file=FLAGS.decode_to_file,
+    #    dataset_split="test" if FLAGS.eval_use_test_set else None)
 
 if __name__ == "__main__":
   tf.logging.set_verbosity(tf.logging.INFO)

@@ -45,15 +45,14 @@ def add_problem_hparams(hparams, problem_name, model_dir):
   hparams.problems.append(p_hparams)
 
 
-def create_experiment_components(problem_name, data_dir, model_name, hparams,
-                                 run_config, model_dir,
+def create_experiment_components(params, hparams, run_config,
                                  train_preprocess_file_path=None,
                                  dev_preprocess_file_path=None):
   """Constructs and returns Estimator and train/eval input functions."""
   tf.logging.info("Creating experiment, storing model files in %s",
                   run_config.model_dir)
 
-  add_problem_hparams(hparams, problem_name, model_dir)
+  add_problem_hparams(hparams, params.problem_name, params.model_dir)
 
   # hparams batch_size is used as minibatch size instead of tokens in batch
   batch_size = (hparams.use_fixed_batch_size and hparams.batch_size) or None
@@ -61,7 +60,7 @@ def create_experiment_components(problem_name, data_dir, model_name, hparams,
   train_input_fn = input_fn_builder.build_input_fn(
       mode=tf.estimator.ModeKeys.TRAIN,
       hparams=hparams,
-      data_dir=data_dir,
+      data_dir=params.data_dir,
       num_datashards=num_datashards,
       worker_replicas=FLAGS.worker_replicas,
       worker_id=FLAGS.worker_id,
@@ -71,20 +70,20 @@ def create_experiment_components(problem_name, data_dir, model_name, hparams,
   eval_input_fn = input_fn_builder.build_input_fn(
       mode=tf.estimator.ModeKeys.EVAL,
       hparams=hparams,
-      data_dir=data_dir,
+      data_dir=params.data_dir,
       num_datashards=num_datashards,
       worker_replicas=FLAGS.worker_replicas,
       worker_id=FLAGS.worker_id,
       dataset_split=dev_preprocess_file_path)
 
   model_fn = model_builder.build_model_fn(
-      model_name,
-      problem_names=FLAGS.problems.split("-"),
-      train_steps=FLAGS.train_steps,
+      params.model_name,
+      problem_names=[params.problem_name],
+      train_steps=params.train_steps,
       worker_id=FLAGS.worker_id,
       worker_replicas=FLAGS.worker_replicas,
       eval_run_autoregressive=FLAGS.eval_run_autoregressive,
-      decode_hparams=decoding.decode_hparams(FLAGS.decode_hparams))
+      decode_hparams=decoding.decode_hparams(params.decode_hparams))
 
   estimator = tf.estimator.Estimator(
       model_fn=model_fn,
@@ -98,40 +97,25 @@ def create_experiment_components(problem_name, data_dir, model_name, hparams,
   }
 
 
-def make_experiment_fn(problem_name, model_dir, data_dir, model_name,
-                       train_steps, eval_steps, train_preprocess_file_path,
+def make_experiment_fn(params, train_preprocess_file_path,
                        dev_preprocess_file_path):
   """Returns experiment_fn for learn_runner. Wraps create_experiment."""
 
   def experiment_fn(run_config, hparams):
-    return create_experiment(
-        problem_name,
-        model_dir,
-        data_dir,
-        model_name=model_name,
-        train_steps=train_steps,
-        eval_steps=eval_steps,
-        hparams=hparams,
-        run_config=run_config,
-        train_preprocess_file_path=train_preprocess_file_path,
-        dev_preprocess_file_path=dev_preprocess_file_path)
+    return create_experiment(params, hparams=hparams, run_config=run_config,
+      train_preprocess_file_path=train_preprocess_file_path,
+      dev_preprocess_file_path=dev_preprocess_file_path)
 
   return experiment_fn
 
 
-def create_experiment(problem_name, model_dir, data_dir, model_name,
-                      train_steps, eval_steps, hparams, run_config,
-                      train_preprocess_file_path, dev_preprocess_file_path):
+def create_experiment(params, hparams, run_config, train_preprocess_file_path,
+                      dev_preprocess_file_path):
   """Create Experiment."""
-  estimator, input_fns = create_experiment_components(
-      problem_name=problem_name,
-      data_dir=data_dir,
-      model_name=model_name,
-      hparams=hparams,
-      run_config=run_config,
-      model_dir=model_dir,
-      train_preprocess_file_path=train_preprocess_file_path,
-      dev_preprocess_file_path=dev_preprocess_file_path)
+  estimator, input_fns = create_experiment_components(params=params,
+    hparams=hparams, run_config=run_config,
+    train_preprocess_file_path=train_preprocess_file_path,
+    dev_preprocess_file_path=dev_preprocess_file_path)
 
   train_monitors = []
   eval_hooks = []
@@ -149,12 +133,12 @@ def create_experiment(problem_name, model_dir, data_dir, model_name,
             show_dataflow=True,
             show_memory=True,
         ))
-  if FLAGS.schedule == "train_and_evaluate":
+  if params.schedule == "train_and_evaluate":
     if FLAGS.local_eval_frequency:
       train_monitors.append(
           tf.contrib.learn.monitors.ValidationMonitor(
               input_fn=input_fns[tf.estimator.ModeKeys.EVAL],
-              eval_steps=eval_steps,
+              eval_steps=params.eval_steps,
               every_n_steps=FLAGS.local_eval_frequency,
               hooks=eval_hooks,
               early_stopping_rounds=FLAGS.eval_early_stopping_steps,
@@ -174,46 +158,39 @@ def create_experiment(problem_name, model_dir, data_dir, model_name,
       estimator=estimator,
       train_input_fn=input_fns[tf.estimator.ModeKeys.TRAIN],
       eval_input_fn=input_fns[tf.estimator.ModeKeys.EVAL],
-      train_steps=train_steps,
-      eval_steps=eval_steps,
+      train_steps=params.train_steps,
+      eval_steps=params.eval_steps,
       train_monitors=train_monitors,
       eval_hooks=eval_hooks,
       eval_delay_secs=0,
       **optional_kwargs)
 
 
-def run(problem_name, model_dir, data_dir, model, output_dir, train_steps, eval_steps, schedule, train_preprocess_file_path, dev_preprocess_file_path):
+def run(params, train_preprocess_file_path, dev_preprocess_file_path):
   """Runs an Estimator locally or distributed.
 
   Args:
     data_dir: The directory the data can be found in.
-    model: The name of the model to use.
+    model_name: The name of the model to use.
     output_dir: The directory to store outputs in.
     train_steps: The number of steps to run training for.
     eval_steps: The number of steps to run evaluation for.
     schedule: (str) The schedule to run. The value here must
       be the name of one of Experiment's methods.
   """
-  exp_fn = make_experiment_fn(
-      problem_name,
-      model_dir,
-      data_dir=data_dir,
-      model_name=model,
-      train_steps=train_steps,
-      eval_steps=eval_steps,
-      train_preprocess_file_path=train_preprocess_file_path,
-      dev_preprocess_file_path=dev_preprocess_file_path)
+  exp_fn = make_experiment_fn(params,
+    train_preprocess_file_path=train_preprocess_file_path,
+    dev_preprocess_file_path=dev_preprocess_file_path)
 
   # Create hparams and run_config
-  run_config = trainer_utils.create_run_config(output_dir)
-  hparams = trainer_utils.create_hparams(
-    FLAGS.hparams_set, data_dir, passed_hparams=FLAGS.hparams)
+  run_config = trainer_utils.create_run_config(params.model_dir)
+  hparams = trainer_utils.create_hparams(params.hparams_set, params.data_dir)
 
   if trainer_utils.is_chief():
-    trainer_utils.save_metadata(output_dir, hparams)
+    trainer_utils.save_metadata(params.model_dir, hparams)
 
   learn_runner.run(
       experiment_fn=exp_fn,
-      schedule=schedule,
+      schedule=params.schedule,
       run_config=run_config,
       hparams=hparams)

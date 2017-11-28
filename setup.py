@@ -36,13 +36,13 @@ setup(
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
     ],
-    keywords='g2p seq2seq rnnlm',
+    keywords='g2p seq2seq tensor2tensor rnnlm',
 
-    install_requires=['tensorflow-gpu>=1.1.0', 'pyyaml>=3.0'],
+    install_requires=['tensorflow-gpu>=1.1.0', 'tensor2tensor>=1.2.0'],
 
     entry_points={
         'console_scripts': [
-            'g2p-seq2seq=g2p_seq2seq.main:main',
+            'g2p-seq2seq=g2p_seq2seq.app:main',
         ],
     },
     test_suite = 'tests'
