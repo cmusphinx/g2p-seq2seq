@@ -35,7 +35,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
   """Encodes each grapheme or phoneme to an id. For 8-bit strings only."""
 
   def __init__(self,
-               vocab_filepath=None,
+               vocab_path=None,
                vocab_list=None,
                separator="",
                num_reserved_ids=text_encoder.NUM_RESERVED_TOKENS):
@@ -51,11 +51,12 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
          is not None, then vocab_list should be None.
       vocab_list: If not None, a list of elements of the vocabulary. If this is
          not None, then vocab_filename should be None.
+      separator: separator between symbols in original file.
       num_reserved_ids: Number of IDs to save for reserved tokens like <EOS>.
     """
     super(GraphemePhonemeEncoder, self).__init__(num_reserved_ids=num_reserved_ids)
-    if vocab_filepath and os.path.exists(vocab_filepath):
-      self._init_vocab_from_file(vocab_filepath)
+    if vocab_path and os.path.exists(vocab_path):
+      self._init_vocab_from_file(vocab_path)
     else:
       assert vocab_list is not None
       self._init_vocab_from_list(vocab_list)
@@ -141,37 +142,16 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
         f.write(self._id_to_sym[i] + "\n")
 
 
-def tabbed_parsing_character_generator(data_dir, train, model_dir):
-  """Generate source and target data from a single file."""
-  #character_vocab = text_encoder.ByteTextEncoder()
-  filename = "cmudict.dic.{0}".format("train" if train else "dev")
-  pair_filepath = os.path.join(data_dir, filename)
-  src_vocab_path = os.path.join(model_dir, "vocab.gr")
-  tgt_vocab_path = os.path.join(model_dir, "vocab.ph")
-  if os.path.exists(src_vocab_path) and os.path.exists(tgt_vocab_path):
-    source_vocab = GraphemePhonemeEncoder(src_vocab_path)
-    target_vocab = GraphemePhonemeEncoder(tgt_vocab_path, separator=" ")
-    return tabbed_generator(pair_filepath, source_vocab, target_vocab, EOS)
-  elif train:
-    graphemes, phonemes = {}, {}
-    data_filepath = os.path.join(data_dir, "cmudict.dic.train")
-    with tf.gfile.GFile(data_filepath, mode="r") as data_file:
-      for line in data_file:
-        line_split = line.strip().split("\t")
-        line_grs, line_phs = list(line_split[0]), line_split[1].split(" ")
-        graphemes = update_vocab_symbols(graphemes, line_grs)
-        phonemes = update_vocab_symbols(phonemes, line_phs)
-    graphemes, phonemes = sorted(graphemes.keys()), sorted(phonemes.keys())
-    source_vocab = GraphemePhonemeEncoder(vocab_filepath=src_vocab_path,
-      vocab_list=graphemes)
-    target_vocab = GraphemePhonemeEncoder(vocab_filepath=tgt_vocab_path,
-      vocab_list=phonemes, separator=" ")
-    source_vocab.store_to_file(src_vocab_path)
-    target_vocab.store_to_file(tgt_vocab_path)
-    return tabbed_generator(pair_filepath, source_vocab, target_vocab, EOS)
-  else:
-    raise IOError("Vocabulary files {} and {} not found.".format(src_vocab_path,
-      tgt_vocab_path))
+def split_grapheme_phoneme(data_path):
+  graphemes, phonemes = {}, {}
+  with tf.gfile.GFile(data_path, mode="r") as data_file:
+    for line in data_file:
+      line_split = line.strip().split("\t")
+      line_grs, line_phs = list(line_split[0]), line_split[1].split(" ")
+      graphemes = update_vocab_symbols(graphemes, line_grs)
+      phonemes = update_vocab_symbols(phonemes, line_phs)
+  graphemes, phonemes = sorted(graphemes.keys()), sorted(phonemes.keys())
+  return graphemes, phonemes
 
 
 def update_vocab_symbols(init_vocab, update_syms):
@@ -181,31 +161,29 @@ def update_vocab_symbols(init_vocab, update_syms):
   return updated_vocab
 
 
-def tabbed_generator(source_path, source_vocab, target_vocab, eos=None):
-  r"""Generator for sequence-to-sequence tasks using tabbed files.
+def create_vocabulary(vocab_path, vocab_list, separator=""):
+  vocab = GraphemePhonemeEncoder(vocab_path=vocab_path,
+    vocab_list=vocab_list, separator=separator)
+  vocab.store_to_file(vocab_path)
+  return vocab
 
-  Tokens are derived from text files where each line contains both
-  a source and a target string. The two strings are separated by a tab
-  character ('\t'). It yields dictionaries of "inputs" and "targets" where
-  inputs are characters from the source lines converted to integers, and
-  targets are characters from the target lines, also converted to integers.
 
-  Args:
-    source_path: path to the file with source and target sentences.
-    source_vocab: a SubwordTextEncoder to encode the source string.
-    target_vocab: a SubwordTextEncoder to encode the target string.
-    eos: integer to append at the end of each sequence (default: None).
-  Yields:
-    A dictionary {"inputs": source-line, "targets": target-line} where
-    the lines are integer lists converted from characters in the file lines.
-  """
-  eos_list = [] if eos is None else [eos]
-  with tf.gfile.GFile(source_path, mode="r") as source_file:
-    for line in source_file:
-      if line and "\t" in line:
-        parts = line.split("\t", 1)
-        source, target = parts[0].strip(), parts[1].strip()
-        source_ints = source_vocab.encode(source) + eos_list
-        target_ints = target_vocab.encode(target) + eos_list
-        yield {"inputs": source_ints, "targets": target_ints}
+def load_vocabulary(vocab_path, separator=""):
+  return GraphemePhonemeEncoder(vocab_path=vocab_path, separator=separator)
+
+
+def load_create_vocabs(model_dir, data_path=None):
+  src_vocab_path = os.path.join(model_dir, "vocab.gr")
+  tgt_vocab_path = os.path.join(model_dir, "vocab.ph")
+  source_vocab, target_vocab = None, None
+  if os.path.exists(src_vocab_path) and os.path.exists(tgt_vocab_path):
+    source_vocab = load_vocabulary(src_vocab_path)
+    target_vocab = load_vocabulary(tgt_vocab_path, separator=" ")
+  else:
+    graphemes, phonemes = split_grapheme_phoneme(data_path)
+    source_vocab = create_vocabulary(vocab_path=src_vocab_path,
+      vocab_list=graphemes)
+    target_vocab = create_vocabulary(vocab_path=tgt_vocab_path,
+      vocab_list=phonemes, separator=" ")
+  return source_vocab, target_vocab
 

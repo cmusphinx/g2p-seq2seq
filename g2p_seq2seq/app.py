@@ -29,13 +29,8 @@ import codecs
 import tensorflow as tf
 import six
 
-from . import g2p_trainer_utils
+from g2p_seq2seq.g2p import G2PModel
 from g2p_seq2seq.params import Params
-from tensor2tensor.data_generators import problem
-from tensor2tensor.utils import registry
-from tensor2tensor.utils import trainer_utils
-from tensor2tensor.utils import usr_dir
-from tensor2tensor.utils import decoding
 
 from IPython.core.debugger import Tracer
 
@@ -67,51 +62,22 @@ FLAGS = tf.app.flags.FLAGS
 def main(_=[]):
   """Main function.
   """
-
   tf.logging.set_verbosity(tf.logging.INFO)
-  usr_dir.import_usr_dir(os.path.dirname(os.path.abspath(__file__)))
   data_path = FLAGS.train if FLAGS.train else FLAGS.decode
   params = Params(FLAGS.model_dir, data_path, flags=FLAGS)
-  problem = registry._PROBLEMS[params.problem_name](params.model_dir)
-  trainer_utils.log_registry()
-  if not os.path.exists(params.model_dir):
-    os.makedirs(params.model_dir)
+  g2p_model = G2PModel(params)
 
   if FLAGS.train:
-    train_preprocess_file_path = problem.generate_data(FLAGS.train,
-      params.model_dir, train_flag=True)
-    dev_preprocess_file_path = problem.generate_data(FLAGS.valid,
-      params.model_dir, train_flag=False)
-    g2p_trainer_utils.run(params=params,
-      train_preprocess_file_path=train_preprocess_file_path,
-      dev_preprocess_file_path=dev_preprocess_file_path)
+    g2p_model.prepare_data(train_path=FLAGS.train, dev_path=FLAGS.valid)
+    g2p_model.train()
 
-  else:
-    test_preprocess_file_path = problem.generate_data(FLAGS.decode,
-      params.model_dir, train_flag=False)
-    hparams = trainer_utils.create_hparams(params.hparams_set, params.data_dir)
-    g2p_trainer_utils.add_problem_hparams(hparams, params.problem_name,
-      params.model_dir)
-    estimator, _ = g2p_trainer_utils.create_experiment_components(
-      params=params,
-      hparams=hparams,
-      run_config=trainer_utils.create_run_config(params.model_dir),
-      dev_preprocess_file_path=test_preprocess_file_path)
+  elif FLAGS.decode:
+    g2p_model.prepare_data(test_path=FLAGS.decode)
+    g2p_model.decode(decode_from_file=FLAGS.decode, decode_to_file=FLAGS.output)
 
-    decode_hp = decoding.decode_hparams(params.decode_hparams)
-    decode_hp.add_hparam("shards", 1)
-    if FLAGS.interactive:
-      decoding.decode_interactively(estimator, decode_hp)
-    elif FLAGS.decode:
-      decoding.decode_from_file(estimator, FLAGS.decode, decode_hp,
-                                FLAGS.output)
-    #else:
-    #  decoding.decode_from_dataset(
-    #    estimator,
-    #    FLAGS.problems.split("-"),
-    #    decode_hp,
-    #    decode_to_file=FLAGS.decode_to_file,
-    #    dataset_split="test" if FLAGS.eval_use_test_set else None)
+  elif FLAGS.interactive:
+    g2p_model.interactive()
+
 
 if __name__ == "__main__":
   tf.logging.set_verbosity(tf.logging.INFO)

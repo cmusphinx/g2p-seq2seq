@@ -20,10 +20,10 @@ from __future__ import print_function
 import os
 import tensorflow as tf
 
+from g2p_seq2seq import g2p_encoder
 from tensor2tensor.data_generators import problem
 from tensor2tensor.data_generators import text_encoder
 from tensor2tensor.utils import registry
-from . import g2p_encoder
 from tensor2tensor.data_generators import generator_utils
 
 from IPython.core.debugger import Tracer
@@ -49,24 +49,22 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
     self._feature_info = None
     self._model_dir = model_dir
 
-#  #def generator(self, data_dir, tmp_dir, is_training):
-#  #  """Generator for the training and evaluation data.
-#
-#    Args:
-#      data_dir: The directory in which to assets, e.g. the vocab file.
-#      tmp_dir: A scratch directory (if needed).
-#      is_training: A boolean indicating if we should generate training data
-#          (True) or dev set data (False).
-#
-#    Yields:
-#      dicts with keys "inputs" and "targets", with values being lists of token
-#      ids.
-#    """
-#    raise NotImplementedError()
+  def generator(self, data_path, source_vocab, target_vocab):
+    """Generator for the training and evaluation data.
+    Generate source and target data from a single file.
 
-  def generator(self, data_path, model_dir, train_flag):#data_dir
-    tag = True if train_flag else False
-    return tabbed_parsing_character_generator(data_path, tag, model_dir)#data_dir
+    Args:
+      data_path: The path to data file.
+      source_vocab: the object of GraphemePhonemeEncoder class with encode and
+        decode functions for symbols from source file.
+      target_vocab: the object of GraphemePhonemeEncoder class with encode and
+        decode functions for symbols from target file.
+
+    Yields:
+      dicts with keys "inputs" and "targets", with values being lists of token
+      ids.
+    """
+    return tabbed_generator(data_path, source_vocab, target_vocab, EOS)
 
   def filepattern(self, data_dir, dataset_split, shard=None):
     return os.path.join(data_dir, dataset_split)
@@ -91,65 +89,26 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
   def is_character_level(self):
     return False
 
-  def generate_data(self, file_path, model_dir, train_flag=False):
-    preprocess_file_path = os.path.join(model_dir,
+  def generate_data(self, file_path, source_vocab, target_vocab):
+    preprocess_file_path = os.path.join(self._model_dir,
       os.path.basename(file_path) + ".preprocessed")
-    generate_files(self.generator(file_path, model_dir, train_flag=train_flag),
+    generate_files(self.generator(file_path, source_vocab, target_vocab),
       preprocess_file_path)
     return preprocess_file_path
 
-
   def get_feature_encoders(self, data_dir=None):
     if self._encoders is None:
-      self._encoders = self.feature_encoders(self._model_dir)
+      self._encoders = self.feature_encoders()
     return self._encoders
 
-  def feature_encoders(self, model_dir):
-    tgt_vocab_path = os.path.join(model_dir, "vocab.ph")
-    targets_encoder = g2p_encoder.GraphemePhonemeEncoder(tgt_vocab_path,
-      separator=" ")
+  def feature_encoders(self):
+    targets_encoder = g2p_encoder.GraphemePhonemeEncoder(
+      vocab_path=os.path.join(self._model_dir, "vocab.ph"), separator=" ")
     if self.has_inputs:
-      src_vocab_path = os.path.join(model_dir, "vocab.gr")
-      inputs_encoder = g2p_encoder.GraphemePhonemeEncoder(src_vocab_path)
+      inputs_encoder = g2p_encoder.GraphemePhonemeEncoder(
+        vocab_path=os.path.join(self._model_dir, "vocab.gr"))
       return {"inputs": inputs_encoder, "targets": targets_encoder}
     return {"targets": targets_encoder}
-
-
-def tabbed_parsing_character_generator(pair_filepath, train, model_dir):
-  """Generate source and target data from a single file."""
-  src_vocab_path = os.path.join(model_dir, "vocab.gr")
-  tgt_vocab_path = os.path.join(model_dir, "vocab.ph")
-  if os.path.exists(src_vocab_path) and os.path.exists(tgt_vocab_path):
-    source_vocab = g2p_encoder.GraphemePhonemeEncoder(src_vocab_path)
-    target_vocab = g2p_encoder.GraphemePhonemeEncoder(tgt_vocab_path,
-      separator=" ")
-    return tabbed_generator(pair_filepath, source_vocab, target_vocab, EOS)
-  elif train:
-    graphemes, phonemes = {}, {}
-    with tf.gfile.GFile(pair_filepath, mode="r") as data_file:
-      for line in data_file:
-        line_split = line.strip().split("\t")
-        line_grs, line_phs = list(line_split[0]), line_split[1].split(" ")
-        graphemes = update_vocab_symbols(graphemes, line_grs)
-        phonemes = update_vocab_symbols(phonemes, line_phs)
-    graphemes, phonemes = sorted(graphemes.keys()), sorted(phonemes.keys())
-    source_vocab = g2p_encoder.GraphemePhonemeEncoder(
-      vocab_filepath=src_vocab_path, vocab_list=graphemes)
-    target_vocab = g2p_encoder.GraphemePhonemeEncoder(
-      vocab_filepath=tgt_vocab_path, vocab_list=phonemes, separator=" ")
-    source_vocab.store_to_file(src_vocab_path)
-    target_vocab.store_to_file(tgt_vocab_path)
-    return tabbed_generator(pair_filepath, source_vocab, target_vocab, EOS)
-  else:
-    raise IOError("Vocabulary files {} and {} not found.".format(src_vocab_path,
-      tgt_vocab_path))
-
-
-def update_vocab_symbols(init_vocab, update_syms):
-  updated_vocab = init_vocab
-  for sym in update_syms:
-    updated_vocab.update({sym : 1})
-  return updated_vocab
 
 
 def tabbed_generator(source_path, source_vocab, target_vocab, eos=None):
@@ -190,8 +149,6 @@ def generate_files(generator, output_filename):
   Args:
     generator: a generator yielding (string -> int/float/str list) dictionaries.
     output_filenames: List of output file paths.
-    max_cases: maximum number of cases to get from the generator;
-      if None (default), we use the generator until StopIteration is raised.
   """
   writer = tf.python_io.TFRecordWriter(output_filename)
   counter = 0
