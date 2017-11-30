@@ -91,8 +91,53 @@ class G2PModel(object):
 
   def decode(self, decode_file_path, output_file_path):
     self.__prepare_decode_model()
-    decode_from_file(self.estimator, decode_file_path, self.decode_hp,
-      output_file_path)
+    sorted_inputs, sorted_keys, decodes = decode_from_file(self.estimator,
+      decode_file_path, self.decode_hp)
+
+    # Dumping inputs and outputs to file filename.decodes in
+    # format result\tinput in the same order as original inputs
+    if output_file_path:
+      tf.logging.info("Writing decodes into %s" % output_file_path)
+      outfile = tf.gfile.Open(output_file_path, "w")
+      for index in range(len(sorted_inputs)):
+        outfile.write("%s%s" % (decodes[sorted_keys[index]],
+          self.decode_hp.delimiter))
+
+  def evaluate(self, gt_file_path, decode_file_path):
+    gt_lines = open(gt_file_path).readlines()
+    g2p_gt_map = create_g2p_gt_map(gt_lines)
+
+    self.__prepare_decode_model()
+
+    errors = self.calc_errors(g2p_gt_map, decode_file_path)
+
+    print("Words: %d" % len(g2p_gt_map))
+    print("Errors: %d" % errors)
+    print("WER: %.3f" % (float(errors)/len(g2p_gt_map)))
+    print("Accuracy: %.3f" % float(1.-(float(errors)/len(g2p_gt_map))))
+
+  def calc_errors(self, g2p_gt_map, decode_file_path):
+
+    sorted_inputs, sorted_keys, decodes = decode_from_file(self.estimator,
+      decode_file_path, self.decode_hp)
+
+    errors = 0
+    for index, word in enumerate(sorted_inputs):
+      if decodes[sorted_keys[index]] not in g2p_gt_map[word]:
+        errors += 1
+    return errors
+
+
+
+def create_g2p_gt_map(gt_lines):
+    g2p_gt_map = {}
+    for line in gt_lines:
+        line_split = line.strip().split("\t")
+        if line_split[0] in g2p_gt_map:
+            g2p_gt_map[line_split[0]].append(line_split[1])
+        else:
+            g2p_gt_map[line_split[0]] = [line_split[1]]
+    return g2p_gt_map
 
 
 def decode_from_file(estimator, filename, decode_hp, decode_to_file=None):
@@ -148,16 +193,6 @@ def decode_from_file(estimator, filename, decode_hp, decode_to_file=None):
   # _decode_batch_input_fn
   sorted_inputs.reverse()
   decodes.reverse()
-  # Dumping inputs and outputs to file filename.decodes in
-  # format result\tinput in the same order as original inputs
-  if decode_to_file:
-    output_filename = decode_to_file
-  else:
-    output_filename = filename + ".decodes"
-  tf.logging.info("Writing decodes into %s" % output_filename)
-  outfile = tf.gfile.Open(output_filename, "w")
-  for index in range(len(sorted_inputs)):
-    outfile.write("%s%s" % (decodes[sorted_keys[index]], decode_hp.delimiter))
-
+  return sorted_inputs, sorted_keys, decodes
 
 

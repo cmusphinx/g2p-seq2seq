@@ -16,7 +16,8 @@
 """Default Parameters class.
 """
 
-import os
+import os, json
+
 
 class Params(object):
   """Class with training parameters."""
@@ -32,8 +33,18 @@ class Params(object):
     self.train_steps = 10
     self.eval_steps = 1
     self.decode_hparams = "beam_size=4,alpha=0.6"
+
     if flags:
       self.batch_size = flags.batch_size
       self.eval_steps = flags.eval_steps
       self.train_steps = len(open(data_path).readlines()) * flags.max_epochs
       self.hparams = "batch_size=" + str(flags.batch_size) + ",num_hidden_layers=" + str(flags.num_layers) + ",hidden_size=" + str(flags.size) + ",filter_size=" + str(flags.filter_size) + ",num_heads=" + str(flags.num_heads)
+
+    saved_hparams_path = os.path.join(self.model_dir, "hparams.json")
+    if os.path.exists(saved_hparams_path):
+      saved_hparams_dic = json.load(open(saved_hparams_path))
+      self.hparams = ""
+      for hparam_idx, (hparam, hparam_value) in enumerate(saved_hparams_dic.items()):
+        self.hparams += hparam + "=" + str(hparam_value)
+        if hparam_idx < len(saved_hparams_dic) - 1:
+          self.hparams += ","

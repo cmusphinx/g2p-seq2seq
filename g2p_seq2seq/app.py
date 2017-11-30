@@ -69,6 +69,7 @@ def main(_=[]):
   """
   tf.logging.set_verbosity(tf.logging.INFO)
   data_path = FLAGS.train if FLAGS.train else FLAGS.decode
+  data_path = FLAGS.evaluate if not data_path else data_path
   params = Params(FLAGS.model_dir, data_path, flags=FLAGS)
   g2p_model = G2PModel(params)
 
@@ -76,13 +77,17 @@ def main(_=[]):
     g2p_model.prepare_data(train_path=FLAGS.train, dev_path=FLAGS.valid)
     g2p_model.train()
 
+  elif FLAGS.interactive:
+    g2p_model.interactive()
+
   elif FLAGS.decode:
     g2p_model.prepare_data(test_path=FLAGS.decode)
     g2p_model.decode(decode_file_path=FLAGS.decode,
       output_file_path=FLAGS.output)
 
-  elif FLAGS.interactive:
-    g2p_model.interactive()
+  elif FLAGS.evaluate:
+    g2p_model.prepare_data(test_path=FLAGS.test)
+    g2p_model.evaluate(FLAGS.evaluate, FLAGS.test)
 
 
 if __name__ == "__main__":
