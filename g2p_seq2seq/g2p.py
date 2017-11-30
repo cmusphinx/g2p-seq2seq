@@ -47,6 +47,9 @@ class G2PModel(object):
     trainer_utils.log_registry()
     if not os.path.exists(self.params.model_dir):
       os.makedirs(self.params.model_dir)
+    self.train_preprocess_file_path, self.dev_preprocess_file_path,\
+      self.test_preprocess_file_path = None, None, None
+
 
   def prepare_data(self, train_path=None, dev_path=None, test_path=None):
     if train_path:
@@ -70,7 +73,7 @@ class G2PModel(object):
 
   def __prepare_decode_model(self):
     hparams = trainer_utils.create_hparams(self.params.hparams_set,
-      self.params.data_dir)
+      self.params.data_dir, passed_hparams=self.params.hparams)
     g2p_trainer_utils.add_problem_hparams(hparams, self.params.problem_name,
       self.params.model_dir)
     self.estimator, _ = g2p_trainer_utils.create_experiment_components(
@@ -86,8 +89,75 @@ class G2PModel(object):
     self.__prepare_decode_model()
     decoding.decode_interactively(self.estimator, self.decode_hp)
 
-  def decode(self, decode_from_file, decode_to_file):
+  def decode(self, decode_file_path, output_file_path):
     self.__prepare_decode_model()
-    decoding.decode_from_file(self.estimator, decode_from_file, self.decode_hp,
-      decode_to_file)
+    decode_from_file(self.estimator, decode_file_path, self.decode_hp,
+      output_file_path)
+
+
+def decode_from_file(estimator, filename, decode_hp, decode_to_file=None):
+  """Compute predictions on entries in filename and write them out."""
+
+  if not decode_hp.batch_size:
+    decode_hp.batch_size = 32
+    tf.logging.info(
+        "decode_hp.batch_size not specified; default=%d" % decode_hp.batch_size)
+
+  hparams = estimator.params
+  problem_id = decode_hp.problem_idx
+  # Inputs vocabulary is set to targets if there are no inputs in the problem,
+  # e.g., for language models where the inputs are just a prefix of targets.
+  has_input = "inputs" in hparams.problems[problem_id].vocabulary
+  inputs_vocab_key = "inputs" if has_input else "targets"
+  inputs_vocab = hparams.problems[problem_id].vocabulary[inputs_vocab_key]
+  targets_vocab = hparams.problems[problem_id].vocabulary["targets"]
+  problem_name = "grapheme_to_phoneme_problem"#FLAGS.problems.split("-")[problem_id]
+  tf.logging.info("Performing decoding from a file.")
+  sorted_inputs, sorted_keys = decoding._get_sorted_inputs(filename,
+    decode_hp.shards, decode_hp.delimiter)
+  num_decode_batches = (len(sorted_inputs) - 1) // decode_hp.batch_size + 1
+
+  def input_fn():
+    input_gen = decoding._decode_batch_input_fn(
+        problem_id, num_decode_batches, sorted_inputs, inputs_vocab,
+        decode_hp.batch_size, decode_hp.max_input_size)
+    gen_fn = decoding.make_input_fn_from_generator(input_gen)
+    example = gen_fn()
+    return decoding._decode_input_tensor_to_features_dict(example, hparams)
+
+  decodes = []
+  result_iter = estimator.predict(input_fn)
+  for result in result_iter:
+    if decode_hp.return_beams:
+      beam_decodes = []
+      output_beams = np.split(result["outputs"], decode_hp.beam_size, axis=0)
+      for k, beam in enumerate(output_beams):
+        tf.logging.info("BEAM %d:" % k)
+        decoded_outputs, _ = decoding.log_decode_results(result["inputs"], beam,
+                                                problem_name, None,
+                                                inputs_vocab, targets_vocab)
+        beam_decodes.append(decoded_outputs)
+      decodes.append("\t".join(beam_decodes))
+    else:
+      decoded_outputs, _ = decoding.log_decode_results(result["inputs"],
+                                              result["outputs"], problem_name,
+                                              None, inputs_vocab, targets_vocab)
+      decodes.append(decoded_outputs)
+
+  # Reversing the decoded inputs and outputs because they were reversed in
+  # _decode_batch_input_fn
+  sorted_inputs.reverse()
+  decodes.reverse()
+  # Dumping inputs and outputs to file filename.decodes in
+  # format result\tinput in the same order as original inputs
+  if decode_to_file:
+    output_filename = decode_to_file
+  else:
+    output_filename = filename + ".decodes"
+  tf.logging.info("Writing decodes into %s" % output_filename)
+  outfile = tf.gfile.Open(output_filename, "w")
+  for index in range(len(sorted_inputs)):
+    outfile.write("%s%s" % (decodes[sorted_keys[index]], decode_hp.delimiter))
+
+
 

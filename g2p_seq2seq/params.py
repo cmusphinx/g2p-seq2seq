@@ -36,3 +36,4 @@ class Params(object):
       self.batch_size = flags.batch_size
       self.eval_steps = flags.eval_steps
       self.train_steps = len(open(data_path).readlines()) * flags.max_epochs
+      self.hparams = "batch_size=" + str(flags.batch_size) + ",num_hidden_layers=" + str(flags.num_layers) + ",hidden_size=" + str(flags.size) + ",filter_size=" + str(flags.filter_size) + ",num_heads=" + str(flags.num_heads)

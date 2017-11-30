@@ -23,6 +23,20 @@ class TestG2P(unittest.TestCase):
     g2p_model.train()
     shutil.rmtree(model_dir)
 
+  def test_decode(self):
+    model_dir = os.path.abspath("tests/models/decode")
+    decode_file_path = os.path.abspath("tests/data/toydict.graphemes")
+    output_file_path = os.path.abspath("tests/models/decode/decode_output.txt")
+    params = Params(model_dir, decode_file_path)
+    g2p_model = G2PModel(params)
+    g2p_model.prepare_data(test_path=decode_file_path)
+    g2p_model.decode(decode_file_path=decode_file_path,
+      output_file_path=output_file_path)
+    out_lines = open(output_file_path).readlines()
+    self.assertEqual(out_lines[0].strip(), u"")
+    self.assertEqual(out_lines[1].strip(), u"")
+    self.assertEqual(out_lines[2].strip(), u"")
+
   #def test_evaluate(self):
   #  model_dir = "tests/models/decode"
   #  with g2p.tf.Graph().as_default():
@@ -34,15 +48,3 @@ class TestG2P(unittest.TestCase):
   #    errors = g2p_model.calc_error(test_dic)
   #    self.assertAlmostEqual(float(errors)/len(test_dic), 0.667, places=3)
 
-  def test_decode(self):
-    model_dir = os.path.join(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))), "models/decode")
-    g2p_model = g2p.G2PModel(model_dir)
-    g2p_params = params.Params(model_dir, decode_flag=True)
-    #phoneme_lines = g2p_model.load_decode_model(g2p_params)
-    g2p_model.load_decode_model(g2p_params)
-    #decode_lines = open("tests/data/toydict.graphemes").readlines()
-    Tracer()()
-    phoneme_lines = g2p_model.decode(return_output_list=True)
-    self.assertEqual(phoneme_lines[0], u'SEQUENCE_END')
-    self.assertEqual(phoneme_lines[1], u'SEQUENCE_END')
-    self.assertEqual(phoneme_lines[2], u'SEQUENCE_END')
