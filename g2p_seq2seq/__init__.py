@@ -19,7 +19,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import sys, os
+import sys
 sys.path.insert(1, "./g2p_seq2seq")
 from g2p_seq2seq import app
 from g2p_seq2seq import g2p

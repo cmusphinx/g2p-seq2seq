@@ -54,7 +54,8 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
       separator: separator between symbols in original file.
       num_reserved_ids: Number of IDs to save for reserved tokens like <EOS>.
     """
-    super(GraphemePhonemeEncoder, self).__init__(num_reserved_ids=num_reserved_ids)
+    super(GraphemePhonemeEncoder, self).__init__(
+        num_reserved_ids=num_reserved_ids)
     if vocab_path and os.path.exists(vocab_path):
       self._init_vocab_from_file(vocab_path)
     else:
@@ -88,8 +89,9 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
       filename: The file to load vocabulary from.
     """
     def sym_gen():
-      with tf.gfile.Open(filename) as f:
-        for line in f:
+      """Symbols generator for vocab initializer from file."""
+      with tf.gfile.Open(filename) as vocab_file:
+        for line in vocab_file:
           sym = line.strip()
           yield sym
 
@@ -105,6 +107,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
       vocab_list: A list of symbols.
     """
     def sym_gen():
+      """Symbols generator for vocab initializer from list."""
       for sym in vocab_list:
         if sym not in text_encoder.RESERVED_TOKENS:
           yield sym
@@ -125,8 +128,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
         enumerate(sym_generator, start=non_reserved_start_index))
 
     # _sym_to_id is the reverse of _id_to_sym
-    self._sym_to_id = dict((v, k)
-      for k, v in six.iteritems(self._id_to_sym))
+    self._sym_to_id = dict((v, k) for k, v in six.iteritems(self._id_to_sym))
 
   def store_to_file(self, filename):
     """Write vocab file to disk.
@@ -137,12 +139,17 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
     Args:
       filename: Full path of the file to store the vocab to.
     """
-    with tf.gfile.Open(filename, "w") as f:
+    with tf.gfile.Open(filename, "w") as vocab_file:
       for i in xrange(len(self._id_to_sym)):
-        f.write(self._id_to_sym[i] + "\n")
+        vocab_file.write(self._id_to_sym[i] + "\n")
 
 
 def split_grapheme_phoneme(data_path):
+  """Split input data file into two separate lists with graphemes and
+    phonemes.
+
+    Args:
+      data_path: path to the data file."""
   graphemes, phonemes = {}, {}
   with tf.gfile.GFile(data_path, mode="r") as data_file:
     for line in data_file:
@@ -155,6 +162,7 @@ def split_grapheme_phoneme(data_path):
 
 
 def update_vocab_symbols(init_vocab, update_syms):
+  """Update current vocabulary with symbols from update_syms list."""
   updated_vocab = init_vocab
   for sym in update_syms:
     updated_vocab.update({sym : 1})
@@ -162,17 +170,21 @@ def update_vocab_symbols(init_vocab, update_syms):
 
 
 def create_vocabulary(vocab_path, vocab_list, separator=""):
-  vocab = GraphemePhonemeEncoder(vocab_path=vocab_path,
-    vocab_list=vocab_list, separator=separator)
+  """Create GraphemePhonemeEncoder object that represent vocabulary.
+    Also, save vocabulary into file located in vocab_path."""
+  vocab = GraphemePhonemeEncoder(
+      vocab_path=vocab_path, vocab_list=vocab_list, separator=separator)
   vocab.store_to_file(vocab_path)
   return vocab
 
 
 def load_vocabulary(vocab_path, separator=""):
+  """Load GraphemePhonemeEncoder object that represent vocabulary."""
   return GraphemePhonemeEncoder(vocab_path=vocab_path, separator=separator)
 
 
 def load_create_vocabs(model_dir, data_path=None):
+  """Load/create vocabularies."""
   src_vocab_path = os.path.join(model_dir, "vocab.gr")
   tgt_vocab_path = os.path.join(model_dir, "vocab.ph")
   source_vocab, target_vocab = None, None
@@ -181,9 +193,8 @@ def load_create_vocabs(model_dir, data_path=None):
     target_vocab = load_vocabulary(tgt_vocab_path, separator=" ")
   else:
     graphemes, phonemes = split_grapheme_phoneme(data_path)
-    source_vocab = create_vocabulary(vocab_path=src_vocab_path,
-      vocab_list=graphemes)
-    target_vocab = create_vocabulary(vocab_path=tgt_vocab_path,
-      vocab_list=phonemes, separator=" ")
+    source_vocab = create_vocabulary(
+        vocab_path=src_vocab_path, vocab_list=graphemes)
+    target_vocab = create_vocabulary(
+        vocab_path=tgt_vocab_path, vocab_list=phonemes, separator=" ")
   return source_vocab, target_vocab
-

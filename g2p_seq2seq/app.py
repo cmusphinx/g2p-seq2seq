@@ -25,9 +25,8 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import codecs
+import shutil
 import tensorflow as tf
-import six
 
 from g2p_seq2seq.g2p import G2PModel
 from g2p_seq2seq.params import Params
@@ -45,21 +44,32 @@ tf.flags.DEFINE_string("valid", "", "Development dictionary.")
 tf.flags.DEFINE_string("test", "", "Test dictionary.")
 tf.flags.DEFINE_boolean("reinit", False,
                         "Set to True for training from scratch.")
+
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 256,
                         "Batch size to use during training.")
 tf.flags.DEFINE_integer("num_layers", 2, "Number of hidden layers.")
-tf.flags.DEFINE_integer("size", 512,
+tf.flags.DEFINE_integer("size", 64,
                         "The number of neurons in the hidden layer.")
-tf.flags.DEFINE_integer("filter_size", 1024, "The size of the filter.")
-tf.flags.DEFINE_integer("num_heads", 4, "Number of heads.")
-tf.flags.DEFINE_integer("max_epochs", 10,
+tf.flags.DEFINE_integer("filter_size", 256,
+                        "The size of the filter in a convolutional layer.")
+tf.flags.DEFINE_integer("dropout", 0.5, "The proportion of dropping out units"
+                        "in hidden layers.")
+tf.flags.DEFINE_integer("attention_dropout", 0.5,
+                        "The proportion of dropping out units"
+                        "in an attention layer.")
+tf.flags.DEFINE_integer("num_heads", 2,
+                        "Number of applied heads in Multi-attention mechanism.")
+tf.flags.DEFINE_integer("max_epochs", 0,
                         "How many training steps to do until stop training"
                         " (0: no limit).")
-tf.flags.DEFINE_integer("eval_steps", 10,
-                        "Run evaluation on validation data every N steps.")
-tf.flags.DEFINE_string("schedule", "train_and_evaluate", "Set schedule.")
-tf.flags.DEFINE_string("master", "", "Address of TensorFlow master.")
+tf.flags.DEFINE_integer("eval_steps", 10, "Number of steps for evaluation.")
+tf.flags.DEFINE_string("schedule", "train_and_evaluate",
+"""Set schedule. More info about training configurations you can read in
+tensor2tensor docs: https://github.com/tensorflow/tensor2tensor/blob/master/docs/distributed_training.md""")
+tf.flags.DEFINE_string("master", "",
+                       "TensorFlow master. Defaults to empty string for local."
+                       "Specifies the configurations for distributed run.")
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -70,6 +80,9 @@ def main(_=[]):
   tf.logging.set_verbosity(tf.logging.INFO)
   data_path = FLAGS.train if FLAGS.train else FLAGS.decode
   data_path = FLAGS.evaluate if not data_path else data_path
+  if FLAGS.reinit and os.path.exists(FLAGS.model_dir):
+    shutil.rmtree(FLAGS.model_dir)
+
   params = Params(FLAGS.model_dir, data_path, flags=FLAGS)
   g2p_model = G2PModel(params)
 
@@ -83,7 +96,7 @@ def main(_=[]):
   elif FLAGS.decode:
     g2p_model.prepare_data(test_path=FLAGS.decode)
     g2p_model.decode(decode_file_path=FLAGS.decode,
-      output_file_path=FLAGS.output)
+                     output_file_path=FLAGS.output)
 
   elif FLAGS.evaluate:
     g2p_model.prepare_data(test_path=FLAGS.test)

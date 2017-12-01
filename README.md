@@ -61,7 +61,7 @@ HH EH L OW
 To generate pronunciations for an English word list with a trained model, run
 
 ```
-  g2p-seq2seq --decode your_wordlist --model model_folder_path
+  g2p-seq2seq --decode your_wordlist --model model_folder_path [--output decode_output_file_path]
 
 ```
 The wordlist is a text file with one word per line
@@ -73,7 +73,9 @@ To evaluate Word Error Rate of the trained model, run
   g2p-seq2seq --evaluate your_test_dictionary --model model_folder_path
 
 ```
-The test dictionary should be a dictionary in standard format.
+The test dictionary should be a dictionary in standard format:
+HELLO\tHH EH L OW
+BYE\tB AY
 
 
 ## Training G2P system
@@ -100,9 +102,13 @@ It is a good idea to play with the following parameters:
      For example, you can try 1 if the train set is not large enough, 
      or 3 to hopefully get better results
 
-  "--learning_rate" - Initial Learning rate (Default: 0.5) 
+  "--filter_size" - The size of the filter layer in a convolutional layer (Default: 256)
 
-  "--learning_rate_decay_factor" - Learning rate decays by this much (Default: 0.8)
+  "--dropout" - The proportion of dropping out units in hidden layers (Default: 0.5)
+
+  "--attention_dropout" - The proportion of dropping out units in an attention layer (Default: 0.5)
+
+  "--num_heads" - Number of applied heads in Multi-attention mechanism (Default: 2)
 ```
 
 You can manually point out Development and Test datasets:

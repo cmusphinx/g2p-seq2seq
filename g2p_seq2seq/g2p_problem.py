@@ -13,6 +13,8 @@
 # limitations under the License.
 # ==============================================================================
 
+"""Module for registering custom Grapheme-to-Phoneme problem in tensor2tensor.
+"""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -48,6 +50,7 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
     self._hparams = None
     self._feature_info = None
     self._model_dir = model_dir
+    self._target_vocab_size = None
 
   def generator(self, data_path, source_vocab, target_vocab):
     """Generator for the training and evaluation data.
@@ -89,11 +92,21 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
   def is_character_level(self):
     return False
 
+  @property
+  def targeted_vocab_size(self):
+    return None
+
+  @property
+  def vocab_name(self):
+    return None
+
   def generate_data(self, file_path, source_vocab, target_vocab):
-    preprocess_file_path = os.path.join(self._model_dir,
-      os.path.basename(file_path) + ".preprocessed")
-    generate_files(self.generator(file_path, source_vocab, target_vocab),
-      preprocess_file_path)
+    preprocess_file_path = os.path.join(
+        self._model_dir,
+        os.path.basename(file_path) + ".preprocessed")
+    generate_files(
+        self.generator(file_path, source_vocab, target_vocab),
+        preprocess_file_path)
     return preprocess_file_path
 
   def get_feature_encoders(self, data_dir=None):
@@ -103,10 +116,10 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
 
   def feature_encoders(self):
     targets_encoder = g2p_encoder.GraphemePhonemeEncoder(
-      vocab_path=os.path.join(self._model_dir, "vocab.ph"), separator=" ")
+        vocab_path=os.path.join(self._model_dir, "vocab.ph"), separator=" ")
     if self.has_inputs:
       inputs_encoder = g2p_encoder.GraphemePhonemeEncoder(
-        vocab_path=os.path.join(self._model_dir, "vocab.gr"))
+          vocab_path=os.path.join(self._model_dir, "vocab.gr"))
       return {"inputs": inputs_encoder, "targets": targets_encoder}
     return {"targets": targets_encoder}
 
@@ -160,4 +173,3 @@ def generate_files(generator, output_filename):
     writer.write(sequence_example.SerializeToString())
 
   writer.close()
-

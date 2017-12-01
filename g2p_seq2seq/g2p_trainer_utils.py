@@ -13,12 +13,14 @@
 # limitations under the License.
 # ==============================================================================
 
+"""Utilities for G2P trainer."""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import os
 import tensorflow as tf
+from tensorflow.contrib.learn.python.learn import learn_runner
 
 from tensor2tensor.utils import devices
 from tensor2tensor.utils import input_fn_builder
@@ -26,8 +28,6 @@ from tensor2tensor.utils import model_builder
 from tensor2tensor.utils import registry
 from tensor2tensor.utils import decoding
 from tensor2tensor.utils import trainer_utils
-
-from tensorflow.contrib.learn.python.learn import learn_runner
 
 from IPython.core.debugger import Tracer
 
@@ -102,9 +102,13 @@ def make_experiment_fn(params, train_preprocess_file_path,
   """Returns experiment_fn for learn_runner. Wraps create_experiment."""
 
   def experiment_fn(run_config, hparams):
-    return create_experiment(params, hparams=hparams, run_config=run_config,
-      train_preprocess_file_path=train_preprocess_file_path,
-      dev_preprocess_file_path=dev_preprocess_file_path)
+    """Function for running experiment creation."""
+    return create_experiment(
+        params,
+        hparams=hparams,
+        run_config=run_config,
+        train_preprocess_file_path=train_preprocess_file_path,
+        dev_preprocess_file_path=dev_preprocess_file_path)
 
   return experiment_fn
 
@@ -112,17 +116,19 @@ def make_experiment_fn(params, train_preprocess_file_path,
 def create_experiment(params, hparams, run_config, train_preprocess_file_path,
                       dev_preprocess_file_path):
   """Create Experiment."""
-  estimator, input_fns = create_experiment_components(params=params,
-    hparams=hparams, run_config=run_config,
-    train_preprocess_file_path=train_preprocess_file_path,
-    dev_preprocess_file_path=dev_preprocess_file_path)
+  estimator, input_fns = create_experiment_components(
+      params=params,
+      hparams=hparams,
+      run_config=run_config,
+      train_preprocess_file_path=train_preprocess_file_path,
+      dev_preprocess_file_path=dev_preprocess_file_path)
 
   train_monitors = []
   eval_hooks = []
-  if FLAGS.tfdbg:
-    hook = debug.LocalCLIDebugHook()
-    train_monitors.append(hook)
-    eval_hooks.append(hook)
+  #if FLAGS.tfdbg:
+  #  hook = debug.LocalCLIDebugHook()
+  #  train_monitors.append(hook)
+  #  eval_hooks.append(hook)
   if FLAGS.dbgprofile:
     # Recorded traces can be visualized with chrome://tracing/
     # The memory/tensor lifetime is also profiled
@@ -146,13 +152,13 @@ def create_experiment(params, hparams, run_config, train_preprocess_file_path,
               early_stopping_metric_minimize=FLAGS.
               eval_early_stopping_metric_minimize))
 
-  optional_kwargs = {}
-  if FLAGS.export_saved_model:
-    assert len(hparams.problem_instances) == 1
-    problem = hparams.problem_instances[0]
-    optional_kwargs["export_strategies"] = [
-        make_export_strategy(problem, hparams)
-    ]
+  #optional_kwargs = {}
+  #if FLAGS.export_saved_model:
+  #  assert len(hparams.problem_instances) == 1
+  #  problem = hparams.problem_instances[0]
+  #  optional_kwargs["export_strategies"] = [
+  #      make_export_strategy(problem, hparams)
+  #  ]
 
   return tf.contrib.learn.Experiment(
       estimator=estimator,
@@ -162,8 +168,8 @@ def create_experiment(params, hparams, run_config, train_preprocess_file_path,
       eval_steps=params.eval_steps,
       train_monitors=train_monitors,
       eval_hooks=eval_hooks,
-      eval_delay_secs=0,
-      **optional_kwargs)
+      eval_delay_secs=0)#,
+      #**optional_kwargs)
 
 
 def run(params, train_preprocess_file_path, dev_preprocess_file_path):
@@ -178,13 +184,17 @@ def run(params, train_preprocess_file_path, dev_preprocess_file_path):
     schedule: (str) The schedule to run. The value here must
       be the name of one of Experiment's methods.
   """
-  exp_fn = make_experiment_fn(params,
-    train_preprocess_file_path=train_preprocess_file_path,
-    dev_preprocess_file_path=dev_preprocess_file_path)
+  exp_fn = make_experiment_fn(
+      params,
+      train_preprocess_file_path=train_preprocess_file_path,
+      dev_preprocess_file_path=dev_preprocess_file_path)
 
   # Create hparams and run_config
   run_config = trainer_utils.create_run_config(params.model_dir)
-  hparams = trainer_utils.create_hparams(params.hparams_set, params.data_dir)
+  hparams = trainer_utils.create_hparams(
+      params.hparams_set,
+      params.data_dir,
+      passed_hparams=params.hparams)
 
   if trainer_utils.is_chief():
     trainer_utils.save_metadata(params.model_dir, hparams)
