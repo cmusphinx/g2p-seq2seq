@@ -20,57 +20,49 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import operator
 import tensorflow as tf
 import numpy as np
 
 from g2p_seq2seq import g2p_trainer_utils
-from g2p_seq2seq import g2p_encoder
 from tensor2tensor.utils import registry
 from tensor2tensor.utils import trainer_utils
 from tensor2tensor.utils import usr_dir
 from tensor2tensor.utils import decoding
 
+from tensor2tensor.data_generators import text_encoder
+
 from IPython.core.debugger import Tracer
+
+EOS = text_encoder.EOS
 
 
 class G2PModel(object):
   """Grapheme-to-Phoneme translation model class.
   """
-  def __init__(self, params):
+  def __init__(self, params, file_path="", is_training=False):
     # Point out the current directory with t2t problem specified for g2p task.
     usr_dir.import_usr_dir(os.path.dirname(os.path.abspath(__file__)))
     self.params = params
+    self.file_path = file_path
     # Register g2p problem.
     self.problem = registry._PROBLEMS[self.params.problem_name](
-        self.params.model_dir)
+        self.params.model_dir, file_path=file_path, is_training=is_training)
     trainer_utils.log_registry()
     if not os.path.exists(self.params.model_dir):
       os.makedirs(self.params.model_dir)
-    self.train_preprocess_file_path, self.dev_preprocess_file_path,\
-      self.test_preprocess_file_path = None, None, None
+    self.train_preprocess_file_path, self.dev_preprocess_file_path = None, None
 
-
-  def prepare_data(self, train_path=None, dev_path=None, test_path=None):
-    """Prepare preprocessed datafiles.
-    """
-    if train_path:
-      source_vocab, target_vocab = g2p_encoder.load_create_vocabs(
-          self.params.model_dir, data_path=train_path)
-      if dev_path:
-        self.train_preprocess_file_path = self.problem.generate_data(
-            train_path, source_vocab, target_vocab)
-        self.dev_preprocess_file_path = self.problem.generate_data(
-            dev_path, source_vocab, target_vocab)
-    elif test_path:
-      source_vocab, target_vocab = g2p_encoder.load_create_vocabs(
-          self.params.model_dir)
-      self.test_preprocess_file_path = self.problem.generate_data(
-          test_path, source_vocab, target_vocab)
+  def prepare_data(self, train_path=None, dev_path=None):
+    """Prepare preprocessed datafiles."""
+    self.train_preprocess_file_path = self.problem.generate_data(train_path)
+    self.dev_preprocess_file_path = self.problem.generate_data(dev_path)
 
   def train(self):
     """Run training."""
     g2p_trainer_utils.run(
         params=self.params,
+        problem_instance=self.problem,
         train_preprocess_file_path=self.train_preprocess_file_path,
         dev_preprocess_file_path=self.dev_preprocess_file_path)
 
@@ -80,15 +72,11 @@ class G2PModel(object):
         self.params.hparams_set,
         self.params.data_dir,
         passed_hparams=self.params.hparams)
-    g2p_trainer_utils.add_problem_hparams(
-        hparams,
-        self.params.problem_name,
-        self.params.model_dir)
     estimator, _ = g2p_trainer_utils.create_experiment_components(
         params=self.params,
         hparams=hparams,
         run_config=trainer_utils.create_run_config(self.params.model_dir),
-        dev_preprocess_file_path=self.test_preprocess_file_path)
+        problem_instance=self.problem)
 
     decode_hp = decoding.decode_hparams(self.params.decode_hparams)
     decode_hp.add_hparam("shards", 1)
@@ -99,11 +87,11 @@ class G2PModel(object):
     estimator, decode_hp = self.__prepare_decode_model()
     decoding.decode_interactively(estimator, decode_hp)
 
-  def decode(self, decode_file_path, output_file_path):
+  def decode(self, output_file_path):
     """Run decoding mode."""
     estimator, decode_hp = self.__prepare_decode_model()
     sorted_inputs, sorted_keys, decodes = decode_from_file(
-        estimator, decode_file_path, decode_hp)
+        estimator, self.file_path, decode_hp)
 
     # Dumping inputs and outputs to file filename.decodes in
     # format result\tinput in the same order as original inputs
@@ -114,34 +102,43 @@ class G2PModel(object):
         outfile.write("%s%s" % (decodes[sorted_keys[index]],
                                 decode_hp.delimiter))
 
-  def evaluate(self, gt_file_path, decode_file_path):
+  def evaluate(self):
     """Run evaluation mode."""
-    gt_lines = open(gt_file_path).readlines()
-    g2p_gt_map = create_g2p_gt_map(gt_lines)
+    words, pronunciations = [], []
+    for case in self.problem.generator(self.file_path,
+                                       self.problem.source_vocab,
+                                       self.problem.target_vocab):
+      word = self.problem.source_vocab.decode(case["inputs"]).replace(
+          EOS, "").strip()
+      pronunciation = self.problem.target_vocab.decode(case["targets"]).replace(
+          EOS, "").strip()
+      words.append(word)
+      pronunciations.append(pronunciation)
+
+    g2p_gt_map = create_g2p_gt_map(words, pronunciations)
 
     estimator, decode_hp = self.__prepare_decode_model()
-    errors = calc_errors(g2p_gt_map, decode_file_path, estimator, decode_hp)
+    errors = calc_errors(g2p_gt_map, estimator, self.file_path, decode_hp)
 
     print("Words: %d" % len(g2p_gt_map))
     print("Errors: %d" % errors)
     print("WER: %.3f" % (float(errors)/len(g2p_gt_map)))
     print("Accuracy: %.3f" % float(1.-(float(errors)/len(g2p_gt_map))))
-    return estimator, decode_hp
+    return estimator, decode_hp, g2p_gt_map
 
 
-def create_g2p_gt_map(gt_lines):
+def create_g2p_gt_map(words, pronunciations):
   """Create grapheme-to-phoneme ground true mapping."""
   g2p_gt_map = {}
-  for line in gt_lines:
-    line_split = line.strip().split("\t")
-    if line_split[0] in g2p_gt_map:
-      g2p_gt_map[line_split[0]].append(line_split[1])
+  for word, pronunciation in zip(words, pronunciations):
+    if word in g2p_gt_map:
+      g2p_gt_map[word].append(pronunciation)
     else:
-      g2p_gt_map[line_split[0]] = [line_split[1]]
+      g2p_gt_map[word] = [pronunciation]
   return g2p_gt_map
 
 
-def calc_errors(g2p_gt_map, decode_file_path, estimator, decode_hp):
+def calc_errors(g2p_gt_map, estimator, decode_file_path, decode_hp):
   """Calculate a number of prediction errors."""
   sorted_inputs, sorted_keys, decodes = decode_from_file(
       estimator, decode_file_path, decode_hp)
@@ -165,14 +162,11 @@ def decode_from_file(estimator, filename, decode_hp):
   problem_id = decode_hp.problem_idx
   # Inputs vocabulary is set to targets if there are no inputs in the problem,
   # e.g., for language models where the inputs are just a prefix of targets.
-  has_input = "inputs" in hparams.problems[problem_id].vocabulary
-  inputs_vocab_key = "inputs" if has_input else "targets"
-  inputs_vocab = hparams.problems[problem_id].vocabulary[inputs_vocab_key]
+  inputs_vocab = hparams.problems[problem_id].vocabulary["inputs"]
   targets_vocab = hparams.problems[problem_id].vocabulary["targets"]
   problem_name = "grapheme_to_phoneme_problem"
   tf.logging.info("Performing decoding from a file.")
-  sorted_inputs, sorted_keys = decoding._get_sorted_inputs(
-      filename, decode_hp.shards, decode_hp.delimiter)
+  sorted_inputs, sorted_keys = _get_sorted_inputs(filename)
   num_decode_batches = (len(sorted_inputs) - 1) // decode_hp.batch_size + 1
 
   def input_fn():
@@ -216,3 +210,41 @@ def decode_from_file(estimator, filename, decode_hp):
   sorted_inputs.reverse()
   decodes.reverse()
   return sorted_inputs, sorted_keys, decodes
+
+
+def _get_sorted_inputs(filename):
+  """Returning inputs sorted according to length.
+
+  Args:
+    filename: path to file with inputs, 1 per line.
+    num_shards: number of input shards. If > 1, will read from file filename.XX,
+      where XX is FLAGS.worker_id.
+    delimiter: str, delimits records in the file.
+
+  Returns:
+    a sorted list of inputs
+
+  """
+  tf.logging.info("Getting sorted inputs")
+
+  inputs = []
+  with tf.gfile.Open(filename) as input_file:
+    lines = input_file.readlines()
+    for line in lines:
+      if "\t" in line:
+        parts = line.strip().split("\t")
+        inputs.append(parts[0])
+      elif " " in line:
+        parts = line.strip().split(" ")
+        inputs.append(parts[0])
+      else:
+        inputs.append(line.strip())
+  input_lens = [(i, len(line)) for i, line in enumerate(inputs)]
+  sorted_input_lens = sorted(input_lens, key=operator.itemgetter(1))
+  # We'll need the keys to rearrange the inputs back into their original order
+  sorted_keys = {}
+  sorted_inputs = []
+  for i, (index, _) in enumerate(sorted_input_lens):
+    sorted_inputs.append(inputs[index])
+    sorted_keys[index] = i
+  return sorted_inputs, sorted_keys

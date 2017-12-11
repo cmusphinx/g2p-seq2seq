@@ -73,7 +73,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
     return [self._sym_to_id[sym] for sym in symbols_list]
 
   def decode(self, ids):
-    return " ".join(self.decode_list(ids))
+    return self._separator.join(self.decode_list(ids))
 
   def decode_list(self, ids):
     return [self._id_to_sym[id_] for id_ in ids]

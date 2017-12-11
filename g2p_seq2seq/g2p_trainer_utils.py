@@ -34,29 +34,29 @@ from IPython.core.debugger import Tracer
 FLAGS = tf.app.flags.FLAGS
 
 
-def add_problem_hparams(hparams, problem_name, model_dir):
+def add_problem_hparams(hparams, problem_name, model_dir, problem_instance):
   """Add problem hparams for the problems."""
   hparams.problems = []
   hparams.problem_instances = []
-  problem = registry._PROBLEMS[problem_name](model_dir)
-  p_hparams = problem.get_hparams(hparams)
-
-  hparams.problem_instances.append(problem)
+  p_hparams = problem_instance.get_hparams(hparams)
+  hparams.problem_instances.append(problem_instance)
   hparams.problems.append(p_hparams)
 
 
 def create_experiment_components(params, hparams, run_config,
+                                 problem_instance,
                                  train_preprocess_file_path=None,
                                  dev_preprocess_file_path=None):
   """Constructs and returns Estimator and train/eval input functions."""
   tf.logging.info("Creating experiment, storing model files in %s",
                   run_config.model_dir)
 
-  add_problem_hparams(hparams, params.problem_name, params.model_dir)
+  add_problem_hparams(hparams, params.problem_name, params.model_dir,
+                      problem_instance)
 
   # hparams batch_size is used as minibatch size instead of tokens in batch
   batch_size = (hparams.use_fixed_batch_size and hparams.batch_size) or None
-  num_datashards = devices.data_parallelism().n
+  num_datashards = 1
   train_input_fn = input_fn_builder.build_input_fn(
       mode=tf.estimator.ModeKeys.TRAIN,
       hparams=hparams,
@@ -93,11 +93,10 @@ def create_experiment_components(params, hparams, run_config,
 
   return estimator, {
       tf.estimator.ModeKeys.TRAIN: train_input_fn,
-      tf.estimator.ModeKeys.EVAL: eval_input_fn
-  }
+      tf.estimator.ModeKeys.EVAL: eval_input_fn}
 
 
-def make_experiment_fn(params, train_preprocess_file_path,
+def make_experiment_fn(params, problem_instance, train_preprocess_file_path,
                        dev_preprocess_file_path):
   """Returns experiment_fn for learn_runner. Wraps create_experiment."""
 
@@ -107,28 +106,27 @@ def make_experiment_fn(params, train_preprocess_file_path,
         params,
         hparams=hparams,
         run_config=run_config,
+        problem_instance=problem_instance,
         train_preprocess_file_path=train_preprocess_file_path,
         dev_preprocess_file_path=dev_preprocess_file_path)
 
   return experiment_fn
 
 
-def create_experiment(params, hparams, run_config, train_preprocess_file_path,
+def create_experiment(params, hparams, run_config, problem_instance,
+                      train_preprocess_file_path,
                       dev_preprocess_file_path):
   """Create Experiment."""
   estimator, input_fns = create_experiment_components(
       params=params,
       hparams=hparams,
       run_config=run_config,
+      problem_instance=problem_instance,
       train_preprocess_file_path=train_preprocess_file_path,
       dev_preprocess_file_path=dev_preprocess_file_path)
 
   train_monitors = []
   eval_hooks = []
-  #if FLAGS.tfdbg:
-  #  hook = debug.LocalCLIDebugHook()
-  #  train_monitors.append(hook)
-  #  eval_hooks.append(hook)
   if FLAGS.dbgprofile:
     # Recorded traces can be visualized with chrome://tracing/
     # The memory/tensor lifetime is also profiled
@@ -152,14 +150,6 @@ def create_experiment(params, hparams, run_config, train_preprocess_file_path,
               early_stopping_metric_minimize=FLAGS.
               eval_early_stopping_metric_minimize))
 
-  #optional_kwargs = {}
-  #if FLAGS.export_saved_model:
-  #  assert len(hparams.problem_instances) == 1
-  #  problem = hparams.problem_instances[0]
-  #  optional_kwargs["export_strategies"] = [
-  #      make_export_strategy(problem, hparams)
-  #  ]
-
   return tf.contrib.learn.Experiment(
       estimator=estimator,
       train_input_fn=input_fns[tf.estimator.ModeKeys.TRAIN],
@@ -168,11 +158,11 @@ def create_experiment(params, hparams, run_config, train_preprocess_file_path,
       eval_steps=params.eval_steps,
       train_monitors=train_monitors,
       eval_hooks=eval_hooks,
-      eval_delay_secs=0)#,
-      #**optional_kwargs)
+      eval_delay_secs=0)
 
 
-def run(params, train_preprocess_file_path, dev_preprocess_file_path):
+def run(params, problem_instance, train_preprocess_file_path,
+        dev_preprocess_file_path):
   """Runs an Estimator locally or distributed.
 
   Args:
@@ -186,6 +176,7 @@ def run(params, train_preprocess_file_path, dev_preprocess_file_path):
   """
   exp_fn = make_experiment_fn(
       params,
+      problem_instance,
       train_preprocess_file_path=train_preprocess_file_path,
       dev_preprocess_file_path=dev_preprocess_file_path)
 
