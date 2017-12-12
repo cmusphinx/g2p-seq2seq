@@ -23,6 +23,7 @@ import os
 import operator
 import tensorflow as tf
 import numpy as np
+import re
 
 from g2p_seq2seq import g2p_trainer_utils
 from tensor2tensor.utils import registry
@@ -31,8 +32,6 @@ from tensor2tensor.utils import usr_dir
 from tensor2tensor.utils import decoding
 
 from tensor2tensor.data_generators import text_encoder
-
-from IPython.core.debugger import Tracer
 
 EOS = text_encoder.EOS
 
@@ -90,17 +89,15 @@ class G2PModel(object):
   def decode(self, output_file_path):
     """Run decoding mode."""
     estimator, decode_hp = self.__prepare_decode_model()
-    sorted_inputs, sorted_keys, decodes = decode_from_file(
+    inputs, decodes = decode_from_file(
         estimator, self.file_path, decode_hp)
 
-    # Dumping inputs and outputs to file filename.decodes in
-    # format result\tinput in the same order as original inputs
+    # If path to the output file pointed out, dump decoding results to the file
     if output_file_path:
       tf.logging.info("Writing decodes into %s" % output_file_path)
       outfile = tf.gfile.Open(output_file_path, "w")
-      for index in range(len(sorted_inputs)):
-        outfile.write("%s%s" % (decodes[sorted_keys[index]],
-                                decode_hp.delimiter))
+      for index in range(len(inputs)):
+        outfile.write("%s%s" % (decodes[index], decode_hp.delimiter))
 
   def evaluate(self):
     """Run evaluation mode."""
@@ -140,12 +137,12 @@ def create_g2p_gt_map(words, pronunciations):
 
 def calc_errors(g2p_gt_map, estimator, decode_file_path, decode_hp):
   """Calculate a number of prediction errors."""
-  sorted_inputs, sorted_keys, decodes = decode_from_file(
+  inputs, decodes = decode_from_file(
       estimator, decode_file_path, decode_hp)
 
   errors = 0
-  for index, word in enumerate(sorted_inputs):
-    if decodes[sorted_keys[index]] not in g2p_gt_map[word]:
+  for index, word in enumerate(inputs):
+    if decodes[index] not in g2p_gt_map[word]:
       errors += 1
   return errors
 
@@ -166,13 +163,13 @@ def decode_from_file(estimator, filename, decode_hp):
   targets_vocab = hparams.problems[problem_id].vocabulary["targets"]
   problem_name = "grapheme_to_phoneme_problem"
   tf.logging.info("Performing decoding from a file.")
-  sorted_inputs, sorted_keys = _get_sorted_inputs(filename)
-  num_decode_batches = (len(sorted_inputs) - 1) // decode_hp.batch_size + 1
+  inputs = _get_inputs(filename)
+  num_decode_batches = (len(inputs) - 1) // decode_hp.batch_size + 1
 
   def input_fn():
     """Function for inputs generator."""
-    input_gen = decoding._decode_batch_input_fn(
-        problem_id, num_decode_batches, sorted_inputs, inputs_vocab,
+    input_gen = _decode_batch_input_fn(
+        problem_id, num_decode_batches, inputs, inputs_vocab,
         decode_hp.batch_size, decode_hp.max_input_size)
     gen_fn = decoding.make_input_fn_from_generator(input_gen)
     example = gen_fn()
@@ -205,46 +202,58 @@ def decode_from_file(estimator, filename, decode_hp):
           targets_vocab)
       decodes.append(decoded_outputs)
 
-  # Reversing the decoded inputs and outputs because they were reversed in
-  # _decode_batch_input_fn
-  sorted_inputs.reverse()
-  decodes.reverse()
-  return sorted_inputs, sorted_keys, decodes
+  return inputs, decodes
 
 
-def _get_sorted_inputs(filename):
-  """Returning inputs sorted according to length.
+def _get_inputs(filename, delimiters="\t "):
+  """Returning inputs.
 
   Args:
     filename: path to file with inputs, 1 per line.
-    num_shards: number of input shards. If > 1, will read from file filename.XX,
-      where XX is FLAGS.worker_id.
-    delimiter: str, delimits records in the file.
+    delimiters: str, delimits records in the file.
 
   Returns:
-    a sorted list of inputs
+    a list of inputs
 
   """
-  tf.logging.info("Getting sorted inputs")
+  tf.logging.info("Getting inputs")
+  DELIMITERS_REGEX = re.compile("[" + delimiters + "]+")
 
   inputs = []
   with tf.gfile.Open(filename) as input_file:
     lines = input_file.readlines()
     for line in lines:
-      if "\t" in line:
-        parts = line.strip().split("\t")
-        inputs.append(parts[0])
-      elif " " in line:
-        parts = line.strip().split(" ")
+      if set("[" + delimiters + "]+$").intersection(line):
+        parts = re.split(DELIMITERS_REGEX, line.strip(), maxsplit=1)
         inputs.append(parts[0])
       else:
         inputs.append(line.strip())
-  input_lens = [(i, len(line)) for i, line in enumerate(inputs)]
-  sorted_input_lens = sorted(input_lens, key=operator.itemgetter(1))
-  # We'll need the keys to rearrange the inputs back into their original order
-  sorted_keys = {}
-  sorted_inputs = []
-  for i, (index, _) in enumerate(sorted_input_lens):
-    sorted_inputs.append(inputs[index])
-    sorted_keys[index] = i
-  return sorted_inputs, sorted_keys
+  return inputs
+
+
+def _decode_batch_input_fn(problem_id, num_decode_batches, inputs,
+                           vocabulary, batch_size, max_input_size):
+  tf.logging.info(" batch %d" % num_decode_batches)
+  for b in range(num_decode_batches):
+    tf.logging.info("Decoding batch %d" % b)
+    batch_length = 0
+    batch_inputs = []
+    for _inputs in inputs[b * batch_size:(b + 1) * batch_size]:
+      input_ids = vocabulary.encode(_inputs)
+      if max_input_size > 0:
+        # Subtract 1 for the EOS_ID.
+        input_ids = input_ids[:max_input_size - 1]
+      input_ids.append(text_encoder.EOS_ID)
+      batch_inputs.append(input_ids)
+      if len(input_ids) > batch_length:
+        batch_length = len(input_ids)
+    final_batch_inputs = []
+    for input_ids in batch_inputs:
+      assert len(input_ids) <= batch_length
+      x = input_ids + [0] * (batch_length - len(input_ids))
+      final_batch_inputs.append(x)
+
+    yield {
+        "inputs": np.array(final_batch_inputs).astype(np.int32),
+        "problem_choice": np.array(problem_id).astype(np.int32),
+    }

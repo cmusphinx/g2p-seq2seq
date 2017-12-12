@@ -157,7 +157,6 @@ def split_grapheme_phoneme(data_path):
       line_grs, line_phs = list(line_split[0]), line_split[1].split(" ")
       graphemes = update_vocab_symbols(graphemes, line_grs)
       phonemes = update_vocab_symbols(phonemes, line_phs)
-  graphemes, phonemes = sorted(graphemes.keys()), sorted(phonemes.keys())
   return graphemes, phonemes
 
 

@@ -34,8 +34,9 @@ class Params(object):
     self.train_steps = 10
     self.eval_steps = 1
     self.hparams = "batch_size=1,num_hidden_layers=1,hidden_size=4" +\
-        ",filter_size=8,num_heads=1"
-    self.decode_hparams = "beam_size=4,alpha=0.6"
+        ",filter_size=8,num_heads=1,length_bucket_step=2.0,max_length=50," +\
+        ",min_length_bucket=5"
+    self.decode_hparams = "beam_size=4,alpha=0.6,return_beams=True"
 
     if flags:
       self.batch_size = flags.batch_size
@@ -48,7 +49,10 @@ class Params(object):
           ",num_hidden_layers=" + str(flags.num_layers) +\
           ",hidden_size=" + str(flags.size) +\
           ",filter_size=" + str(flags.filter_size) +\
-          ",num_heads=" + str(flags.num_heads)
+          ",num_heads=" + str(flags.num_heads) +\
+          ",length_bucket_step=" + str(flags.length_bucket_step) +\
+          ",max_length=" + str(flags.max_length) +\
+          ",min_length_bucket" + str(flags.min_length_bucket)
 
     saved_hparams_path = os.path.join(self.model_dir, "hparams.json")
     if os.path.exists(saved_hparams_path):

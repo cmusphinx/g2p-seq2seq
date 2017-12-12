@@ -47,6 +47,15 @@ tf.flags.DEFINE_boolean("reinit", False,
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 256,
                         "Batch size to use during training.")
+tf.flags.DEFINE_integer("min_length_bucket", 5,
+                        "Set the size of the minimal bucket.")
+tf.flags.DEFINE_integer("max_length", 40,
+                        "Set the size of the maximal bucket.")
+tf.flags.DEFINE_integer("length_bucket_step", 2.0,
+    """This flag controls the number of length buckets in the data reader.
+    The buckets have maximum lengths from min_bucket_length to max_length,
+    increasing (approximately) by factors
+    of length_bucket_step.""")
 tf.flags.DEFINE_integer("num_layers", 2, "Number of hidden layers.")
 tf.flags.DEFINE_integer("size", 64,
                         "The number of neurons in the hidden layer.")
