@@ -32,6 +32,7 @@ from tensor2tensor.utils import usr_dir
 from tensor2tensor.utils import decoding
 
 from tensor2tensor.data_generators import text_encoder
+from IPython.core.debugger import Tracer
 
 EOS = text_encoder.EOS
 
@@ -91,13 +92,17 @@ class G2PModel(object):
     estimator, decode_hp = self.__prepare_decode_model()
     inputs, decodes = decode_from_file(
         estimator, self.file_path, decode_hp)
-
     # If path to the output file pointed out, dump decoding results to the file
     if output_file_path:
       tf.logging.info("Writing decodes into %s" % output_file_path)
       outfile = tf.gfile.Open(output_file_path, "w")
-      for index in range(len(inputs)):
-        outfile.write("%s%s" % (decodes[index], decode_hp.delimiter))
+      if decode_hp.return_beams:
+        for index in range(len(inputs)):
+          outfile.write("%s%s" % ("\t".join(decodes[index]),
+                                  decode_hp.delimiter))
+      else:
+        for index in range(len(inputs)):
+          outfile.write("%s%s" % (decodes[index], decode_hp.delimiter))
 
   def evaluate(self):
     """Run evaluation mode."""
@@ -115,12 +120,13 @@ class G2PModel(object):
     g2p_gt_map = create_g2p_gt_map(words, pronunciations)
 
     estimator, decode_hp = self.__prepare_decode_model()
-    errors = calc_errors(g2p_gt_map, estimator, self.file_path, decode_hp)
+    correct, errors = calc_errors(g2p_gt_map, estimator, self.file_path,
+                                  decode_hp)
 
-    print("Words: %d" % len(g2p_gt_map))
+    print("Words: %d" % (correct+errors))
     print("Errors: %d" % errors)
-    print("WER: %.3f" % (float(errors)/len(g2p_gt_map)))
-    print("Accuracy: %.3f" % float(1.-(float(errors)/len(g2p_gt_map))))
+    print("WER: %.3f" % (float(errors)/(correct+errors)))
+    print("Accuracy: %.3f" % float(1.-(float(errors)/(correct+errors))))
     return estimator, decode_hp, g2p_gt_map
 
 
@@ -140,11 +146,25 @@ def calc_errors(g2p_gt_map, estimator, decode_file_path, decode_hp):
   inputs, decodes = decode_from_file(
       estimator, decode_file_path, decode_hp)
 
-  errors = 0
+  correct, errors = 0, 0
   for index, word in enumerate(inputs):
-    if decodes[index] not in g2p_gt_map[word]:
-      errors += 1
-  return errors
+    if decode_hp.return_beams:
+      beam_correct_found = False
+      for beam_decode in decodes[index]:
+        if beam_decode in g2p_gt_map[word]:
+          beam_correct_found = True
+          break
+      if beam_correct_found:
+        correct += 1
+      else:
+        errors += 1
+    else:
+      if decodes[index] in g2p_gt_map[word]:
+        correct += 1
+      else:
+        errors += 1
+
+  return correct, errors
 
 
 def decode_from_file(estimator, filename, decode_hp):
@@ -191,7 +211,7 @@ def decode_from_file(estimator, filename, decode_hp):
             inputs_vocab,
             targets_vocab)
         beam_decodes.append(decoded_outputs)
-      decodes.append("\t".join(beam_decodes))
+      decodes.append(beam_decodes)
     else:
       decoded_outputs, _ = decoding.log_decode_results(
           result["inputs"],

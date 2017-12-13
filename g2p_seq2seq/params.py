@@ -33,10 +33,10 @@ class Params(object):
     self.problem_name = "grapheme_to_phoneme_problem"
     self.train_steps = 10
     self.eval_steps = 1
-    self.hparams = "batch_size=1,num_hidden_layers=1,hidden_size=4" +\
-        ",filter_size=8,num_heads=1,length_bucket_step=2.0,max_length=50," +\
-        ",min_length_bucket=5"
-    self.decode_hparams = "beam_size=4,alpha=0.6,return_beams=True"
+    self.hparams = "batch_size=1,num_hidden_layers=1,hidden_size=4," +\
+        "filter_size=8,num_heads=1,length_bucket_step=2.0,max_length=50," +\
+        "min_length_bucket=5"
+    self.decode_hparams = "beam_size=1,alpha=0.6,return_beams=False"
 
     if flags:
       self.batch_size = flags.batch_size
@@ -53,6 +53,7 @@ class Params(object):
           ",length_bucket_step=" + str(flags.length_bucket_step) +\
           ",max_length=" + str(flags.max_length) +\
           ",min_length_bucket" + str(flags.min_length_bucket)
+      self.decode_hparams = "beam_size=4,alpha=0.6,return_beams=True"
 
     saved_hparams_path = os.path.join(self.model_dir, "hparams.json")
     if os.path.exists(saved_hparams_path):

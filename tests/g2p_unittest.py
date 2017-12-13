@@ -5,6 +5,7 @@ import g2p_seq2seq.g2p as g2p
 from g2p_seq2seq.g2p import G2PModel
 from g2p_seq2seq.params import Params
 import inspect, os
+from IPython.core.debugger import Tracer
 
 
 class TestG2P(unittest.TestCase):
@@ -22,22 +23,22 @@ class TestG2P(unittest.TestCase):
     shutil.rmtree(model_dir)
 
   def test_decode(self):
-    model_dir = os.path.abspath("tests/models/decode")
+    model_dir = os.path.abspath("tests/models/train_new")
     decode_file_path = os.path.abspath("tests/data/toydict.graphemes")
     output_file_path = os.path.abspath("tests/models/decode/decode_output.txt")
     params = Params(model_dir, decode_file_path)
     g2p_model = G2PModel(params, file_path=decode_file_path, is_training=False)
     g2p_model.decode(output_file_path=output_file_path)
     out_lines = open(output_file_path).readlines()
-    self.assertEqual(out_lines[0].strip(), u"")
-    self.assertEqual(out_lines[1].strip(), u"")
-    self.assertEqual(out_lines[2].strip(), u"")
+    self.assertEqual(out_lines[0].strip(), u"C B C A C B")
+    self.assertEqual(out_lines[1].strip(), u"C B C A C B")
+    self.assertEqual(out_lines[2].strip(), u"A")
 
   def test_evaluate(self):
-    model_dir = os.path.abspath("tests/models/decode")
+    model_dir = os.path.abspath("tests/models/train_new")#decode")
     gt_path = os.path.abspath("tests/data/toydict.test")
     params = Params(model_dir, gt_path)
     g2p_model = G2PModel(params, file_path=gt_path, is_training=False)
     estimator, decode_hp, g2p_gt_map = g2p_model.evaluate()
-    errors = g2p.calc_errors(g2p_gt_map, estimator, gt_path, decode_hp)
-    self.assertAlmostEqual(float(errors)/len(g2p_gt_map), 1.000, places=3)
+    correct, errors = g2p.calc_errors(g2p_gt_map, estimator, gt_path, decode_hp)
+    self.assertAlmostEqual(float(errors)/(correct+errors), 1.000, places=3)
