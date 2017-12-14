@@ -108,23 +108,44 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
   def vocab_name(self):
     return None
 
-  def generate_data(self, file_path):
-    """Generate cases from a generator and save as TFRecord files.
-
-    Generated cases are transformed to tf.Example protos and saved as TFRecords
-    in sharded files named output_dir/output_name-00..N-of-00..M=num_shards.
+  def generate_preprocess_data(self, train_path, dev_path):
+    """Generate and save preprocessed data as TFRecord files.
 
     Args:
-      generator: a generator yielding (string -> int/float/str list)
-                 dictionaries.
+      train_path: the path to the train data file.
+      dev_path: the path to the development data file.
+
+    Returns:
+      train_preprocess_path: the path where the preprocessed train data
+          was saved.
+      dev_preprocess_path: the path where the preprocessed development data
+          was saved.
     """
-    preprocess_file_path = os.path.join(
-        self._model_dir,
-        os.path.basename(file_path) + ".preprocessed")
-    generate_files(
-        self.generator(file_path, self.source_vocab, self.target_vocab),
-        preprocess_file_path)
-    return preprocess_file_path
+    train_gen = self.generator(train_path, self.source_vocab,
+                               self.target_vocab)
+    dev_gen = None
+    if dev_path:
+      train_preprocess_path = os.path.join(
+          self._model_dir,
+          os.path.basename(train_path) + ".preprocessed")
+      dev_preprocess_path = os.path.join(
+          self._model_dir,
+          os.path.basename(dev_path) + ".preprocessed")
+      train_gen = self.generator(train_path, self.source_vocab,
+                                 self.target_vocab)
+      dev_gen = self.generator(dev_path, self.source_vocab,
+                               self.target_vocab)
+    else:
+      train_preprocess_path = os.path.join(
+          self._model_dir,
+          os.path.basename(train_path) + ".train.preprocessed")
+      dev_preprocess_path = os.path.join(
+          self._model_dir,
+          os.path.basename(train_path) + ".dev.preprocessed")
+
+    generate_files(train_gen, dev_gen, train_preprocess_path,
+                   dev_preprocess_path)
+    return train_preprocess_path, dev_preprocess_path
 
   def get_feature_encoders(self, data_dir=None):
     if self._encoders is None:
@@ -305,17 +326,49 @@ class Gen:
                                         "targets":target_ints})
 
 
-def generate_files(generator, output_filename):
-  """Generate cases from a generator and save as TFRecord files.
+def generate_files(train_gen, dev_gen, train_preprocess_path,
+                   dev_preprocess_path):
+  """Generate cases from a generators and save as TFRecord files.
 
   Generated cases are transformed to tf.Example protos and saved as TFRecords
   in sharded files named output_dir/output_name-00..N-of-00..M=num_shards.
 
   Args:
-    generator: a generator yielding (string -> int/float/str list) dictionaries.
-    output_filename: output file paths.
+    train_gen: a generator yielding (string -> int/float/str list) train data.
+    dev_gen: a generator yielding development data.
+    train_preprocess_path: path to the file where preprocessed train data
+        will be saved.
+    dev_preprocess_path: path to the file where preprocessed development data
+        will be saved.
   """
-  writer = tf.python_io.TFRecordWriter(output_filename)
+  if dev_gen:
+    gen_file(train_gen, train_preprocess_path)
+    gen_file(dev_gen, dev_preprocess_path)
+  else:
+    # In case when development generator was not given, we create development
+    # preprocess file from train generator.
+    train_writer = tf.python_io.TFRecordWriter(train_preprocess_path)
+    dev_writer = tf.python_io.TFRecordWriter(dev_preprocess_path)
+    line_counter = 1
+    for case in train_gen:
+      sequence_example = generator_utils.to_example(case)
+      if line_counter % 20 == 0:
+        dev_writer.write(sequence_example.SerializeToString())
+      else:
+        train_writer.write(sequence_example.SerializeToString())
+      line_counter += 1
+    train_writer.close()
+    dev_writer.close()
+
+
+def gen_file(generator, output_file_path):
+  """Generate cases from generator and save as TFRecord file.
+
+  Args:
+    generator: a generator yielding (string -> int/float/str list) data.
+    output_file_path: path to the file where preprocessed data will be saved.
+  """
+  writer = tf.python_io.TFRecordWriter(output_file_path)
   for case in generator:
     sequence_example = generator_utils.to_example(case)
     writer.write(sequence_example.SerializeToString())

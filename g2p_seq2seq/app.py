@@ -72,6 +72,14 @@ tf.flags.DEFINE_integer("max_epochs", 0,
                         "How many training steps to do until stop training"
                         " (0: no limit).")
 tf.flags.DEFINE_integer("eval_steps", 10, "Number of steps for evaluation.")
+
+# Decoding parameters
+tf.flags.DEFINE_boolean("return_beams", False,
+                        "Set to true for beams decoding.")
+tf.flags.DEFINE_integer("beam_size", 4, "Number of decoding beams.")
+tf.flags.DEFINE_integer("alpha", 0.6,
+    """Float that controls the length penalty. Larger the alpha, stronger the
+    preference for longer sequences.""")
 tf.flags.DEFINE_string("schedule", "train_and_evaluate",
     """Set schedule. More info about training configurations you can read in
     tensor2tensor docs: https://github.com/tensorflow/tensor2tensor/blob/master/
@@ -103,7 +111,7 @@ def main(_=[]):
 
   if FLAGS.train:
     g2p_model = G2PModel(params, file_path=FLAGS.train, is_training=True)
-    g2p_model.prepare_data(train_path=FLAGS.train, dev_path=FLAGS.valid)
+    g2p_model.prepare_datafiles(train_path=FLAGS.train, dev_path=FLAGS.valid)
     g2p_model.train()
 
   elif FLAGS.interactive:

@@ -32,7 +32,6 @@ from tensor2tensor.utils import usr_dir
 from tensor2tensor.utils import decoding
 
 from tensor2tensor.data_generators import text_encoder
-from IPython.core.debugger import Tracer
 
 EOS = text_encoder.EOS
 
@@ -53,10 +52,10 @@ class G2PModel(object):
       os.makedirs(self.params.model_dir)
     self.train_preprocess_file_path, self.dev_preprocess_file_path = None, None
 
-  def prepare_data(self, train_path=None, dev_path=None):
+  def prepare_datafiles(self, train_path, dev_path):
     """Prepare preprocessed datafiles."""
-    self.train_preprocess_file_path = self.problem.generate_data(train_path)
-    self.dev_preprocess_file_path = self.problem.generate_data(dev_path)
+    self.train_preprocess_file_path, self.dev_preprocess_file_path =\
+        self.problem.generate_preprocess_data(train_path, dev_path)
 
   def train(self):
     """Run training."""

@@ -52,8 +52,13 @@ class Params(object):
           ",num_heads=" + str(flags.num_heads) +\
           ",length_bucket_step=" + str(flags.length_bucket_step) +\
           ",max_length=" + str(flags.max_length) +\
-          ",min_length_bucket" + str(flags.min_length_bucket)
-      self.decode_hparams = "beam_size=4,alpha=0.6,return_beams=True"
+          ",min_length_bucket=" + str(flags.min_length_bucket)
+      self.decode_hparams = "beam_size=" + str(flags.beam_size) +\
+          ",alpha=" + str(flags.alpha)
+      if flags.return_beams:
+          self.decode_hparams += ",return_beams=True"
+      else:
+          self.decode_hparams += ",return_beams=False"
 
     saved_hparams_path = os.path.join(self.model_dir, "hparams.json")
     if os.path.exists(saved_hparams_path):
