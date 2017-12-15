@@ -43,6 +43,8 @@ tf.flags.DEFINE_string("valid", "", "Development dictionary.")
 tf.flags.DEFINE_string("test", "", "Test dictionary.")
 tf.flags.DEFINE_boolean("reinit", False,
                         "Set to True for training from scratch.")
+tf.flags.DEFINE_boolean("freeze", False,
+                        "Set to True for freeze the graph.")
 
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 256,
@@ -110,6 +112,7 @@ def main(_=[]):
   params = Params(FLAGS.model_dir, data_path, flags=FLAGS)
 
   if FLAGS.train:
+    #FLAGS.keep_checkpoint_max = 1
     g2p_model = G2PModel(params, file_path=FLAGS.train, is_training=True)
     g2p_model.prepare_datafiles(train_path=FLAGS.train, dev_path=FLAGS.valid)
     g2p_model.train()
@@ -126,6 +129,9 @@ def main(_=[]):
     g2p_model = G2PModel(params, file_path=FLAGS.evaluate, is_training=False)
     g2p_model.evaluate()
 
+  elif FLAGS.freeze:
+    #g2p_model.freeze(params, )
+    pass
 
 if __name__ == "__main__":
   tf.logging.set_verbosity(tf.logging.INFO)

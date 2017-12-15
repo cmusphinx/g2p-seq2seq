@@ -29,9 +29,15 @@ from tensor2tensor.utils import registry
 from tensor2tensor.utils import decoding
 from tensor2tensor.utils import trainer_utils
 
-from IPython.core.debugger import Tracer
+#FLAGS = tf.app.flags.FLAGS
 
-FLAGS = tf.app.flags.FLAGS
+flags = tf.flags
+FLAGS = flags.FLAGS
+
+flags.DEFINE_integer("save_checkpoints_steps", None,
+    """Save checkpoints every this many steps. Default=None means let
+    tensorflow.contrib.learn.python.learn decide, which saves checkpoints
+    every 600 seconds.""")
 
 
 def add_problem_hparams(hparams, problem_name, model_dir, problem_instance):
@@ -161,6 +167,23 @@ def create_experiment(params, hparams, run_config, problem_instance,
       eval_delay_secs=0)
 
 
+def create_run_config(output_dir):
+  """Create a RunConfig object."""
+
+  FLAGS.keep_checkpoint_max = 1
+
+  run_config = tf.contrib.learn.RunConfig(
+      model_dir=output_dir,
+      master=FLAGS.master,
+      gpu_memory_fraction=FLAGS.worker_gpu_memory_fraction,
+      session_config=trainer_utils.session_config(),
+      keep_checkpoint_max=FLAGS.keep_checkpoint_max,
+      keep_checkpoint_every_n_hours=FLAGS.keep_checkpoint_every_n_hours,
+      save_checkpoints_steps=FLAGS.save_checkpoints_steps)
+
+  return run_config
+
+
 def run(params, problem_instance, train_preprocess_file_path,
         dev_preprocess_file_path):
   """Runs an Estimator locally or distributed.
@@ -181,7 +204,8 @@ def run(params, problem_instance, train_preprocess_file_path,
       dev_preprocess_file_path=dev_preprocess_file_path)
 
   # Create hparams and run_config
-  run_config = trainer_utils.create_run_config(params.model_dir)
+  #run_config = trainer_utils.create_run_config(params.model_dir)
+  run_config = create_run_config(params.model_dir)
   hparams = trainer_utils.create_hparams(
       params.hparams_set,
       params.data_dir,
