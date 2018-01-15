@@ -31,6 +31,7 @@ import tensorflow as tf
 from g2p_seq2seq.g2p import G2PModel
 from g2p_seq2seq.params import Params
 
+from IPython.core.debugger import Tracer
 
 tf.flags.DEFINE_string("model_dir", None, "Training directory.")
 tf.flags.DEFINE_boolean("interactive", False,
@@ -97,8 +98,7 @@ def main(_=[]):
   """Main function.
   """
   tf.logging.set_verbosity(tf.logging.INFO)
-  data_path = FLAGS.train if FLAGS.train else FLAGS.decode
-  data_path = FLAGS.evaluate if not data_path else data_path
+  file_path = FLAGS.train or FLAGS.decode or FLAGS.evaluate
 
   if not FLAGS.model_dir:
     raise RuntimeError("Model directory not specified.")
@@ -109,29 +109,28 @@ def main(_=[]):
   if not os.path.exists(FLAGS.model_dir):
     os.makedirs(FLAGS.model_dir)
 
-  params = Params(FLAGS.model_dir, data_path, flags=FLAGS)
+  params = Params(FLAGS.model_dir, file_path, flags=FLAGS)
 
   if FLAGS.train:
-    #FLAGS.keep_checkpoint_max = 1
-    g2p_model = G2PModel(params, file_path=FLAGS.train, is_training=True)
+    g2p_model = G2PModel(params, file_path, is_training=True)
     g2p_model.prepare_datafiles(train_path=FLAGS.train, dev_path=FLAGS.valid)
     g2p_model.train()
 
-  elif FLAGS.interactive:
-    g2p_model = G2PModel(params)
-    g2p_model.interactive()
+  #elif FLAGS.freeze:
+  #  g2p_model.freeze(params)
 
-  elif FLAGS.decode:
-    g2p_model = G2PModel(params, file_path=FLAGS.decode, is_training=False)
-    g2p_model.decode(output_file_path=FLAGS.output)
+  else:
+    g2p_model = G2PModel(params, file_path, is_training=False)
 
-  elif FLAGS.evaluate:
-    g2p_model = G2PModel(params, file_path=FLAGS.evaluate, is_training=False)
-    g2p_model.evaluate()
+    if FLAGS.interactive:
+      g2p_model.interactive()
+      
+    elif FLAGS.decode:
+      g2p_model.decode(output_file_path=FLAGS.output)
 
-  elif FLAGS.freeze:
-    #g2p_model.freeze(params, )
-    pass
+    elif FLAGS.evaluate:
+      g2p_model.evaluate()
+
 
 if __name__ == "__main__":
   tf.logging.set_verbosity(tf.logging.INFO)

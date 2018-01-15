@@ -29,8 +29,6 @@ from tensor2tensor.utils import registry
 from tensor2tensor.utils import decoding
 from tensor2tensor.utils import trainer_utils
 
-#FLAGS = tf.app.flags.FLAGS
-
 flags = tf.flags
 FLAGS = flags.FLAGS
 

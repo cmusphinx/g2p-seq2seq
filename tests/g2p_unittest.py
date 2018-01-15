@@ -5,7 +5,6 @@ import g2p_seq2seq.g2p as g2p
 from g2p_seq2seq.g2p import G2PModel
 from g2p_seq2seq.params import Params
 import inspect, os
-from IPython.core.debugger import Tracer
 
 
 class TestG2P(unittest.TestCase):
@@ -23,7 +22,7 @@ class TestG2P(unittest.TestCase):
     shutil.rmtree(model_dir)
 
   def test_decode(self):
-    model_dir = os.path.abspath("tests/models/train_new")
+    model_dir = os.path.abspath("tests/models/decode")
     decode_file_path = os.path.abspath("tests/data/toydict.graphemes")
     output_file_path = os.path.abspath("tests/models/decode/decode_output.txt")
     params = Params(model_dir, decode_file_path)
@@ -35,7 +34,7 @@ class TestG2P(unittest.TestCase):
     self.assertEqual(out_lines[2].strip(), u"A")
 
   def test_evaluate(self):
-    model_dir = os.path.abspath("tests/models/train_new")#decode")
+    model_dir = os.path.abspath("tests/models/decode")
     gt_path = os.path.abspath("tests/data/toydict.test")
     params = Params(model_dir, gt_path)
     g2p_model = G2PModel(params, file_path=gt_path, is_training=False)

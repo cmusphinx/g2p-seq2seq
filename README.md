@@ -83,6 +83,7 @@ To evaluate Word Error Rate of the trained model, run
 ```
 The test dictionary should be a dictionary in standard format:
 HELLO\tHH EH L OW
+
 BYE\tB AY
 
 You may also calculate Word Error Rate considering all top N beams.
@@ -94,7 +95,7 @@ To train G2P you need a dictionary (word and phone sequence per line).
 See an [example dictionary](http://github.com/cmusphinx/cmudict)
 
 ```
-  g2p-seq2seq --train train_dictionary.dic --model model_folder_path
+  g2p-seq2seq --train train_dictionary.dic --model_dir model_folder_path
 ```
 
 You can set up maximum training steps:
@@ -129,7 +130,7 @@ You can manually point out Development and Test datasets:
 
 If you need to continue train a saved model just point out the directory with the existing model:
 ```
-  g2p-seq2seq --train train_dictionary.dic --model model_folder_path
+  g2p-seq2seq --train train_dictionary.dic --model_dir model_folder_path
 ```
 
 And, if you want to start training from scratch:
@@ -160,11 +161,8 @@ LSTM num_layers=2, size=256   | 22.2 | ~31
 ## References
 ---------------------------------------
 
-[1] Ilya Sutskever, Vinyals Oriol and V. Le Quoc. "Sequence to sequence
-learning with neural networks." In Advances in neural information
-processing systems, pp. 3104-3112. 2014.
+[1] Lukasz Kaiser. "Accelerating Deep Learning Research with the Tensor2Tensor Library." In Google Research Blog, 2017.
 
-[2] Yao, Kaisheng, and Geoffrey Zweig. "Sequence-to-sequence neural net
-models for grapheme-to-phoneme conversion." arXiv preprint
-arXiv:1506.00196, 2015.
-
+[2] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lucasz Kaiser, and Illia Polosukhin. "Attention Is All You Need."
+arXiv preprint
+arXiv:1706.03762, 2017.

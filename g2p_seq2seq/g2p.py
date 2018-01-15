@@ -33,6 +33,12 @@ from tensor2tensor.utils import decoding
 
 from tensor2tensor.data_generators import text_encoder
 
+from IPython.core.debugger import Tracer
+from six.moves import input
+from six import text_type
+
+from tensorflow.python.estimator import estimator as estimator_lib
+
 EOS = text_encoder.EOS
 
 
@@ -51,6 +57,10 @@ class G2PModel(object):
     if not os.path.exists(self.params.model_dir):
       os.makedirs(self.params.model_dir)
     self.train_preprocess_file_path, self.dev_preprocess_file_path = None, None
+    self.estimator, self.decode_hp = self.__prepare_decode_model()
+    self.word_processed = tf.get_variable("word_processed", dtype=tf.bool, initializer=tf.constant(True))
+    self.problem_choice = tf.get_variable("problem_choice", [1], dtype=tf.int32)
+    self.inputs_placeholder = tf.placeholder(tf.int32, [None], name="inputs_placeholder")
 
   def prepare_datafiles(self, train_path, dev_path):
     """Prepare preprocessed datafiles."""
@@ -81,16 +91,163 @@ class G2PModel(object):
     decode_hp.add_hparam("shards", 1)
     return estimator, decode_hp
 
+  def __prepare_interactive_model(self, num_samples, decode_length, vocabulary,
+      const_array_size):
+    """Create monitored session and generator that reads from the terminal and yields "interactive inputs".
+
+    Due to temporary limitations in tf.learn, if we don't want to reload the
+    whole graph, then we are stuck encoding all of the input as one fixed-size
+    numpy array.
+
+    We yield int32 arrays with shape [const_array_size].  The format is:
+    [num_samples, decode_length, len(input ids), <input ids>, <padding>]
+
+    Args:
+      num_samples;
+      decode_length: maximum possible length of decoding word;
+      vocabulary: g2p_encoder.GraphemePhonemeEncoder object that used here for
+        the purpose of decoding the list with input ids;
+      const_array_size: this should be longer than the longest input.
+
+    Raises:
+      ValueError: Could not find a trained model in model_dir.
+      ValueError: if batch length of predictions are not same.
+    """
+
+    try:
+      word = input("> ")
+      if not issubclass(type(word), text_type):
+        word = text_type(word, encoding="utf-8", errors="replace")
+    except EOFError:
+      pass
+    if not word:
+      pass
+
+    input_ids = vocabulary.encode(word)
+    input_ids.append(text_encoder.EOS_ID)
+    self.inputs = [num_samples, decode_length, len(input_ids)] + input_ids
+    assert len(self.inputs) < const_array_size
+    self.inputs += [0] * (const_array_size - len(self.inputs))
+    prob_choice = np.array(0).astype(np.int32)
+
+    def input_fn():
+      """Input function returning features which is a dictionary of
+        string feature name to `Tensor` or `SparseTensor`. If it returns a
+        tuple, first item is extracted as features. Prediction continues until
+        `input_fn` raises an end-of-input exception (`OutOfRangeError` or
+        `StopIteration`)."""
+      gen_fn = make_input_fn(self.inputs, prob_choice)
+      example = gen_fn()
+      example = decoding._interactive_input_tensor_to_features_dict(example,
+          self.estimator.params)
+      return example
+
+    self.input_fn = input_fn
+
+    with estimator_lib.ops.Graph().as_default() as g:
+      features = self.estimator._get_features_from_input_fn(
+          input_fn, estimator_lib.model_fn_lib.ModeKeys.PREDICT)
+      # List of `SessionRunHook` subclass instances. Used for callbacks inside
+      # the prediction call.
+      hooks = estimator_lib._check_hooks_type(None)
+      # Check that model has been trained.
+      # Path of a specific checkpoint to predict. The latest checkpoint
+      # in `model_dir` is used
+      checkpoint_path = estimator_lib.saver.latest_checkpoint(
+          self.params.model_dir)
+      if not checkpoint_path:
+        raise ValueError('Could not find trained model in model_dir: {}.'
+            .format(model_dir))
+
+      estimator_lib.random_seed.set_random_seed(
+          self.estimator._config.tf_random_seed)
+      self.estimator._create_and_assert_global_step(g)
+      self.estimator_spec = self.estimator._call_model_fn(
+          features, None, estimator_lib.model_fn_lib.ModeKeys.PREDICT,
+          self.estimator.config)
+      self.mon_sess = estimator_lib.training.MonitoredSession(
+          session_creator=estimator_lib.training.ChiefSessionCreator(
+              checkpoint_filename_with_path=checkpoint_path,
+              scaffold=self.estimator_spec.scaffold,
+              config=self.estimator._session_config),
+          hooks=hooks)
+
+  def decode_word(self, x):
+    """Decode word.
+
+    Args:
+      x: input ids for decoding.
+
+    Returns:
+      pronunciation: a decoded phonemes sequence for input word.
+    """
+
+    self.predictions = self.estimator._extract_keys(self.estimator_spec.predictions, None)
+    res_iter = self.estimator.predict(self.input_fn)
+    result = res_iter.next()
+
+    if self.decode_hp.return_beams:
+      beams = np.split(result["outputs"], self.decode_hp.beam_size, axis=0)
+      scores = None
+      if "scores" in result:
+        scores = np.split(result["scores"], decode_hp.beam_size, axis=0)
+      for k, beam in enumerate(beams):
+        tf.logging.info("BEAM %d:" % k)
+        beam_string = self.problem.target_vocab.decode(
+            decoding._save_until_eos(beam, is_image=False))
+        if scores is not None:
+          tf.logging.info("%s\tScore:%f" % (beam_string, scores[k]))
+        else:
+          tf.logging.info(beam_string)
+    else:
+      if self.decode_hp.identity_output:
+        tf.logging.info(" ".join(map(str, result["outputs"].flatten())))
+      else:
+        res = result["outputs"]
+        res = res.flatten()
+        index = list(res).index(text_encoder.EOS_ID)
+        res = res[0:index]
+        pronunciation = self.problem.target_vocab.decode(res)
+    return pronunciation
+
+
   def interactive(self):
-    """Run interactive mode."""
-    estimator, decode_hp = self.__prepare_decode_model()
-    decoding.decode_interactively(estimator, decode_hp)
+    """Interactive decoding."""
+
+    num_samples = 1
+    decode_length = 100
+    p_hparams = self.estimator.params.problems[0]
+    vocabulary = p_hparams.vocabulary["inputs"]
+    # This should be longer than the longest input.
+    const_array_size = 10000
+
+    self.__prepare_interactive_model(num_samples, decode_length, vocabulary,
+        const_array_size)
+
+    while not self.mon_sess.should_stop():
+      pronunciation = self.decode_word(self.inputs)
+      print("Pronunciation: {}".format(pronunciation))
+
+      try:
+        word = input("> ")
+        if not issubclass(type(word), text_type):
+          word = text_type(word, encoding="utf-8", errors="replace")
+      except EOFError:
+        break
+      if not word:
+        break
+
+      input_ids = vocabulary.encode(word)
+      input_ids.append(text_encoder.EOS_ID)
+      self.inputs = [num_samples, decode_length, len(input_ids)] + input_ids
+      assert len(self.inputs) < const_array_size
+      self.inputs += [0] * (const_array_size - len(self.inputs))
+      
 
   def decode(self, output_file_path):
     """Run decoding mode."""
-    estimator, decode_hp = self.__prepare_decode_model()
     inputs, decodes = decode_from_file(
-        estimator, self.file_path, decode_hp)
+        self.estimator, self.file_path, self.decode_hp)
     # If path to the output file pointed out, dump decoding results to the file
     if output_file_path:
       tf.logging.info("Writing decodes into %s" % output_file_path)
@@ -118,15 +275,42 @@ class G2PModel(object):
 
     g2p_gt_map = create_g2p_gt_map(words, pronunciations)
 
-    estimator, decode_hp = self.__prepare_decode_model()
-    correct, errors = calc_errors(g2p_gt_map, estimator, self.file_path,
-                                  decode_hp)
+    correct, errors = calc_errors(g2p_gt_map, self.estimator, self.file_path,
+                                  self.decode_hp)
 
     print("Words: %d" % (correct+errors))
     print("Errors: %d" % errors)
     print("WER: %.3f" % (float(errors)/(correct+errors)))
     print("Accuracy: %.3f" % float(1.-(float(errors)/(correct+errors))))
     return estimator, decode_hp, g2p_gt_map
+
+
+def make_input_fn(x_out, prob_choice):
+  """Use py_func to yield elements from the given generator."""
+  inp =  {"inputs": np.array(x_out).astype(np.int32),
+          "problem_choice": prob_choice}
+  first_ex = inp
+  flattened = tf.contrib.framework.nest.flatten(first_ex)
+  Tracer()()
+  types = [t.dtype for t in flattened]
+  shapes = [[None] * len(t.shape) for t in flattened]
+  first_ex_list = [first_ex]
+
+  def py_func():
+    if first_ex_list:
+      example = first_ex_list.pop()
+    else:
+      example = inp
+    return tf.contrib.framework.nest.flatten(example)
+
+  def input_fn():
+    Tracer()()
+    flat_example = tf.py_func(py_func, [], types)
+    _ = [t.set_shape(shape) for t, shape in zip(flat_example, shapes)]
+    example = tf.contrib.framework.nest.pack_sequence_as(first_ex, flat_example)
+    return example
+
+  return input_fn
 
 
 def create_g2p_gt_map(words, pronunciations):
