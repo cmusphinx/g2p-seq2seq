@@ -91,8 +91,7 @@ class G2PModel(object):
     decode_hp.add_hparam("shards", 1)
     return estimator, decode_hp
 
-  def __prepare_interactive_model(self, num_samples, decode_length, vocabulary,
-      const_array_size):
+  def __prepare_interactive_model(self):
     """Create monitored session and generator that reads from the terminal and yields "interactive inputs".
 
     Due to temporary limitations in tf.learn, if we don't want to reload the
@@ -101,13 +100,6 @@ class G2PModel(object):
 
     We yield int32 arrays with shape [const_array_size].  The format is:
     [num_samples, decode_length, len(input ids), <input ids>, <padding>]
-
-    Args:
-      num_samples;
-      decode_length: maximum possible length of decoding word;
-      vocabulary: g2p_encoder.GraphemePhonemeEncoder object that used here for
-        the purpose of decoding the list with input ids;
-      const_array_size: this should be longer than the longest input.
 
     Raises:
       ValueError: Could not find a trained model in model_dir.
@@ -123,11 +115,7 @@ class G2PModel(object):
     if not word:
       pass
 
-    input_ids = vocabulary.encode(word)
-    input_ids.append(text_encoder.EOS_ID)
-    self.inputs = [num_samples, decode_length, len(input_ids)] + input_ids
-    assert len(self.inputs) < const_array_size
-    self.inputs += [0] * (const_array_size - len(self.inputs))
+    self.decode_word(word, first_ex=True)
     prob_choice = np.array(0).astype(np.int32)
 
     def input_fn():
@@ -172,17 +160,36 @@ class G2PModel(object):
               config=self.estimator._session_config),
           hooks=hooks)
 
-  def decode_word(self, x):
+      pronunciation = self.decode_word(word)
+      print("Pronunciation: {}".format(pronunciation))
+
+
+  def decode_word(self, word, first_ex=False):
     """Decode word.
 
     Args:
-      x: input ids for decoding.
+      word: word for decoding.
 
     Returns:
       pronunciation: a decoded phonemes sequence for input word.
     """
+    num_samples = 1
+    decode_length = 100
+    p_hparams = self.estimator.params.problems[0]
+    vocabulary = p_hparams.vocabulary["inputs"]
+    # This should be longer than the longest input.
+    const_array_size = 10000
 
-    self.predictions = self.estimator._extract_keys(self.estimator_spec.predictions, None)
+    input_ids = vocabulary.encode(word)
+    input_ids.append(text_encoder.EOS_ID)
+    self.inputs = [num_samples, decode_length, len(input_ids)] + input_ids
+    assert len(self.inputs) < const_array_size
+    self.inputs += [0] * (const_array_size - len(self.inputs))
+    if first_ex:
+      return
+
+    self.predictions = self.estimator._extract_keys(
+        self.estimator_spec.predictions, None)
     res_iter = self.estimator.predict(self.input_fn)
     result = res_iter.next()
 
@@ -210,24 +217,11 @@ class G2PModel(object):
         pronunciation = self.problem.target_vocab.decode(res)
     return pronunciation
 
-
   def interactive(self):
     """Interactive decoding."""
-
-    num_samples = 1
-    decode_length = 100
-    p_hparams = self.estimator.params.problems[0]
-    vocabulary = p_hparams.vocabulary["inputs"]
-    # This should be longer than the longest input.
-    const_array_size = 10000
-
-    self.__prepare_interactive_model(num_samples, decode_length, vocabulary,
-        const_array_size)
+    self.__prepare_interactive_model()
 
     while not self.mon_sess.should_stop():
-      pronunciation = self.decode_word(self.inputs)
-      print("Pronunciation: {}".format(pronunciation))
-
       try:
         word = input("> ")
         if not issubclass(type(word), text_type):
@@ -236,13 +230,8 @@ class G2PModel(object):
         break
       if not word:
         break
-
-      input_ids = vocabulary.encode(word)
-      input_ids.append(text_encoder.EOS_ID)
-      self.inputs = [num_samples, decode_length, len(input_ids)] + input_ids
-      assert len(self.inputs) < const_array_size
-      self.inputs += [0] * (const_array_size - len(self.inputs))
-      
+      pronunciation = self.decode_word(word)
+      print("Pronunciation: {}".format(pronunciation))
 
   def decode(self, output_file_path):
     """Run decoding mode."""
