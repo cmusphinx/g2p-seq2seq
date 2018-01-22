@@ -116,15 +116,15 @@ def main(_=[]):
     g2p_model.prepare_datafiles(train_path=FLAGS.train, dev_path=FLAGS.valid)
     g2p_model.train()
 
-  #elif FLAGS.freeze:
-  #  g2p_model.freeze(params)
-
   else:
     g2p_model = G2PModel(params, file_path, is_training=False)
 
-    if FLAGS.interactive:
+    if FLAGS.freeze:
+      g2p_model.freeze()
+
+    elif FLAGS.interactive:
       g2p_model.interactive()
-      
+
     elif FLAGS.decode:
       g2p_model.decode(output_file_path=FLAGS.output)
 

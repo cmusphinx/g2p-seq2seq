@@ -38,6 +38,7 @@ from six.moves import input
 from six import text_type
 
 from tensorflow.python.estimator import estimator as estimator_lib
+from tensorflow.python.framework import graph_util
 
 EOS = text_encoder.EOS
 
@@ -58,9 +59,9 @@ class G2PModel(object):
       os.makedirs(self.params.model_dir)
     self.train_preprocess_file_path, self.dev_preprocess_file_path = None, None
     self.estimator, self.decode_hp = self.__prepare_decode_model()
-    self.word_processed = tf.get_variable("word_processed", dtype=tf.bool, initializer=tf.constant(True))
-    self.problem_choice = tf.get_variable("problem_choice", [1], dtype=tf.int32)
-    self.inputs_placeholder = tf.placeholder(tf.int32, [None], name="inputs_placeholder")
+    #self.word_processed = tf.get_variable("word_processed", dtype=tf.bool, initializer=tf.constant(True))
+    #self.problem_choice = tf.get_variable("problem_choice", [1], dtype=tf.int32)
+    #self.inputs_placeholder = tf.placeholder(tf.int32, [None], name="inputs_placeholder")
 
   def prepare_datafiles(self, train_path, dev_path):
     """Prepare preprocessed datafiles."""
@@ -133,7 +134,7 @@ class G2PModel(object):
     self.input_fn = input_fn
 
     with estimator_lib.ops.Graph().as_default() as g:
-      features = self.estimator._get_features_from_input_fn(
+      self.features = self.estimator._get_features_from_input_fn(
           input_fn, estimator_lib.model_fn_lib.ModeKeys.PREDICT)
       # List of `SessionRunHook` subclass instances. Used for callbacks inside
       # the prediction call.
@@ -151,7 +152,7 @@ class G2PModel(object):
           self.estimator._config.tf_random_seed)
       self.estimator._create_and_assert_global_step(g)
       self.estimator_spec = self.estimator._call_model_fn(
-          features, None, estimator_lib.model_fn_lib.ModeKeys.PREDICT,
+          self.features, None, estimator_lib.model_fn_lib.ModeKeys.PREDICT,
           self.estimator.config)
       self.mon_sess = estimator_lib.training.MonitoredSession(
           session_creator=estimator_lib.training.ChiefSessionCreator(
@@ -241,13 +242,13 @@ class G2PModel(object):
     if output_file_path:
       tf.logging.info("Writing decodes into %s" % output_file_path)
       outfile = tf.gfile.Open(output_file_path, "w")
-      if decode_hp.return_beams:
+      if self.decode_hp.return_beams:
         for index in range(len(inputs)):
           outfile.write("%s%s" % ("\t".join(decodes[index]),
-                                  decode_hp.delimiter))
+                                  self.decode_hp.delimiter))
       else:
         for index in range(len(inputs)):
-          outfile.write("%s%s" % (decodes[index], decode_hp.delimiter))
+          outfile.write("%s%s" % (decodes[index], self.decode_hp.delimiter))
 
   def evaluate(self):
     """Run evaluation mode."""
@@ -271,7 +272,49 @@ class G2PModel(object):
     print("Errors: %d" % errors)
     print("WER: %.3f" % (float(errors)/(correct+errors)))
     print("Accuracy: %.3f" % float(1.-(float(errors)/(correct+errors))))
-    return estimator, decode_hp, g2p_gt_map
+    return self.estimator, self.decode_hp, g2p_gt_map
+
+  def freeze(self):
+    # We retrieve our checkpoint fullpath
+    checkpoint = tf.train.get_checkpoint_state(self.params.model_dir)
+    input_checkpoint = checkpoint.model_checkpoint_path
+
+    # We precise the file fullname of our freezed graph
+    absolute_model_folder = "/".join(input_checkpoint.split('/')[:-1])
+    output_graph = absolute_model_folder + "/frozen_model.pb"
+
+    # Before exporting our graph, we need to precise what is our output node
+    # This is how TF decides what part of the Graph he has to keep and what part it can dump
+    # NOTE: this variable is plural, because you can have multiple output nodes
+    output_node_names = ["transformer/body/model/parallel_0/body/decoder/layer_0/self_attention/multihead_attention/dot_product_attention/Softmax",
+        "transformer/body/model/parallel_0/body/decoder/layer_0/encdec_attention/multihead_attention/dot_product_attention/Softmax",
+        "transformer/body/model/parallel_0/body/decoder/layer_1/self_attention/multihead_attention/dot_product_attention/Softmax",
+        "transformer/body/model/parallel_0/body/decoder/layer_1/encdec_attention/multihead_attention/dot_product_attention/Softmax"]
+
+    # We clear devices to allow TensorFlow to control on which device it will load operations
+    clear_devices = True
+    # We import the meta graph and retrieve a Saver
+    saver = tf.train.import_meta_graph(input_checkpoint + '.meta', clear_devices=clear_devices)
+
+    # We retrieve the protobuf graph definition
+    graph = tf.get_default_graph()
+    input_graph_def = graph.as_graph_def()
+
+    # We start a session and restore the graph weights
+    with tf.Session() as sess:
+      saver.restore(sess, input_checkpoint)
+
+      # We use a built-in TF helper to export variables to constants
+      output_graph_def = graph_util.convert_variables_to_constants(
+          sess, # The session is used to retrieve the weights
+          input_graph_def, # The graph_def is used to retrieve the nodes 
+          output_node_names # The output node names are used to select the usefull nodes
+          )
+
+      # Finally we serialize and dump the output graph to the filesystem
+      with tf.gfile.GFile(output_graph, "wb") as f:
+        f.write(output_graph_def.SerializeToString())
+      print("%d ops in the final graph." % len(output_graph_def.node))
 
 
 def make_input_fn(x_out, prob_choice):
