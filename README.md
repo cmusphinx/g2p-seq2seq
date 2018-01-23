@@ -20,10 +20,14 @@ for TensorFlow installation details.
 You can install tensorflow with the following command:
 
 ```
-sudo pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-1.3.0-cp27-none-linux_x86_64.whl
+sudo pip install tensorflow-gpu
 ```
 
-And for installing Tensor2Tensor pass the steps from it's installation [guide](https://github.com/tensorflow/tensor2tensor#installation)
+And for installing Tensor2Tensor run:
+
+```
+sudo pip install tensor2tensor
+```
 
 The g2p_seq2seq package itself uses setuptools, so you can follow standard installation process:
 
@@ -41,7 +45,7 @@ The runnable script `g2p-seq2seq` is installed in  `/usr/local/bin` folder by de
 
 ## Running G2P
 
-A pretrained model 2-layer LSTM with 512 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download).
+A pretrained 2-layer transformer model with 512 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download).
 Unpack the model after download. The model is trained on [CMU English dictionary](http://github.com/cmusphinx/cmudict)
 
 ```
@@ -72,19 +76,18 @@ The wordlist is a text file with one word per line
 If you wish to list top N variants of decoding, set return_beams flag and specify beam_size:
 
 ```
-$ g2p-seq2seq --decode your_wordlist --model_dir model_folder_path --return_beams --beam_size number_returned_beams [--output decode_output_file_path]
+  g2p-seq2seq --decode your_wordlist --model_dir model_folder_path --return_beams --beam_size number_returned_beams [--output decode_output_file_path]
 ```
 
 To evaluate Word Error Rate of the trained model, run
 
 ```
   g2p-seq2seq --evaluate your_test_dictionary --model_dir model_folder_path
-
 ```
-The test dictionary should be a dictionary in standard format:
-HELLO\tHH EH L OW
 
-BYE\tB AY
+The test dictionary should be a dictionary in standard format:
+HELLO HH EH L OW
+BYE B AY
 
 You may also calculate Word Error Rate considering all top N beams.
 In this case we consider word decoding as error only if none of the decoded beams will match with the ground true pronunciation of the word.
@@ -155,7 +158,7 @@ To reproduce the following results, train the model on CMUdict dictionaries duri
 System | WER ([CMUdict PRONALSYL 2007](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/phonetisaurus-cmudict-split.tar.gz)), % | WER ([CMUdict latest\*](https://github.com/cmusphinx/cmudict)), %
 --- | --- | ---
 Baseline WFST (Phonetisaurus) | 24.4 | 33.89
-LSTM num_layers=2, size=256   | 22.2 | ~31
+Transformer num_layers=2, size=256   | 22.2 | ~31
 \* These results pointed out for dictionary without stress.
 
 ## References
