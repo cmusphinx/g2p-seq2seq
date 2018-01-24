@@ -32,13 +32,13 @@ from tensor2tensor.utils import usr_dir
 from tensor2tensor.utils import decoding
 
 from tensor2tensor.data_generators import text_encoder
-
-from IPython.core.debugger import Tracer
 from six.moves import input
 from six import text_type
 
 from tensorflow.python.estimator import estimator as estimator_lib
 from tensorflow.python.framework import graph_util
+
+from IPython.core.debugger import Tracer
 
 EOS = text_encoder.EOS
 
@@ -161,8 +161,8 @@ class G2PModel(object):
               config=self.estimator._session_config),
           hooks=hooks)
 
-      pronunciation = self.decode_word(word)
-      print("Pronunciation: {}".format(pronunciation))
+      pronunciations = self.decode_word(word)
+      print("Pronunciations: {}".format(pronunciations))
 
 
   def decode_word(self, word, first_ex=False):
@@ -194,15 +194,17 @@ class G2PModel(object):
     res_iter = self.estimator.predict(self.input_fn)
     result = res_iter.next()
 
+    pronunciations = []
     if self.decode_hp.return_beams:
       beams = np.split(result["outputs"], self.decode_hp.beam_size, axis=0)
       scores = None
       if "scores" in result:
-        scores = np.split(result["scores"], decode_hp.beam_size, axis=0)
+        scores = np.split(result["scores"], self.decode_hp.beam_size, axis=0)
       for k, beam in enumerate(beams):
         tf.logging.info("BEAM %d:" % k)
         beam_string = self.problem.target_vocab.decode(
             decoding._save_until_eos(beam, is_image=False))
+        pronunciations.append(beam_string)
         if scores is not None:
           tf.logging.info("%s\tScore:%f" % (beam_string, scores[k]))
         else:
@@ -215,8 +217,8 @@ class G2PModel(object):
         res = res.flatten()
         index = list(res).index(text_encoder.EOS_ID)
         res = res[0:index]
-        pronunciation = self.problem.target_vocab.decode(res)
-    return pronunciation
+        pronunciations.append(self.problem.target_vocab.decode(res))
+    return pronunciations
 
   def interactive(self):
     """Interactive decoding."""
@@ -231,8 +233,8 @@ class G2PModel(object):
         break
       if not word:
         break
-      pronunciation = self.decode_word(word)
-      print("Pronunciation: {}".format(pronunciation))
+      pronunciations = self.decode_word(word)
+      print("Pronunciations: {}".format(pronunciations))
 
   def decode(self, output_file_path):
     """Run decoding mode."""
@@ -321,12 +323,10 @@ def make_input_fn(x_out, prob_choice):
   """Use py_func to yield elements from the given generator."""
   inp =  {"inputs": np.array(x_out).astype(np.int32),
           "problem_choice": prob_choice}
-  first_ex = inp
-  flattened = tf.contrib.framework.nest.flatten(first_ex)
-  Tracer()()
+  flattened = tf.contrib.framework.nest.flatten(inp)
   types = [t.dtype for t in flattened]
   shapes = [[None] * len(t.shape) for t in flattened]
-  first_ex_list = [first_ex]
+  first_ex_list = [inp]
 
   def py_func():
     if first_ex_list:
@@ -336,10 +336,9 @@ def make_input_fn(x_out, prob_choice):
     return tf.contrib.framework.nest.flatten(example)
 
   def input_fn():
-    Tracer()()
     flat_example = tf.py_func(py_func, [], types)
     _ = [t.set_shape(shape) for t, shape in zip(flat_example, shapes)]
-    example = tf.contrib.framework.nest.pack_sequence_as(first_ex, flat_example)
+    example = tf.contrib.framework.nest.pack_sequence_as(inp, flat_example)
     return example
 
   return input_fn

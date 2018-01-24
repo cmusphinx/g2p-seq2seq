@@ -86,11 +86,11 @@ To evaluate Word Error Rate of the trained model, run
 ```
 
 The test dictionary should be a dictionary in standard format:
+
 HELLO HH EH L OW
 BYE B AY
 
-You may also calculate Word Error Rate considering all top N beams.
-In this case we consider word decoding as error only if none of the decoded beams will match with the ground true pronunciation of the word.
+You may also calculate Word Error Rate considering all top N best decoded results. In this case we consider word decoding as error only if none of the decoded pronunciations will match with the ground true pronunciation of the word.
 
 ## Training G2P system
 
@@ -146,6 +146,11 @@ The differences in pronunciations between short and long words can be significan
   "--min_length_bucket" - the size of the minimal bucket (Default: 5)
   "--max_length" - maximal possible length of words or maximal number of phonemes in pronunciations (Default: 40)
   "--length_bucket_step" - multiplier that controls the number of length buckets in the data. The buckets have maximum lengths from min_bucket_length to max_length, increasing by factors of length_bucket_step (Default: 2.0)
+```
+
+After training the model, you may freeze it:
+```
+  g2p_seq2seq --model_dir model_folder_path --freeze
 ```
 
 To reproduce the following results, train the model on CMUdict dictionaries during 50 epochs:
