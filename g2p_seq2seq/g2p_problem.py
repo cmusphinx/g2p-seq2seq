@@ -53,12 +53,13 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
     self._feature_info = None
     self._model_dir = model_dir
     self.file_path = file_path
+    vocab_filename = os.path.join(self._model_dir, "vocab.g2p")
     if is_training:
       self.source_vocab, self.target_vocab = g2p_encoder.load_create_vocabs(
-          self._model_dir, data_path=file_path)
+          vocab_filename, data_path=file_path)
     else:
       self.source_vocab, self.target_vocab = g2p_encoder.load_create_vocabs(
-          self._model_dir, data_path=None)
+          vocab_filename)
 
   def generator(self, data_path, source_vocab, target_vocab):
     """Generator for the training and evaluation data.
@@ -181,18 +182,13 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
     with tf.gfile.GFile(source_path, mode="r") as source_file:
       for line in source_file:
         if line:
-          if "\t" in line:
-            parts = line.split("\t", 1)
-            source, target = parts[0].strip(), parts[1].strip()
-            source_ints = source_vocab.encode(source) + eos_list
-            target_ints = target_vocab.encode(target) + eos_list
-            yield {"inputs": source_ints, "targets": target_ints}
-          elif " " in line:
-            parts = line.split(" ")
-            source, target = parts[0].strip(), " ".join(parts[1:]).strip()
-            source_ints = source_vocab.encode(source) + eos_list
-            target_ints = target_vocab.encode(target) + eos_list
-            yield {"inputs": source_ints, "targets": target_ints}
+          items = line.split()
+          assert len(items) > 1
+          source, target = items[0].strip(), " ".join(items[1:]).strip()
+          source_ints = source_vocab.encode(source) + eos_list
+          target_ints = target_vocab.encode(target) + eos_list
+          yield {"inputs": source_ints, "targets": target_ints}
+
 
   def dataset(self,
               mode,

@@ -86,9 +86,10 @@ To evaluate Word Error Rate of the trained model, run
 ```
 
 The test dictionary should be a dictionary in standard format:
-
+```
 HELLO HH EH L OW
 BYE B AY
+```
 
 You may also calculate Word Error Rate considering all top N best decoded results. In this case we consider word decoding as error only if none of the decoded pronunciations will match with the ground true pronunciation of the word.
 

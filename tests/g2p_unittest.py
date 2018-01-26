@@ -17,7 +17,7 @@ class TestG2P(unittest.TestCase):
     dev_path = os.path.abspath("tests/data/toydict.test")
     params = Params(model_dir, train_path)
     g2p_model = G2PModel(params, file_path=train_path, is_training=True)
-    g2p_model.prepare_data(train_path=train_path, dev_path=dev_path)
+    g2p_model.prepare_datafiles(train_path=train_path, dev_path=dev_path)
     g2p_model.train()
     shutil.rmtree(model_dir)
 

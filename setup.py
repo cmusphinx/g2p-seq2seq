@@ -18,19 +18,19 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='g2p_seq2seq',
-    version='5.0.0a0',
+    version='6.0.0a0',
     packages=['g2p_seq2seq'],
     description='Grapheme to phoneme module based on Seq2Seq',
     long_description=long_description,
     url='https://github.com/cmusphinx/g2p-seq2seq',
     author='Nurtas Makhazhanov',
     author_email='makhazhanovn@gmail.com',
-    license='Apache License 2.0',
+    license='Apache Software License',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
         'Topic :: Software Development :: Build Tools',
-        'License :: OSI Approved :: Apache License 2.0',
+        'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3.4',
@@ -38,7 +38,7 @@ setup(
     ],
     keywords='g2p seq2seq tensor2tensor rnnlm',
 
-    install_requires=['tensorflow>=1.1.0', 'tensor2tensor>=1.2.0'],
+    install_requires=['tensorflow-gpu>=1.1.0', 'tensor2tensor>=1.2.0'],
 
     entry_points={
         'console_scripts': [
