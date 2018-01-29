@@ -65,6 +65,7 @@ class G2PModel(object):
   def __init__(self, model_dir):
     """Initialize model directory."""
     self.model_dir = model_dir
+    self.mode = 'g2p'
 
   def load_decode_model(self):
     """Load G2P model and initialize or load parameters in session."""
@@ -446,9 +447,9 @@ class G2PModel(object):
         for pronunciation in pronunciations:
           hyp = self.decode_pronunciation(pronunciation)
           errors += calc_edit_distance(hyp, word)
-          total += max([hyp,pronunciations])
+          total += max([hyp, word])
           total_pronunciations += 1
-      return (errors, total)
+      return (errors, total, total_pronunciations)
 
 
   def evaluate(self, test_lines):
@@ -477,10 +478,10 @@ class G2PModel(object):
       print('Beginning calculation pronunciation error rate (PER) on test sample.')
       errors, total, total_pronunciations = self.calc_error(test_dic)
 
-      print("Pronunciations: %d" % len(total_pronunciations))
+      print("Pronunciations: %d" % total_pronunciations)
       print("Errors: %d" % errors)
       print("PER: %.3f" % float(errors)/total)
-      print("Accuracy: %.3f" % float(1-(float(errors)/len(test_dic))))
+      print("Accuracy: %.3f" % float(1-(float(errors)/total)))
 
 
   def decode(self, decode_lines, output_file=None):
