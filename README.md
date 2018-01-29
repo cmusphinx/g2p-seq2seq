@@ -2,10 +2,11 @@
 
 # Sequence-to-Sequence G2P toolkit
 
-The tool does Grapheme-to-Phoneme (G2P) conversion using recurrent
-neural network (RNN) with long short-term memory units (LSTM). LSTM
-sequence-to-sequence models were successfully applied in various tasks,
-including machine translation [1] and grapheme-to-phoneme [2].
+The tool does Grapheme-to-Phoneme (G2P) conversion using transformer model
+from tensor2tensor toolkit [1]. A lot of approaches in sequence modeling and
+transduction problems use recurrent neural networks. But, transformer model
+architecture eschews recurrence and instead relies entirely on an attenction
+mechanism to draw global dependencies between input and output [2].
 
 This implementation is based on python
 [TensorFlow](https://www.tensorflow.org/tutorials/seq2seq/),
@@ -58,7 +59,7 @@ The easiest way to check how the tool works is to run it the interactive mode an
 ```
 $ g2p-seq2seq --interactive --model_dir model_folder_path
 ...
-> hello
+> HELLO
 ...
 INFO:tensorflow:HH EH L OW
 ...
