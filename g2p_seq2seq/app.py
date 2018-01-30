@@ -58,16 +58,21 @@ tf.app.flags.DEFINE_integer("max_steps", 0,
 tf.app.flags.DEFINE_boolean("reinit", False,
                             "Set to True for training from scratch.")
 tf.app.flags.DEFINE_string("optimizer", "sgd", "Optimizer type: sgd, adam, rms-prop. Default: sgd.")
+tf.app.flags.DEFINE_string("mode", "g2p", "mode type: g2p, p2g. Default: g2p.")
 
 FLAGS = tf.app.flags.FLAGS
 
 def main(_=[]):
   """Main function.
   """
-  with tf.Graph().as_default():
+  with tf.Graph().as_default():    
     if not FLAGS.model:
       raise RuntimeError("Model directory not specified.")
-    g2p_model = G2PModel(FLAGS.model)
+    if not FLAGS.mode:
+      mode = 'g2p'
+    else:
+      mode = FLAGS.mode
+    g2p_model = G2PModel(FLAGS.model, mode)
     if FLAGS.train:
       g2p_params = TrainingParams(FLAGS)
       g2p_model.prepare_data(FLAGS.train, FLAGS.valid, FLAGS.test)
