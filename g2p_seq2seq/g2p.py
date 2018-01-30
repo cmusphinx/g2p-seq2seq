@@ -62,10 +62,10 @@ class G2PModel(object):
   # See seq2seq_model.Seq2SeqModel for details of how they work.
   _BUCKETS = [(5, 10), (10, 15), (40, 50)]
 
-  def __init__(self, model_dir):
+  def __init__(self, model_dir, mode = 'g2p'):
     """Initialize model directory."""
     self.model_dir = model_dir
-    self.mode = 'g2p'
+    self.mode = mode
 
   def load_decode_model(self):
     """Load G2P model and initialize or load parameters in session."""
@@ -166,7 +166,7 @@ class G2PModel(object):
     # Prepare model.
     print("Creating model with parameters:")
     print(params)
-    if(self.mode and self.mode == 'g2p'):
+    if((self.mode) and (self.mode == 'g2p')):
       self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
                                               len(self.ph_vocab), self._BUCKETS,
                                               self.params.size,
@@ -297,7 +297,7 @@ class G2PModel(object):
 
     print('Training done.')
     with tf.Graph().as_default():
-      g2p_model_eval = G2PModel(self.model_dir)
+      g2p_model_eval = G2PModel(self.model_dir, self.mode)
       g2p_model_eval.load_decode_model()
       g2p_model_eval.evaluate(self.test_lines)
 
@@ -353,9 +353,9 @@ class G2PModel(object):
     if ph_absent:
       print("Symbols '%s' are not in vocabulary" % "','".join(ph_absent).encode('utf-8'))
       return ""
-
     # Get token-ids for the input word.
     token_ids = [self.ph_vocab.get(s, data_utils.UNK_ID) for s in pronunciation]
+    #print("token_ids =", token_ids)
     # Which bucket does it belong to?
     bucket_id = min([b for b in xrange(len(self._BUCKETS))
                      if self._BUCKETS[b][0] > len(token_ids)])
@@ -427,7 +427,22 @@ class G2PModel(object):
         print(self.decode_word(word))
       else:
         print(self.decode_pronunciation(word.strip().split()))
+  
+  
+  def calc_edit_distance(self, s1, s2):
+    if len(s1) > len(s2):
+        s1, s2 = s2, s1
 
+    distances = range(len(s1) + 1)
+    for i2, c2 in enumerate(s2):
+        distances_ = [i2+1]
+        for i1, c1 in enumerate(s1):
+            if c1 == c2:
+                distances_.append(distances[i1])
+            else:
+                distances_.append(1 + min((distances[i1], distances[i1 + 1], distances_[-1])))
+        distances = distances_
+    return distances[-1]
 
   def calc_error(self, dictionary):
     """Calculate a number of prediction errors.
@@ -445,9 +460,9 @@ class G2PModel(object):
       total_pronunciations = 0
       for word, pronunciations in dictionary.items():
         for pronunciation in pronunciations:
-          hyp = self.decode_pronunciation(pronunciation)
-          errors += calc_edit_distance(hyp, word)
-          total += max([hyp, word])
+          hyp = self.decode_pronunciation(pronunciation.strip().split())
+          errors += self.calc_edit_distance(hyp, word)
+          total += max([len(hyp), len(word)])
           total_pronunciations += 1
       return (errors, total, total_pronunciations)
 
@@ -477,10 +492,10 @@ class G2PModel(object):
     else:
       print('Beginning calculation pronunciation error rate (PER) on test sample.')
       errors, total, total_pronunciations = self.calc_error(test_dic)
-
+      
       print("Pronunciations: %d" % total_pronunciations)
       print("Errors: %d" % errors)
-      print("PER: %.3f" % float(errors)/total)
+      print("PER: ",float(errors)/float(total))
       print("Accuracy: %.3f" % float(1-(float(errors)/total)))
 
 
