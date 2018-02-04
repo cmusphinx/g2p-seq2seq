@@ -428,6 +428,22 @@ class G2PModel(object):
       else:
         print(self.decode_pronunciation(word.split()))
   
+  
+  def calc_edit_distance(self, s1, s2):
+    if len(s1) > len(s2):
+        s1, s2 = s2, s1
+
+    distances = range(len(s1) + 1)
+    for i2, c2 in enumerate(s2):
+        distances_ = [i2+1]
+        for i1, c1 in enumerate(s1):
+            if c1 == c2:
+                distances_.append(distances[i1])
+            else:
+                distances_.append(1 + min((distances[i1], distances[i1 + 1], distances_[-1])))
+        distances = distances_
+    return distances[-1]
+
 
   def calc_error(self, dictionary):
     """Calculate a number of prediction errors.
@@ -439,6 +455,17 @@ class G2PModel(object):
         if hyp not in pronunciations:
           errors += 1
       return errors
+    else:
+      errors = 0
+      total = 0
+      total_pronunciations = 0
+      for word, pronunciations in dictionary.items():
+        for pronunciation in pronunciations:
+          hyp = self.decode_pronunciation(pronunciation.strip().split())
+          errors += self.calc_edit_distance(hyp, word)
+          total += max([len(hyp), len(word)])
+          total_pronunciations += 1
+      return (errors, total, total_pronunciations)
 
 
   def evaluate(self, test_lines):
@@ -456,13 +483,19 @@ class G2PModel(object):
       return
 
     if self.mode == 'g2p':
-      print('Beginning calculation word error rate (WER) on test sample.')
       errors = self.calc_error(test_dic)
 
       print("Words: %d" % len(test_dic))
       print("Errors: %d" % errors)
       print("WER: %.3f" % (float(errors)/len(test_dic)))
       print("Accuracy: %.3f" % float(1-(errors/len(test_dic))))
+    else:
+      errors, total, total_pronunciations = self.calc_error(test_dic)
+
+      print("Pronunciations: %d" % total_pronunciations)
+      print("Errors: %d" % errors)
+      print("PER: ",float(errors)/float(total))
+      print("Accuracy: %.3f" % float(1-(float(errors)/total)))
 
 
   def decode(self, decode_lines, output_file=None):
