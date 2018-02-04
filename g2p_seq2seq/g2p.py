@@ -444,6 +444,7 @@ class G2PModel(object):
         distances = distances_
     return distances[-1]
 
+
   def calc_error(self, dictionary):
     """Calculate a number of prediction errors.
     """
