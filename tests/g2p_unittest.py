@@ -9,7 +9,7 @@ class TestG2P(unittest.TestCase):
   def test_train(self):
     model_dir = "tests/models/train"
     with g2p.tf.Graph().as_default():
-      g2p_model = g2p.G2PModel(model_dir, 'g2p')
+      g2p_model = g2p.G2PModel(model_dir)
       train_path = "tests/data/toydict.train"
       valid_path = "tests/data/toydict.test"
       test_path = "tests/data/toydict.test"
@@ -26,7 +26,7 @@ class TestG2P(unittest.TestCase):
   def test_evaluate(self):
     model_dir = "tests/models/decode"
     with g2p.tf.Graph().as_default():
-      g2p_model = g2p.G2PModel(model_dir, 'g2p')
+      g2p_model = g2p.G2PModel(model_dir)
       g2p_model.load_decode_model()
       with open("tests/data/toydict.test") as f:
         test_lines = f.readlines()
@@ -38,7 +38,7 @@ class TestG2P(unittest.TestCase):
   def test_decode(self):
     model_dir = "tests/models/decode"
     with g2p.tf.Graph().as_default():
-      g2p_model = g2p.G2PModel(model_dir, 'g2p')
+      g2p_model = g2p.G2PModel(model_dir)
       g2p_model.load_decode_model()
       with open("tests/data/toydict.graphemes") as f:
         decode_lines = f.readlines()
