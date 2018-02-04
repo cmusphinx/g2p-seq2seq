@@ -62,9 +62,10 @@ class G2PModel(object):
   # See seq2seq_model.Seq2SeqModel for details of how they work.
   _BUCKETS = [(5, 10), (10, 15), (40, 50)]
 
-  def __init__(self, model_dir):
+  def __init__(self, model_dir, mode = 'g2p'):
     """Initialize model directory."""
     self.model_dir = model_dir
+    self.mode = mode
 
   def load_decode_model(self):
     """Load G2P model and initialize or load parameters in session."""
@@ -80,10 +81,14 @@ class G2PModel(object):
                                                             "vocab.grapheme"))
     self.ph_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
                                                             "vocab.phoneme"))
-
-    self.rev_ph_vocab =\
-      data_utils.load_vocabulary(os.path.join(self.model_dir, "vocab.phoneme"),
-                                 reverse=True)
+    if self.mode == 'g2p':
+      self.rev_ph_vocab =\
+        data_utils.load_vocabulary(os.path.join(self.model_dir, "vocab.phoneme"),
+                                  reverse=True)
+    else:
+      self.rev_gr_vocab =\
+        data_utils.load_vocabulary(os.path.join(self.model_dir, "vocab.grapheme"),
+                                  reverse=True)
 
     self.session = tf.Session()
 
@@ -139,10 +144,16 @@ class G2PModel(object):
                                 test_path)
     # Read data into buckets and compute their sizes.
     print ("Reading development and training data.")
-    self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
-    self.train_set = self.__put_into_buckets(train_gr_ids, train_ph_ids)
+    if self.mode == 'g2p' :
+      self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
+      self.train_set = self.__put_into_buckets(train_gr_ids, train_ph_ids)
 
-    self.rev_ph_vocab = dict([(x, y) for (y, x) in enumerate(self.ph_vocab)])
+      self.rev_ph_vocab = dict([(x, y) for (y, x) in enumerate(self.ph_vocab)])
+    else:
+      self.valid_set = self.__put_into_buckets(valid_ph_ids, valid_gr_ids)
+      self.train_set = self.__put_into_buckets(train_ph_ids, train_gr_ids)
+
+      self.rev_gr_vocab = dict([(x, y) for (y, x) in enumerate(self.gr_vocab)])
 
 
   def __prepare_model(self, params):
@@ -155,16 +166,28 @@ class G2PModel(object):
     # Prepare model.
     print("Creating model with parameters:")
     print(params)
-    self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
-                                            len(self.ph_vocab), self._BUCKETS,
-                                            self.params.size,
-                                            self.params.num_layers,
-                                            self.params.max_gradient_norm,
-                                            self.params.batch_size,
-                                            self.params.learning_rate,
-                                            self.params.lr_decay_factor,
-                                            forward_only=False,
-                                            optimizer=self.params.optimizer)
+    if self.mode == 'g2p':
+      self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
+                                              len(self.ph_vocab), self._BUCKETS,
+                                              self.params.size,
+                                              self.params.num_layers,
+                                              self.params.max_gradient_norm,
+                                              self.params.batch_size,
+                                              self.params.learning_rate,
+                                              self.params.lr_decay_factor,
+                                              forward_only=False,
+                                              optimizer=self.params.optimizer)
+    else:
+      self.model = seq2seq_model.Seq2SeqModel(len(self.ph_vocab),
+                                              len(self.gr_vocab), self._BUCKETS,
+                                              self.params.size,
+                                              self.params.num_layers,
+                                              self.params.max_gradient_norm,
+                                              self.params.batch_size,
+                                              self.params.learning_rate,
+                                              self.params.lr_decay_factor,
+                                              forward_only=False,
+                                              optimizer=self.params.optimizer)
     self.model.saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
 
 
@@ -274,7 +297,7 @@ class G2PModel(object):
 
     print('Training done.')
     with tf.Graph().as_default():
-      g2p_model_eval = G2PModel(self.model_dir)
+      g2p_model_eval = G2PModel(self.model_dir, self.mode)
       g2p_model_eval.load_decode_model()
       g2p_model_eval.evaluate(self.test_lines)
 
@@ -314,6 +337,42 @@ class G2PModel(object):
         eval_loss += eval_batch_loss
     eval_loss = eval_loss/num_iter_total if num_iter_total > 0 else float('inf')
     return eval_loss
+  
+  
+  def decode_pronunciation(self, pronunciation):
+    """Decode input pronunciation to word.
+
+    Args:
+      word: input word;
+
+    Returns:
+      word: decoded word for input pronunciation;
+    """
+    # Check if all phonemes attended in vocabulary
+    ph_absent = [ph for ph in pronunciation if ph not in self.ph_vocab]
+    if ph_absent:
+      print("Symbols '%s' are not in vocabulary" % "','".join(ph_absent).encode('utf-8'))
+      return ""
+    # Get token-ids for the input word.
+    token_ids = [self.ph_vocab.get(s, data_utils.UNK_ID) for s in pronunciation]
+    #print("token_ids =", token_ids)
+    # Which bucket does it belong to?
+    bucket_id = min([b for b in xrange(len(self._BUCKETS))
+                     if self._BUCKETS[b][0] > len(token_ids)])
+    # Get a 1-element batch to feed the word to the model.
+    encoder_inputs, decoder_inputs, target_weights = self.model.get_batch(
+        {bucket_id: [(token_ids, [])]}, bucket_id)
+    # Get output logits for the word.
+    _, _, output_logits = self.model.step(self.session, encoder_inputs,
+                                          decoder_inputs, target_weights,
+                                          bucket_id, True)
+    # This is a greedy decoder - outputs are just argmaxes of output_logits.
+    outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
+    # If there is an EOS symbol in outputs, cut them at that point.
+    if data_utils.EOS_ID in outputs:
+      outputs = outputs[:outputs.index(data_utils.EOS_ID)]
+    # Grapheme sequence corresponding to outputs.
+    return "".join([self.rev_gr_vocab[output] for output in outputs])
 
 
   def decode_word(self, word):
@@ -364,18 +423,22 @@ class G2PModel(object):
         break
       if not word:
         break
-      print(self.decode_word(word))
-
+      if self.mode == 'g2p':
+        print(self.decode_word(word))
+      else:
+        print(self.decode_pronunciation(word.split()))
+  
 
   def calc_error(self, dictionary):
     """Calculate a number of prediction errors.
     """
-    errors = 0
-    for word, pronunciations in dictionary.items():
-      hyp = self.decode_word(word)
-      if hyp not in pronunciations:
-        errors += 1
-    return errors
+    if self.mode == 'g2p':
+      errors = 0
+      for word, pronunciations in dictionary.items():
+        hyp = self.decode_word(word)
+        if hyp not in pronunciations:
+          errors += 1
+      return errors
 
 
   def evaluate(self, test_lines):
@@ -392,13 +455,14 @@ class G2PModel(object):
       print("Test dictionary is empty")
       return
 
-    print('Beginning calculation word error rate (WER) on test sample.')
-    errors = self.calc_error(test_dic)
+    if self.mode == 'g2p':
+      print('Beginning calculation word error rate (WER) on test sample.')
+      errors = self.calc_error(test_dic)
 
-    print("Words: %d" % len(test_dic))
-    print("Errors: %d" % errors)
-    print("WER: %.3f" % (float(errors)/len(test_dic)))
-    print("Accuracy: %.3f" % float(1-(errors/len(test_dic))))
+      print("Words: %d" % len(test_dic))
+      print("Errors: %d" % errors)
+      print("WER: %.3f" % (float(errors)/len(test_dic)))
+      print("Accuracy: %.3f" % float(1-(errors/len(test_dic))))
 
 
   def decode(self, decode_lines, output_file=None):
@@ -414,7 +478,10 @@ class G2PModel(object):
     if output_file:
       for word in decode_lines:
         word = word.strip()
-        phonemes = self.decode_word(word)
+        if self.mode == 'g2p':
+          phonemes = self.decode_word(word)
+        else:
+          phonemes = self.decode_pronunciation(word.split())
         output_file.write(word)
         output_file.write(' ')
         output_file.write(phonemes)
@@ -424,8 +491,12 @@ class G2PModel(object):
     else:
       for word in decode_lines:
         word = word.strip()
-        phonemes = self.decode_word(word)
-        print(word + ' ' + phonemes)
+        if self.mode == 'g2p':
+          phonemes = self.decode_word(word)
+          print(word + ' ' + phonemes)
+        else:
+          phonemes = self.decode_pronunciation(word.split())
+          print(phonemes + ' ' + word)
         phoneme_lines.append(phonemes)
     return phoneme_lines
 
@@ -443,6 +514,7 @@ class TrainingParams(object):
       self.steps_per_checkpoint = flags.steps_per_checkpoint
       self.max_steps = flags.max_steps
       self.optimizer = flags.optimizer
+      self.mode = flags.mode
     else:
       self.learning_rate = 0.5
       self.lr_decay_factor = 0.99
@@ -453,6 +525,7 @@ class TrainingParams(object):
       self.steps_per_checkpoint = 200
       self.max_steps = 0
       self.optimizer = "sgd"
+      self.mode = "g2p"
 
   def __str__(self):
     return ("Learning rate:        {}\n"
@@ -463,7 +536,8 @@ class TrainingParams(object):
             "Number of layers:     {}\n"
             "Steps per checkpoint: {}\n"
             "Max steps:            {}\n"
-            "Optimizer:            {}\n").format(
+            "Optimizer:            {}\n"
+            "Mode:                 {}\n").format(
       self.learning_rate,
       self.lr_decay_factor,
       self.max_gradient_norm,
@@ -472,4 +546,5 @@ class TrainingParams(object):
       self.num_layers,
       self.steps_per_checkpoint,
       self.max_steps,
-      self.optimizer)
+      self.optimizer,
+      self.mode)
