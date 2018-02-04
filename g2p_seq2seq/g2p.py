@@ -483,7 +483,6 @@ class G2PModel(object):
       return
 
     if self.mode == 'g2p':
-      print('Beginning calculation word error rate (WER) on test sample.')
       errors = self.calc_error(test_dic)
 
       print("Words: %d" % len(test_dic))
@@ -491,7 +490,6 @@ class G2PModel(object):
       print("WER: %.3f" % (float(errors)/len(test_dic)))
       print("Accuracy: %.3f" % float(1-(errors/len(test_dic))))
     else:
-      print('Beginning calculation pronunciation error rate (PER) on test sample.')
       errors, total, total_pronunciations = self.calc_error(test_dic)
 
       print("Pronunciations: %d" % total_pronunciations)
