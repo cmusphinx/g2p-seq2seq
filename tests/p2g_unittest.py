@@ -24,6 +24,17 @@ class TestG2P(unittest.TestCase):
       g2p_model.train()
     shutil.rmtree(model_dir)
 
+  def test_evaluate(self):
+    model_dir = "tests/models/decode"
+    with g2p.tf.Graph().as_default():
+      g2p_model = g2p.G2PModel(model_dir, 'p2g')
+      g2p_model.load_decode_model()
+      with open("tests/data/toydict.test") as f:
+        test_lines = f.readlines()
+      g2p_model.evaluate(test_lines)
+      test_dic = data_utils.collect_pronunciations(test_lines)
+      errors, total, total_pronunciations = g2p_model.calc_error(test_dic)
+      self.assertAlmostEqual(float(errors)/float(total), 0.630, places=3)
 
   def test_decode(self):
     model_dir = "tests/models/decode"
