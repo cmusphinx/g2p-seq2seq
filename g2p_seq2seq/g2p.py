@@ -81,7 +81,7 @@ class G2PModel(object):
                                                             "vocab.grapheme"))
     self.ph_vocab = data_utils.load_vocabulary(os.path.join(self.model_dir,
                                                             "vocab.phoneme"))
-    if(self.mode and self.mode == 'g2p'):
+    if self.mode and self.mode == 'g2p':
       self.rev_ph_vocab =\
         data_utils.load_vocabulary(os.path.join(self.model_dir, "vocab.phoneme"),
                                   reverse=True)
@@ -144,7 +144,7 @@ class G2PModel(object):
                                 test_path)
     # Read data into buckets and compute their sizes.
     print ("Reading development and training data.")
-    if(self.mode and self.mode == 'g2p'):
+    if self.mode and self.mode == 'g2p' :
       self.valid_set = self.__put_into_buckets(valid_gr_ids, valid_ph_ids)
       self.train_set = self.__put_into_buckets(train_gr_ids, train_ph_ids)
 
@@ -166,7 +166,7 @@ class G2PModel(object):
     # Prepare model.
     print("Creating model with parameters:")
     print(params)
-    if((self.mode) and (self.mode == 'g2p')):
+    if self.mode and self.mode == 'g2p':
       self.model = seq2seq_model.Seq2SeqModel(len(self.gr_vocab),
                                               len(self.ph_vocab), self._BUCKETS,
                                               self.params.size,
@@ -423,48 +423,22 @@ class G2PModel(object):
         break
       if not word:
         break
-      if(self.mode and self.mode == 'g2p'):
+      if self.mode and self.mode == 'g2p':
         print(self.decode_word(word))
       else:
-        print(self.decode_pronunciation(word.strip().split()))
+        print(self.decode_pronunciation(word.split()))
   
-  
-  def calc_edit_distance(self, s1, s2):
-    if len(s1) > len(s2):
-        s1, s2 = s2, s1
-
-    distances = range(len(s1) + 1)
-    for i2, c2 in enumerate(s2):
-        distances_ = [i2+1]
-        for i1, c1 in enumerate(s1):
-            if c1 == c2:
-                distances_.append(distances[i1])
-            else:
-                distances_.append(1 + min((distances[i1], distances[i1 + 1], distances_[-1])))
-        distances = distances_
-    return distances[-1]
 
   def calc_error(self, dictionary):
     """Calculate a number of prediction errors.
     """
-    if(self.mode and self.mode == 'g2p'):
+    if self.mode and self.mode == 'g2p':
       errors = 0
       for word, pronunciations in dictionary.items():
         hyp = self.decode_word(word)
         if hyp not in pronunciations:
           errors += 1
       return errors
-    else:
-      errors = 0
-      total = 0
-      total_pronunciations = 0
-      for word, pronunciations in dictionary.items():
-        for pronunciation in pronunciations:
-          hyp = self.decode_pronunciation(pronunciation.strip().split())
-          errors += self.calc_edit_distance(hyp, word)
-          total += max([len(hyp), len(word)])
-          total_pronunciations += 1
-      return (errors, total, total_pronunciations)
 
 
   def evaluate(self, test_lines):
@@ -481,7 +455,7 @@ class G2PModel(object):
       print("Test dictionary is empty")
       return
 
-    if(self.mode and self.mode == 'g2p'):
+    if self.mode and self.mode == 'g2p':
       print('Beginning calculation word error rate (WER) on test sample.')
       errors = self.calc_error(test_dic)
 
@@ -489,14 +463,6 @@ class G2PModel(object):
       print("Errors: %d" % errors)
       print("WER: %.3f" % (float(errors)/len(test_dic)))
       print("Accuracy: %.3f" % float(1-(errors/len(test_dic))))
-    else:
-      print('Beginning calculation pronunciation error rate (PER) on test sample.')
-      errors, total, total_pronunciations = self.calc_error(test_dic)
-      
-      print("Pronunciations: %d" % total_pronunciations)
-      print("Errors: %d" % errors)
-      print("PER: ",float(errors)/float(total))
-      print("Accuracy: %.3f" % float(1-(float(errors)/total)))
 
 
   def decode(self, decode_lines, output_file=None):
@@ -512,7 +478,7 @@ class G2PModel(object):
     if output_file:
       for word in decode_lines:
         word = word.strip()
-        if(self.mode and self.mode == 'g2p'):
+        if self.mode and self.mode == 'g2p':
           phonemes = self.decode_word(word)
         else:
           phonemes = self.decode_pronunciation(word.split())
@@ -525,7 +491,7 @@ class G2PModel(object):
     else:
       for word in decode_lines:
         word = word.strip()
-        if(self.mode and self.mode == 'g2p'):
+        if self.mode and self.mode == 'g2p':
           phonemes = self.decode_word(word)
           print(word + ' ' + phonemes)
         else:
