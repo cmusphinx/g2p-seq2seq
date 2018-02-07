@@ -155,6 +155,8 @@ After training the model, you may freeze it:
   g2p_seq2seq --model_dir model_folder_path --freeze
 ```
 
+File "frozen_model.pb" will appeared in "model_folder_path" directory after launching previous command. And now, if you run one of the decoding modes, program will load and use this frozen graph.
+
 To reproduce the following results, train the model on CMUdict dictionaries during 50 epochs:
 ```
 --max_epochs 50

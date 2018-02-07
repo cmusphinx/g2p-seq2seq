@@ -38,8 +38,6 @@ from six import text_type
 from tensorflow.python.estimator import estimator as estimator_lib
 from tensorflow.python.framework import graph_util
 
-from IPython.core.debugger import Tracer
-
 EOS = text_encoder.EOS
 
 
@@ -51,30 +49,33 @@ class G2PModel(object):
     usr_dir.import_usr_dir(os.path.dirname(os.path.abspath(__file__)))
     self.params = params
     self.file_path = file_path
+    if not os.path.exists(self.params.model_dir):
+      os.makedirs(self.params.model_dir)
+
     # Register g2p problem.
     self.problem = registry._PROBLEMS[self.params.problem_name](
         self.params.model_dir, file_path=file_path, is_training=is_training)
     trainer_utils.log_registry()
-    if not os.path.exists(self.params.model_dir):
-      os.makedirs(self.params.model_dir)
-    self.train_preprocess_file_path, self.dev_preprocess_file_path = None, None
-    self.estimator, self.decode_hp = self.__prepare_decode_model()
-    #self.word_processed = tf.get_variable("word_processed", dtype=tf.bool, initializer=tf.constant(True))
-    #self.problem_choice = tf.get_variable("problem_choice", [1], dtype=tf.int32)
-    #self.inputs_placeholder = tf.placeholder(tf.int32, [None], name="inputs_placeholder")
+
+    self.frozen_graph_filename = os.path.join(self.params.model_dir, "frozen_model.pb")
+    self.first_ex = False
+    if is_training:
+      self.train_preprocess_file_path, self.dev_preprocess_file_path =\
+          None, None
+      self.estimator, self.decode_hp = self.__prepare_decode_model()
+
+    elif os.path.exists(self.frozen_graph_filename):
+      self.estimator, self.decode_hp = self.__prepare_decode_model()
+      self.__load_graph()
+      self.checkpoint_path = tf.train.latest_checkpoint(self.params.model_dir)
+
+    else:
+      self.estimator, self.decode_hp = self.__prepare_decode_model()
 
   def prepare_datafiles(self, train_path, dev_path):
     """Prepare preprocessed datafiles."""
     self.train_preprocess_file_path, self.dev_preprocess_file_path =\
         self.problem.generate_preprocess_data(train_path, dev_path)
-
-  def train(self):
-    """Run training."""
-    g2p_trainer_utils.run(
-        params=self.params,
-        problem_instance=self.problem,
-        train_preprocess_file_path=self.train_preprocess_file_path,
-        dev_preprocess_file_path=self.dev_preprocess_file_path)
 
   def __prepare_decode_model(self):
     """Prepare utilities for decoding."""
@@ -93,7 +94,8 @@ class G2PModel(object):
     return estimator, decode_hp
 
   def __prepare_interactive_model(self):
-    """Create monitored session and generator that reads from the terminal and yields "interactive inputs".
+    """Create monitored session and generator that reads from the terminal and
+    yields "interactive inputs".
 
     Due to temporary limitations in tf.learn, if we don't want to reload the
     whole graph, then we are stuck encoding all of the input as one fixed-size
@@ -106,17 +108,11 @@ class G2PModel(object):
       ValueError: Could not find a trained model in model_dir.
       ValueError: if batch length of predictions are not same.
     """
+    word = self.__get_word()
 
-    try:
-      word = input("> ")
-      if not issubclass(type(word), text_type):
-        word = text_type(word, encoding="utf-8", errors="replace")
-    except EOFError:
-      pass
-    if not word:
-      pass
-
-    self.decode_word(word, first_ex=True)
+    self.first_ex = True
+    self.decode_word(word)
+    self.first_ex = False
     prob_choice = np.array(0).astype(np.int32)
 
     def input_fn():
@@ -133,6 +129,9 @@ class G2PModel(object):
 
     self.input_fn = input_fn
 
+    if os.path.exists(self.frozen_graph_filename):
+      return
+
     with estimator_lib.ops.Graph().as_default() as g:
       self.features = self.estimator._get_features_from_input_fn(
           input_fn, estimator_lib.model_fn_lib.ModeKeys.PREDICT)
@@ -146,7 +145,7 @@ class G2PModel(object):
           self.params.model_dir)
       if not checkpoint_path:
         raise ValueError('Could not find trained model in model_dir: {}.'
-            .format(model_dir))
+            .format(self.params.model_dir))
 
       estimator_lib.random_seed.set_random_seed(
           self.estimator._config.tf_random_seed)
@@ -165,7 +164,7 @@ class G2PModel(object):
       print("Pronunciations: {}".format(pronunciations))
 
 
-  def decode_word(self, word, first_ex=False):
+  def decode_word(self, word):
     """Decode word.
 
     Args:
@@ -186,60 +185,76 @@ class G2PModel(object):
     self.inputs = [num_samples, decode_length, len(input_ids)] + input_ids
     assert len(self.inputs) < const_array_size
     self.inputs += [0] * (const_array_size - len(self.inputs))
-    if first_ex:
+
+    if self.first_ex:
       return
 
-    self.predictions = self.estimator._extract_keys(
-        self.estimator_spec.predictions, None)
     res_iter = self.estimator.predict(self.input_fn)
     result = res_iter.next()
-
     pronunciations = []
     if self.decode_hp.return_beams:
       beams = np.split(result["outputs"], self.decode_hp.beam_size, axis=0)
-      scores = None
-      if "scores" in result:
-        scores = np.split(result["scores"], self.decode_hp.beam_size, axis=0)
       for k, beam in enumerate(beams):
         tf.logging.info("BEAM %d:" % k)
         beam_string = self.problem.target_vocab.decode(
             decoding._save_until_eos(beam, is_image=False))
         pronunciations.append(beam_string)
-        if scores is not None:
-          tf.logging.info("%s\tScore:%f" % (beam_string, scores[k]))
-        else:
-          tf.logging.info(beam_string)
+        tf.logging.info(beam_string)
     else:
       if self.decode_hp.identity_output:
         tf.logging.info(" ".join(map(str, result["outputs"].flatten())))
       else:
-        res = result["outputs"]
-        res = res.flatten()
-        index = list(res).index(text_encoder.EOS_ID)
-        res = res[0:index]
+        res = result["outputs"].flatten()
+        if text_encoder.EOS_ID in res:
+          index = list(res).index(text_encoder.EOS_ID)
+          res = res[0:index]
         pronunciations.append(self.problem.target_vocab.decode(res))
     return pronunciations
+
+  def __get_word(self):
+    word = ""
+    try:
+      word = input("> ")
+      if not issubclass(type(word), text_type):
+        word = text_type(word, encoding="utf-8", errors="replace")
+    except EOFError:
+      pass
+    if not word:
+      pass
+    return word
+
+  def train(self):
+    """Run training."""
+    g2p_trainer_utils.run(
+        params=self.params,
+        problem_instance=self.problem,
+        train_preprocess_file_path=self.train_preprocess_file_path,
+        dev_preprocess_file_path=self.dev_preprocess_file_path)
 
   def interactive(self):
     """Interactive decoding."""
     self.__prepare_interactive_model()
 
-    while not self.mon_sess.should_stop():
-      try:
-        word = input("> ")
-        if not issubclass(type(word), text_type):
-          word = text_type(word, encoding="utf-8", errors="replace")
-      except EOFError:
-        break
-      if not word:
-        break
-      pronunciations = self.decode_word(word)
-      print("Pronunciations: {}".format(pronunciations))
+    if os.path.exists(self.frozen_graph_filename):
+      with tf.Session(graph=self.graph) as sess:
+        saver = tf.train.import_meta_graph(self.checkpoint_path + ".meta", import_scope=None, clear_devices=True)
+        saver.restore(sess, self.checkpoint_path)
+        inp = tf.placeholder(tf.string, name="inp_decode")[0]
+        decode_op = tf.py_func(self.decode_word, [inp], tf.string)
+        while True:
+          word = self.__get_word()
+          output = sess.run(decode_op,
+              feed_dict={"inp_decode:0" : [word]})
+          print ("output: " + output)
+    else:
+      while not self.mon_sess.should_stop():
+        self.__get_word()
+        pronunciations = self.decode_word(word)
+        print("Pronunciations: {}".format(pronunciations))
 
   def decode(self, output_file_path):
     """Run decoding mode."""
-    inputs, decodes = decode_from_file(
-        self.estimator, self.file_path, self.decode_hp)
+    inputs, decodes = self.__decode_from_file(self.file_path)
     # If path to the output file pointed out, dump decoding results to the file
     if output_file_path:
       tf.logging.info("Writing decodes into %s" % output_file_path)
@@ -267,14 +282,13 @@ class G2PModel(object):
 
     g2p_gt_map = create_g2p_gt_map(words, pronunciations)
 
-    correct, errors = calc_errors(g2p_gt_map, self.estimator, self.file_path,
-                                  self.decode_hp)
+    correct, errors = self.calc_errors(g2p_gt_map, self.file_path)
 
     print("Words: %d" % (correct+errors))
     print("Errors: %d" % errors)
     print("WER: %.3f" % (float(errors)/(correct+errors)))
     print("Accuracy: %.3f" % float(1.-(float(errors)/(correct+errors))))
-    return self.estimator, self.decode_hp, g2p_gt_map
+    return g2p_gt_map
 
   def freeze(self):
     # We retrieve our checkpoint fullpath
@@ -302,6 +316,10 @@ class G2PModel(object):
     graph = tf.get_default_graph()
     input_graph_def = graph.as_graph_def()
 
+    with open("/home/nurtas/input_nodes.txt", "w") as ofile:
+      for op in graph.get_operations():
+        ofile.write(op.name + "\n")
+
     # We start a session and restore the graph weights
     with tf.Session() as sess:
       saver.restore(sess, input_checkpoint)
@@ -310,13 +328,108 @@ class G2PModel(object):
       output_graph_def = graph_util.convert_variables_to_constants(
           sess, # The session is used to retrieve the weights
           input_graph_def, # The graph_def is used to retrieve the nodes 
-          output_node_names # The output node names are used to select the usefull nodes
-          )
+          output_node_names, # The output node names are used to select the
+                             #usefull nodes
+          variable_names_blacklist=['global_step'])
 
       # Finally we serialize and dump the output graph to the filesystem
       with tf.gfile.GFile(output_graph, "wb") as f:
         f.write(output_graph_def.SerializeToString())
       print("%d ops in the final graph." % len(output_graph_def.node))
+
+  def __load_graph(self):
+    # We load the protobuf file from the disk and parse it to retrieve the
+    # unserialized graph_def
+    with tf.gfile.GFile(self.frozen_graph_filename, "rb") as f:
+      graph_def = tf.GraphDef()
+      graph_def.ParseFromString(f.read())
+
+    # Then, we import the graph_def into a new Graph and returns it
+    with tf.Graph().as_default() as self.graph:
+      # The name var will prefix every op/nodes in your graph
+      # Since we load everything in a new graph, this is not needed
+      tf.import_graph_def(graph_def, name="import")
+
+  def __decode_from_file(self, filename):
+    """Compute predictions on entries in filename and write them out."""
+
+    if not self.decode_hp.batch_size:
+      self.decode_hp.batch_size = 32
+      tf.logging.info(
+          "decode_hp.batch_size not specified; default=%d" % self.decode_hp.batch_size)
+
+    hparams = self.estimator.params
+    problem_id = self.decode_hp.problem_idx
+    # Inputs vocabulary is set to targets if there are no inputs in the problem,
+    # e.g., for language models where the inputs are just a prefix of targets.
+    inputs_vocab = hparams.problems[problem_id].vocabulary["inputs"]
+    targets_vocab = hparams.problems[problem_id].vocabulary["targets"]
+    problem_name = "grapheme_to_phoneme_problem"
+    tf.logging.info("Performing decoding from a file.")
+    inputs = _get_inputs(filename)
+    num_decode_batches = (len(inputs) - 1) // self.decode_hp.batch_size + 1
+
+    def input_fn():
+      """Function for inputs generator."""
+      input_gen = _decode_batch_input_fn(
+          problem_id, num_decode_batches, inputs, inputs_vocab,
+          self.decode_hp.batch_size, self.decode_hp.max_input_size)
+      gen_fn = decoding.make_input_fn_from_generator(input_gen)
+      example = gen_fn()
+      return decoding._decode_input_tensor_to_features_dict(example, hparams)
+
+    decodes = []
+    result_iter = self.estimator.predict(input_fn)
+    for result in result_iter:
+      if self.decode_hp.return_beams:
+        beam_decodes = []
+        output_beams = np.split(result["outputs"], self.decode_hp.beam_size, axis=0)
+        for k, beam in enumerate(output_beams):
+          tf.logging.info("BEAM %d:" % k)
+          decoded_outputs, _ = decoding.log_decode_results(
+              result["inputs"],
+              beam,
+              problem_name,
+              None,
+              inputs_vocab,
+              targets_vocab)
+          beam_decodes.append(decoded_outputs)
+        decodes.append(beam_decodes)
+      else:
+        decoded_outputs, _ = decoding.log_decode_results(
+            result["inputs"],
+            result["outputs"],
+            problem_name,
+            None,
+            inputs_vocab,
+            targets_vocab)
+        decodes.append(decoded_outputs)
+
+    return inputs, decodes
+
+  def calc_errors(self, g2p_gt_map, decode_file_path):
+    """Calculate a number of prediction errors."""
+    inputs, decodes = self.__decode_from_file(decode_file_path)
+
+    correct, errors = 0, 0
+    for index, word in enumerate(inputs):
+      if self.decode_hp.return_beams:
+        beam_correct_found = False
+        for beam_decode in decodes[index]:
+          if beam_decode in g2p_gt_map[word]:
+            beam_correct_found = True
+            break
+        if beam_correct_found:
+          correct += 1
+        else:
+          errors += 1
+      else:
+        if decodes[index] in g2p_gt_map[word]:
+          correct += 1
+        else:
+          errors += 1
+
+    return correct, errors
 
 
 def make_input_fn(x_out, prob_choice):
@@ -355,90 +468,6 @@ def create_g2p_gt_map(words, pronunciations):
   return g2p_gt_map
 
 
-def calc_errors(g2p_gt_map, estimator, decode_file_path, decode_hp):
-  """Calculate a number of prediction errors."""
-  inputs, decodes = decode_from_file(
-      estimator, decode_file_path, decode_hp)
-
-  correct, errors = 0, 0
-  for index, word in enumerate(inputs):
-    if decode_hp.return_beams:
-      beam_correct_found = False
-      for beam_decode in decodes[index]:
-        if beam_decode in g2p_gt_map[word]:
-          beam_correct_found = True
-          break
-      if beam_correct_found:
-        correct += 1
-      else:
-        errors += 1
-    else:
-      if decodes[index] in g2p_gt_map[word]:
-        correct += 1
-      else:
-        errors += 1
-
-  return correct, errors
-
-
-def decode_from_file(estimator, filename, decode_hp):
-  """Compute predictions on entries in filename and write them out."""
-
-  if not decode_hp.batch_size:
-    decode_hp.batch_size = 32
-    tf.logging.info(
-        "decode_hp.batch_size not specified; default=%d" % decode_hp.batch_size)
-
-  hparams = estimator.params
-  problem_id = decode_hp.problem_idx
-  # Inputs vocabulary is set to targets if there are no inputs in the problem,
-  # e.g., for language models where the inputs are just a prefix of targets.
-  inputs_vocab = hparams.problems[problem_id].vocabulary["inputs"]
-  targets_vocab = hparams.problems[problem_id].vocabulary["targets"]
-  problem_name = "grapheme_to_phoneme_problem"
-  tf.logging.info("Performing decoding from a file.")
-  inputs = _get_inputs(filename)
-  num_decode_batches = (len(inputs) - 1) // decode_hp.batch_size + 1
-
-  def input_fn():
-    """Function for inputs generator."""
-    input_gen = _decode_batch_input_fn(
-        problem_id, num_decode_batches, inputs, inputs_vocab,
-        decode_hp.batch_size, decode_hp.max_input_size)
-    gen_fn = decoding.make_input_fn_from_generator(input_gen)
-    example = gen_fn()
-    return decoding._decode_input_tensor_to_features_dict(example, hparams)
-
-  decodes = []
-  result_iter = estimator.predict(input_fn)
-  for result in result_iter:
-    if decode_hp.return_beams:
-      beam_decodes = []
-      output_beams = np.split(result["outputs"], decode_hp.beam_size, axis=0)
-      for k, beam in enumerate(output_beams):
-        tf.logging.info("BEAM %d:" % k)
-        decoded_outputs, _ = decoding.log_decode_results(
-            result["inputs"],
-            beam,
-            problem_name,
-            None,
-            inputs_vocab,
-            targets_vocab)
-        beam_decodes.append(decoded_outputs)
-      decodes.append(beam_decodes)
-    else:
-      decoded_outputs, _ = decoding.log_decode_results(
-          result["inputs"],
-          result["outputs"],
-          problem_name,
-          None,
-          inputs_vocab,
-          targets_vocab)
-      decodes.append(decoded_outputs)
-
-  return inputs, decodes
-
-
 def _get_inputs(filename, delimiters="\t "):
   """Returning inputs.
 
@@ -458,8 +487,8 @@ def _get_inputs(filename, delimiters="\t "):
     lines = input_file.readlines()
     for line in lines:
       if set("[" + delimiters + "]+$").intersection(line):
-        parts = re.split(DELIMITERS_REGEX, line.strip(), maxsplit=1)
-        inputs.append(parts[0])
+        items = re.split(DELIMITERS_REGEX, line.strip(), maxsplit=1)
+        inputs.append(items[0])
       else:
         inputs.append(line.strip())
   return inputs
