@@ -163,7 +163,6 @@ class G2PModel(object):
       pronunciations = self.decode_word(word)
       print("Pronunciations: {}".format(pronunciations))
 
-
   def decode_word(self, word):
     """Decode word.
 
@@ -211,6 +210,15 @@ class G2PModel(object):
         pronunciations.append(self.problem.target_vocab.decode(res))
     return pronunciations
 
+  def __run_op(self, sess, decode_op, feed_input):
+    saver = tf.train.import_meta_graph(self.checkpoint_path + ".meta",
+        import_scope=None, clear_devices=True)
+    saver.restore(sess, self.checkpoint_path)
+    inp = tf.placeholder(tf.string, name="inp_decode")[0]
+    results = sess.run(decode_op,
+        feed_dict={"inp_decode:0" : [feed_input]})
+    return results
+
   def __get_word(self):
     word = ""
     try:
@@ -237,15 +245,12 @@ class G2PModel(object):
 
     if os.path.exists(self.frozen_graph_filename):
       with tf.Session(graph=self.graph) as sess:
-        saver = tf.train.import_meta_graph(self.checkpoint_path + ".meta", import_scope=None, clear_devices=True)
-        saver.restore(sess, self.checkpoint_path)
         inp = tf.placeholder(tf.string, name="inp_decode")[0]
         decode_op = tf.py_func(self.decode_word, [inp], tf.string)
         while True:
           word = self.__get_word()
-          output = sess.run(decode_op,
-              feed_dict={"inp_decode:0" : [word]})
-          print ("output: " + output)
+          result = self.__run_op(sess, decode_op, word)
+          print ("output: " + result)
     else:
       while not self.mon_sess.should_stop():
         self.__get_word()
@@ -254,7 +259,15 @@ class G2PModel(object):
 
   def decode(self, output_file_path):
     """Run decoding mode."""
-    inputs, decodes = self.__decode_from_file(self.file_path)
+    if os.path.exists(self.frozen_graph_filename):
+      with tf.Session(graph=self.graph) as sess:
+        inp = tf.placeholder(tf.string, name="inp_decode")[0]
+        decode_op = tf.py_func(self.__decode_from_file, [inp],
+            [tf.string, tf.string])
+        [inputs, decodes] = self.__run_op(sess, decode_op, self.file_path)
+    else:
+      inputs, decodes = self.__decode_from_file(self.file_path)
+
     # If path to the output file pointed out, dump decoding results to the file
     if output_file_path:
       tf.logging.info("Writing decodes into %s" % output_file_path)
@@ -280,15 +293,23 @@ class G2PModel(object):
       words.append(word)
       pronunciations.append(pronunciation)
 
-    g2p_gt_map = create_g2p_gt_map(words, pronunciations)
+    self.g2p_gt_map = create_g2p_gt_map(words, pronunciations)
 
-    correct, errors = self.calc_errors(g2p_gt_map, self.file_path)
+    if os.path.exists(self.frozen_graph_filename):
+      with tf.Session(graph=self.graph) as sess:
+        inp = tf.placeholder(tf.string, name="inp_decode")[0]
+        decode_op = tf.py_func(self.calc_errors, [inp],
+            [tf.int64, tf.int64])
+        [correct, errors] = self.__run_op(sess, decode_op, self.file_path)
+
+    else:
+      correct, errors = self.calc_errors(g2p_gt_map, self.file_path)
 
     print("Words: %d" % (correct+errors))
     print("Errors: %d" % errors)
     print("WER: %.3f" % (float(errors)/(correct+errors)))
     print("Accuracy: %.3f" % float(1.-(float(errors)/(correct+errors))))
-    return g2p_gt_map
+    return self.g2p_gt_map
 
   def freeze(self):
     # We retrieve our checkpoint fullpath
@@ -405,9 +426,9 @@ class G2PModel(object):
             targets_vocab)
         decodes.append(decoded_outputs)
 
-    return inputs, decodes
+    return [inputs, decodes]
 
-  def calc_errors(self, g2p_gt_map, decode_file_path):
+  def calc_errors(self, decode_file_path):
     """Calculate a number of prediction errors."""
     inputs, decodes = self.__decode_from_file(decode_file_path)
 
@@ -416,7 +437,7 @@ class G2PModel(object):
       if self.decode_hp.return_beams:
         beam_correct_found = False
         for beam_decode in decodes[index]:
-          if beam_decode in g2p_gt_map[word]:
+          if beam_decode in self.g2p_gt_map[word]:
             beam_correct_found = True
             break
         if beam_correct_found:
@@ -424,7 +445,7 @@ class G2PModel(object):
         else:
           errors += 1
       else:
-        if decodes[index] in g2p_gt_map[word]:
+        if decodes[index] in self.g2p_gt_map[word]:
           correct += 1
         else:
           errors += 1
