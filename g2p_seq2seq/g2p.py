@@ -177,7 +177,7 @@ class G2PModel(object):
     p_hparams = self.estimator.params.problems[0]
     vocabulary = p_hparams.vocabulary["inputs"]
     # This should be longer than the longest input.
-    const_array_size = 10000
+    const_array_size = 50
 
     input_ids = vocabulary.encode(word)
     input_ids.append(text_encoder.EOS_ID)
@@ -303,7 +303,7 @@ class G2PModel(object):
         [correct, errors] = self.__run_op(sess, decode_op, self.file_path)
 
     else:
-      correct, errors = self.calc_errors(g2p_gt_map, self.file_path)
+      correct, errors = self.calc_errors(self.file_path)
 
     print("Words: %d" % (correct+errors))
     print("Errors: %d" % errors)
@@ -336,10 +336,6 @@ class G2PModel(object):
     # We retrieve the protobuf graph definition
     graph = tf.get_default_graph()
     input_graph_def = graph.as_graph_def()
-
-    with open("/home/nurtas/input_nodes.txt", "w") as ofile:
-      for op in graph.get_operations():
-        ofile.write(op.name + "\n")
 
     # We start a session and restore the graph weights
     with tf.Session() as sess:
@@ -404,7 +400,8 @@ class G2PModel(object):
     for result in result_iter:
       if self.decode_hp.return_beams:
         beam_decodes = []
-        output_beams = np.split(result["outputs"], self.decode_hp.beam_size, axis=0)
+        output_beams = np.split(result["outputs"], self.decode_hp.beam_size,
+                                axis=0)
         for k, beam in enumerate(output_beams):
           tf.logging.info("BEAM %d:" % k)
           decoded_outputs, _ = decoding.log_decode_results(

@@ -27,15 +27,15 @@ class Params(object):
     self.data_dir = os.path.dirname(data_path)
     # Set default parameters first. Then update the parameters that
     # pointed out in flags.
-    self.hparams_set = "transformer_small"
+    self.hparams_set = "transformer_base"
     self.schedule = "train_and_evaluate"
     self.model_name = "transformer"
     self.problem_name = "grapheme_to_phoneme_problem"
     self.train_steps = 10
     self.eval_steps = 1
-    self.hparams = "batch_size=1,num_hidden_layers=1,hidden_size=4," +\
-        "filter_size=8,num_heads=1,length_bucket_step=2.0,max_length=50," +\
-        "min_length_bucket=5"
+    self.hparams = "eval_drop_long_sequences=True,batch_size=1," +\
+        "num_hidden_layers=1,hidden_size=4,filter_size=8,num_heads=1," +\
+        "length_bucket_step=2.0,max_length=50,min_length_bucket=5"
     self.decode_hparams = "beam_size=1,alpha=0.6,return_beams=False"
 
     if flags:
@@ -45,7 +45,8 @@ class Params(object):
         self.train_steps = len(open(data_path).readlines()) * flags.max_epochs
       elif flags.train:
         self.train_steps = 1000000
-      self.hparams = "batch_size=" + str(flags.batch_size) +\
+      self.hparams = "eval_drop_long_sequences=True" +\
+          ",batch_size=" + str(flags.batch_size) +\
           ",num_hidden_layers=" + str(flags.num_layers) +\
           ",hidden_size=" + str(flags.size) +\
           ",filter_size=" + str(flags.filter_size) +\

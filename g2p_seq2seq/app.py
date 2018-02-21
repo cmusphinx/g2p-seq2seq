@@ -48,13 +48,13 @@ tf.flags.DEFINE_boolean("freeze", False,
                         "Set to True for freeze the graph.")
 
 # Training parameters
-tf.flags.DEFINE_integer("batch_size", 256,
+tf.flags.DEFINE_integer("batch_size", 4096,
                         "Batch size to use during training.")
-tf.flags.DEFINE_integer("min_length_bucket", 5,
+tf.flags.DEFINE_integer("min_length_bucket", 6,
                         "Set the size of the minimal bucket.")
-tf.flags.DEFINE_integer("max_length", 40,
+tf.flags.DEFINE_integer("max_length", 30,
                         "Set the size of the maximal bucket.")
-tf.flags.DEFINE_integer("length_bucket_step", 2.0,
+tf.flags.DEFINE_integer("length_bucket_step", 1.5,
     """This flag controls the number of length buckets in the data reader.
     The buckets have maximum lengths from min_bucket_length to max_length,
     increasing (approximately) by factors
@@ -64,12 +64,7 @@ tf.flags.DEFINE_integer("size", 64,
                         "The number of neurons in the hidden layer.")
 tf.flags.DEFINE_integer("filter_size", 256,
                         "The size of the filter in a convolutional layer.")
-tf.flags.DEFINE_integer("dropout", 0.5, "The proportion of dropping out units"
-                        "in hidden layers.")
-tf.flags.DEFINE_integer("attention_dropout", 0.5,
-                        "The proportion of dropping out units"
-                        "in an attention layer.")
-tf.flags.DEFINE_integer("num_heads", 2,
+tf.flags.DEFINE_integer("num_heads", 4,
                         "Number of applied heads in Multi-attention mechanism.")
 tf.flags.DEFINE_integer("max_epochs", 0,
                         "How many training steps to do until stop training"
