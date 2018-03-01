@@ -57,7 +57,8 @@ class G2PModel(object):
         self.params.model_dir, file_path=file_path, is_training=is_training)
     trainer_utils.log_registry()
 
-    self.frozen_graph_filename = os.path.join(self.params.model_dir, "frozen_model.pb")
+    self.frozen_graph_filename = os.path.join(self.params.model_dir,
+                                              "frozen_model.pb")
     self.first_ex = False
     if is_training:
       self.train_preprocess_file_path, self.dev_preprocess_file_path =\
@@ -123,8 +124,8 @@ class G2PModel(object):
         `StopIteration`)."""
       gen_fn = make_input_fn(self.inputs, prob_choice)
       example = gen_fn()
-      example = decoding._interactive_input_tensor_to_features_dict(example,
-          self.estimator.params)
+      example = decoding._interactive_input_tensor_to_features_dict(
+          example, self.estimator.params)
       return example
 
     self.input_fn = input_fn
@@ -132,7 +133,7 @@ class G2PModel(object):
     if os.path.exists(self.frozen_graph_filename):
       return
 
-    with estimator_lib.ops.Graph().as_default() as g:
+    with estimator_lib.ops.Graph().as_default() as graph:
       self.features = self.estimator._get_features_from_input_fn(
           input_fn, estimator_lib.model_fn_lib.ModeKeys.PREDICT)
       # List of `SessionRunHook` subclass instances. Used for callbacks inside
@@ -145,11 +146,11 @@ class G2PModel(object):
           self.params.model_dir)
       if not checkpoint_path:
         raise ValueError('Could not find trained model in model_dir: {}.'
-            .format(self.params.model_dir))
+                         .format(self.params.model_dir))
 
       estimator_lib.random_seed.set_random_seed(
           self.estimator._config.tf_random_seed)
-      self.estimator._create_and_assert_global_step(g)
+      self.estimator._create_and_assert_global_step(graph)
       self.estimator_spec = self.estimator._call_model_fn(
           self.features, None, estimator_lib.model_fn_lib.ModeKeys.PREDICT,
           self.estimator.config)
@@ -211,15 +212,17 @@ class G2PModel(object):
     return pronunciations
 
   def __run_op(self, sess, decode_op, feed_input):
+    """Run tensorflow operation for decoding."""
     saver = tf.train.import_meta_graph(self.checkpoint_path + ".meta",
-        import_scope=None, clear_devices=True)
+                                       import_scope=None, clear_devices=True)
     saver.restore(sess, self.checkpoint_path)
     inp = tf.placeholder(tf.string, name="inp_decode")[0]
     results = sess.run(decode_op,
-        feed_dict={"inp_decode:0" : [feed_input]})
+                       feed_dict={"inp_decode:0" : [feed_input]})
     return results
 
   def __get_word(self):
+    """Get next word in the interactive mode."""
     word = ""
     try:
       word = input("> ")
@@ -263,7 +266,7 @@ class G2PModel(object):
       with tf.Session(graph=self.graph) as sess:
         inp = tf.placeholder(tf.string, name="inp_decode")[0]
         decode_op = tf.py_func(self.__decode_from_file, [inp],
-            [tf.string, tf.string])
+                               [tf.string, tf.string])
         [inputs, decodes] = self.__run_op(sess, decode_op, self.file_path)
     else:
       inputs, decodes = self.__decode_from_file(self.file_path)
@@ -298,8 +301,7 @@ class G2PModel(object):
     if os.path.exists(self.frozen_graph_filename):
       with tf.Session(graph=self.graph) as sess:
         inp = tf.placeholder(tf.string, name="inp_decode")[0]
-        decode_op = tf.py_func(self.calc_errors, [inp],
-            [tf.int64, tf.int64])
+        decode_op = tf.py_func(self.calc_errors, [inp], [tf.int64, tf.int64])
         [correct, errors] = self.__run_op(sess, decode_op, self.file_path)
 
     else:
@@ -321,17 +323,20 @@ class G2PModel(object):
     output_graph = absolute_model_folder + "/frozen_model.pb"
 
     # Before exporting our graph, we need to precise what is our output node
-    # This is how TF decides what part of the Graph he has to keep and what part it can dump
+    # This is how TF decides what part of the Graph he has to keep and what
+    # part it can dump
     # NOTE: this variable is plural, because you can have multiple output nodes
     output_node_names = ["transformer/body/model/parallel_0/body/decoder/layer_0/self_attention/multihead_attention/dot_product_attention/Softmax",
-        "transformer/body/model/parallel_0/body/decoder/layer_0/encdec_attention/multihead_attention/dot_product_attention/Softmax",
-        "transformer/body/model/parallel_0/body/decoder/layer_1/self_attention/multihead_attention/dot_product_attention/Softmax",
-        "transformer/body/model/parallel_0/body/decoder/layer_1/encdec_attention/multihead_attention/dot_product_attention/Softmax"]
+                         "transformer/body/model/parallel_0/body/decoder/layer_0/encdec_attention/multihead_attention/dot_product_attention/Softmax",
+                         "transformer/body/model/parallel_0/body/decoder/layer_1/self_attention/multihead_attention/dot_product_attention/Softmax",
+                         "transformer/body/model/parallel_0/body/decoder/layer_1/encdec_attention/multihead_attention/dot_product_attention/Softmax"]
 
-    # We clear devices to allow TensorFlow to control on which device it will load operations
+    # We clear devices to allow TensorFlow to control on which device it will
+    # load operations
     clear_devices = True
     # We import the meta graph and retrieve a Saver
-    saver = tf.train.import_meta_graph(input_checkpoint + '.meta', clear_devices=clear_devices)
+    saver = tf.train.import_meta_graph(input_checkpoint + '.meta',
+                                       clear_devices=clear_devices)
 
     # We retrieve the protobuf graph definition
     graph = tf.get_default_graph()
@@ -344,7 +349,7 @@ class G2PModel(object):
       # We use a built-in TF helper to export variables to constants
       output_graph_def = graph_util.convert_variables_to_constants(
           sess, # The session is used to retrieve the weights
-          input_graph_def, # The graph_def is used to retrieve the nodes 
+          input_graph_def, # The graph_def is used to retrieve the nodes
           output_node_names, # The output node names are used to select the
                              #usefull nodes
           variable_names_blacklist=['global_step'])
@@ -372,8 +377,8 @@ class G2PModel(object):
 
     if not self.decode_hp.batch_size:
       self.decode_hp.batch_size = 32
-      tf.logging.info(
-          "decode_hp.batch_size not specified; default=%d" % self.decode_hp.batch_size)
+      tf.logging.info("decode_hp.batch_size not specified; default=%d" %
+                      self.decode_hp.batch_size)
 
     hparams = self.estimator.params
     problem_id = self.decode_hp.problem_idx
@@ -452,14 +457,15 @@ class G2PModel(object):
 
 def make_input_fn(x_out, prob_choice):
   """Use py_func to yield elements from the given generator."""
-  inp =  {"inputs": np.array(x_out).astype(np.int32),
-          "problem_choice": prob_choice}
+  inp = {"inputs": np.array(x_out).astype(np.int32),
+         "problem_choice": prob_choice}
   flattened = tf.contrib.framework.nest.flatten(inp)
   types = [t.dtype for t in flattened]
   shapes = [[None] * len(t.shape) for t in flattened]
   first_ex_list = [inp]
 
   def py_func():
+    """Flatten example."""
     if first_ex_list:
       example = first_ex_list.pop()
     else:
@@ -467,6 +473,7 @@ def make_input_fn(x_out, prob_choice):
     return tf.contrib.framework.nest.flatten(example)
 
   def input_fn():
+    """Input function"""
     flat_example = tf.py_func(py_func, [], types)
     _ = [t.set_shape(shape) for t, shape in zip(flat_example, shapes)]
     example = tf.contrib.framework.nest.pack_sequence_as(inp, flat_example)
@@ -514,6 +521,7 @@ def _get_inputs(filename, delimiters="\t "):
 
 def _decode_batch_input_fn(problem_id, num_decode_batches, inputs,
                            vocabulary, batch_size, max_input_size):
+  """Decode batch"""
   tf.logging.info(" batch %d" % num_decode_batches)
   for b in range(num_decode_batches):
     tf.logging.info("Decoding batch %d" % b)
