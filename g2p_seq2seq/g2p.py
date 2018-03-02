@@ -20,10 +20,12 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import operator
-import tensorflow as tf
-import numpy as np
 import re
+import numpy as np
+
+import tensorflow as tf
+from tensorflow.python.estimator import estimator as estimator_lib
+from tensorflow.python.framework import graph_util
 
 from g2p_seq2seq import g2p_trainer_utils
 from tensor2tensor.utils import registry
@@ -34,9 +36,6 @@ from tensor2tensor.utils import decoding
 from tensor2tensor.data_generators import text_encoder
 from six.moves import input
 from six import text_type
-
-from tensorflow.python.estimator import estimator as estimator_lib
-from tensorflow.python.framework import graph_util
 
 EOS = text_encoder.EOS
 
@@ -59,6 +58,8 @@ class G2PModel(object):
 
     self.frozen_graph_filename = os.path.join(self.params.model_dir,
                                               "frozen_model.pb")
+    self.inputs, self.features, self.input_fn = None, None, None
+    self.mon_sess, self.estimator_spec, self.g2p_gt_map = None, None, None
     self.first_ex = False
     if is_training:
       self.train_preprocess_file_path, self.dev_preprocess_file_path =\
@@ -109,7 +110,7 @@ class G2PModel(object):
       ValueError: Could not find a trained model in model_dir.
       ValueError: if batch length of predictions are not same.
     """
-    word = self.__get_word()
+    word = get_word()
 
     self.first_ex = True
     self.decode_word(word)
@@ -216,23 +217,10 @@ class G2PModel(object):
     saver = tf.train.import_meta_graph(self.checkpoint_path + ".meta",
                                        import_scope=None, clear_devices=True)
     saver.restore(sess, self.checkpoint_path)
-    inp = tf.placeholder(tf.string, name="inp_decode")[0]
+    #inp = tf.placeholder(tf.string, name="inp_decode")[0]
     results = sess.run(decode_op,
                        feed_dict={"inp_decode:0" : [feed_input]})
     return results
-
-  def __get_word(self):
-    """Get next word in the interactive mode."""
-    word = ""
-    try:
-      word = input("> ")
-      if not issubclass(type(word), text_type):
-        word = text_type(word, encoding="utf-8", errors="replace")
-    except EOFError:
-      pass
-    if not word:
-      pass
-    return word
 
   def train(self):
     """Run training."""
@@ -251,12 +239,12 @@ class G2PModel(object):
         inp = tf.placeholder(tf.string, name="inp_decode")[0]
         decode_op = tf.py_func(self.decode_word, [inp], tf.string)
         while True:
-          word = self.__get_word()
+          word = get_word()
           result = self.__run_op(sess, decode_op, word)
           print ("output: " + result)
     else:
       while not self.mon_sess.should_stop():
-        self.__get_word()
+        word = get_word()
         pronunciations = self.decode_word(word)
         print("Pronunciations: {}".format(pronunciations))
 
@@ -314,6 +302,7 @@ class G2PModel(object):
     return self.g2p_gt_map
 
   def freeze(self):
+    """Freeze pre-trained model."""
     # We retrieve our checkpoint fullpath
     checkpoint = tf.train.get_checkpoint_state(self.params.model_dir)
     input_checkpoint = checkpoint.model_checkpoint_path
@@ -326,10 +315,18 @@ class G2PModel(object):
     # This is how TF decides what part of the Graph he has to keep and what
     # part it can dump
     # NOTE: this variable is plural, because you can have multiple output nodes
-    output_node_names = ["transformer/body/model/parallel_0/body/decoder/layer_0/self_attention/multihead_attention/dot_product_attention/Softmax",
-                         "transformer/body/model/parallel_0/body/decoder/layer_0/encdec_attention/multihead_attention/dot_product_attention/Softmax",
-                         "transformer/body/model/parallel_0/body/decoder/layer_1/self_attention/multihead_attention/dot_product_attention/Softmax",
-                         "transformer/body/model/parallel_0/body/decoder/layer_1/encdec_attention/multihead_attention/dot_product_attention/Softmax"]
+    output_node_names = ["transformer/body/model/parallel_0/body/decoder/\
+        layer_0/self_attention/multihead_attention/dot_product_attention/\
+        Softmax",
+                         "transformer/body/model/parallel_0/body/decoder/\
+        layer_0/encdec_attention/multihead_attention/dot_product_attention/\
+        Softmax",
+                         "transformer/body/model/parallel_0/body/decoder/\
+        layer_1/self_attention/multihead_attention/dot_product_attention/\
+        Softmax",
+                         "transformer/body/model/parallel_0/body/decoder/\
+        layer_1/encdec_attention/multihead_attention/dot_product_attention/\
+        Softmax"]
 
     # We clear devices to allow TensorFlow to control on which device it will
     # load operations
@@ -355,16 +352,17 @@ class G2PModel(object):
           variable_names_blacklist=['global_step'])
 
       # Finally we serialize and dump the output graph to the filesystem
-      with tf.gfile.GFile(output_graph, "wb") as f:
-        f.write(output_graph_def.SerializeToString())
+      with tf.gfile.GFile(output_graph, "wb") as output_graph_file:
+        output_graph_file.write(output_graph_def.SerializeToString())
       print("%d ops in the final graph." % len(output_graph_def.node))
 
   def __load_graph(self):
+    """Load freezed graph."""
     # We load the protobuf file from the disk and parse it to retrieve the
     # unserialized graph_def
-    with tf.gfile.GFile(self.frozen_graph_filename, "rb") as f:
+    with tf.gfile.GFile(self.frozen_graph_filename, "rb") as frozen_graph_file:
       graph_def = tf.GraphDef()
-      graph_def.ParseFromString(f.read())
+      graph_def.ParseFromString(frozen_graph_file.read())
 
     # Then, we import the graph_def into a new Graph and returns it
     with tf.Graph().as_default() as self.graph:
@@ -394,7 +392,7 @@ class G2PModel(object):
     def input_fn():
       """Function for inputs generator."""
       input_gen = _decode_batch_input_fn(
-          problem_id, num_decode_batches, inputs, inputs_vocab,
+          num_decode_batches, inputs, inputs_vocab,
           self.decode_hp.batch_size, self.decode_hp.max_input_size)
       gen_fn = decoding.make_input_fn_from_generator(input_gen)
       example = gen_fn()
@@ -482,6 +480,20 @@ def make_input_fn(x_out, prob_choice):
   return input_fn
 
 
+def get_word():
+  """Get next word in the interactive mode."""
+  word = ""
+  try:
+    word = input("> ")
+    if not issubclass(type(word), text_type):
+      word = text_type(word, encoding="utf-8", errors="replace")
+  except EOFError:
+    pass
+  if not word:
+    pass
+  return word
+
+
 def create_g2p_gt_map(words, pronunciations):
   """Create grapheme-to-phoneme ground true mapping."""
   g2p_gt_map = {}
@@ -505,29 +517,29 @@ def _get_inputs(filename, delimiters="\t "):
 
   """
   tf.logging.info("Getting inputs")
-  DELIMITERS_REGEX = re.compile("[" + delimiters + "]+")
+  delimiters_regex = re.compile("[" + delimiters + "]+")
 
   inputs = []
   with tf.gfile.Open(filename) as input_file:
     lines = input_file.readlines()
     for line in lines:
       if set("[" + delimiters + "]+$").intersection(line):
-        items = re.split(DELIMITERS_REGEX, line.strip(), maxsplit=1)
+        items = re.split(delimiters_regex, line.strip(), maxsplit=1)
         inputs.append(items[0])
       else:
         inputs.append(line.strip())
   return inputs
 
 
-def _decode_batch_input_fn(problem_id, num_decode_batches, inputs,
+def _decode_batch_input_fn(num_decode_batches, inputs,
                            vocabulary, batch_size, max_input_size):
   """Decode batch"""
   tf.logging.info(" batch %d" % num_decode_batches)
-  for b in range(num_decode_batches):
-    tf.logging.info("Decoding batch %d" % b)
+  for batch_idx in range(num_decode_batches):
+    tf.logging.info("Decoding batch %d" % batch_idx)
     batch_length = 0
     batch_inputs = []
-    for _inputs in inputs[b * batch_size:(b + 1) * batch_size]:
+    for _inputs in inputs[batch_idx * batch_size:(batch_idx + 1) * batch_size]:
       input_ids = vocabulary.encode(_inputs)
       if max_input_size > 0:
         # Subtract 1 for the EOS_ID.
@@ -539,10 +551,10 @@ def _decode_batch_input_fn(problem_id, num_decode_batches, inputs,
     final_batch_inputs = []
     for input_ids in batch_inputs:
       assert len(input_ids) <= batch_length
-      x = input_ids + [0] * (batch_length - len(input_ids))
-      final_batch_inputs.append(x)
+      encoded_input = input_ids + [0] * (batch_length - len(input_ids))
+      final_batch_inputs.append(encoded_input)
 
     yield {
         "inputs": np.array(final_batch_inputs).astype(np.int32),
-        "problem_choice": np.array(problem_id).astype(np.int32),
+        "problem_choice": np.array(0).astype(np.int32),
     }
