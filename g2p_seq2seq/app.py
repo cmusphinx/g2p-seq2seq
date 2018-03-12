@@ -62,6 +62,11 @@ tf.app.flags.DEFINE_string("mode", "g2p", "mode type: g2p, p2g. Default: g2p.")
 
 FLAGS = tf.app.flags.FLAGS
 
+# Below lines are added for supporting Tensorflow 1.5
+setattr(tf.contrib.rnn.GRUCell, '__deepcopy__', lambda self, _: self)
+setattr(tf.contrib.rnn.BasicLSTMCell, '__deepcopy__', lambda self, _: self)
+setattr(tf.contrib.rnn.MultiRNNCell, '__deepcopy__', lambda self, _: self)
+
 def main(_=[]):
   """Main function.
   """
