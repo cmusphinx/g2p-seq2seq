@@ -157,17 +157,13 @@ After training the model, you may freeze it:
 
 File "frozen_model.pb" will appeared in "model_folder_path" directory after launching previous command. And now, if you run one of the decoding modes, program will load and use this frozen graph.
 
-To reproduce the following results, train the model on CMUdict dictionaries during 50 epochs:
-```
---max_epochs 50
-```
 
 #### Word error rate on CMU dictionary data sets
 
 System | WER ([CMUdict PRONALSYL 2007](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/phonetisaurus-cmudict-split.tar.gz)), % | WER ([CMUdict latest\*](https://github.com/cmusphinx/cmudict)), %
 --- | --- | ---
 Baseline WFST (Phonetisaurus) | 24.4 | 33.89
-Transformer num_layers=2, size=256   | 22.2 | ~31
+Transformer num_layers=2, size=256   | 20.2 | ~31
 \* These results pointed out for dictionary without stress.
 
 ## References

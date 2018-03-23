@@ -217,7 +217,6 @@ class G2PModel(object):
     saver = tf.train.import_meta_graph(self.checkpoint_path + ".meta",
                                        import_scope=None, clear_devices=True)
     saver.restore(sess, self.checkpoint_path)
-    #inp = tf.placeholder(tf.string, name="inp_decode")[0]
     results = sess.run(decode_op,
                        feed_dict={"inp_decode:0" : [feed_input]})
     return results
