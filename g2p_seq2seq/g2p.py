@@ -123,7 +123,7 @@ class G2PModel(object):
     """
 
     # By default unk to unk
-    data_set = [[[[4], [4]]] for _ in self._BUCKETS]
+    data_set = [[[[data_utils.UNK_ID], [data_utils.UNK_ID]]] for _ in self._BUCKETS]
 
     for source_ids, target_ids in zip(source, target):
       target_ids.append(data_utils.EOS_ID)
