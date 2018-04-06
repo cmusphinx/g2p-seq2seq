@@ -314,18 +314,18 @@ class G2PModel(object):
     # This is how TF decides what part of the Graph he has to keep and what
     # part it can dump
     # NOTE: this variable is plural, because you can have multiple output nodes
-    output_node_names = ["transformer/body/model/parallel_0/body/decoder/\
-        layer_0/self_attention/multihead_attention/dot_product_attention/\
-        Softmax",
-                         "transformer/body/model/parallel_0/body/decoder/\
-        layer_0/encdec_attention/multihead_attention/dot_product_attention/\
-        Softmax",
-                         "transformer/body/model/parallel_0/body/decoder/\
-        layer_1/self_attention/multihead_attention/dot_product_attention/\
-        Softmax",
-                         "transformer/body/model/parallel_0/body/decoder/\
-        layer_1/encdec_attention/multihead_attention/dot_product_attention/\
-        Softmax"]
+    output_node_names = ["transformer/body/model/parallel_0/body/decoder/"
+        "layer_0/self_attention/multihead_attention/dot_product_attention/"
+        "Softmax",
+                         "transformer/body/model/parallel_0/body/decoder/"
+        "layer_0/encdec_attention/multihead_attention/dot_product_attention/"
+        "Softmax",
+                         "transformer/body/model/parallel_0/body/decoder/"
+        "layer_1/self_attention/multihead_attention/dot_product_attention/"
+        "Softmax",
+                         "transformer/body/model/parallel_0/body/decoder/"
+        "layer_1/encdec_attention/multihead_attention/dot_product_attention/"
+        "Softmax"]
 
     # We clear devices to allow TensorFlow to control on which device it will
     # load operations

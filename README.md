@@ -5,7 +5,7 @@
 The tool does Grapheme-to-Phoneme (G2P) conversion using transformer model
 from tensor2tensor toolkit [1]. A lot of approaches in sequence modeling and
 transduction problems use recurrent neural networks. But, transformer model
-architecture eschews recurrence and instead relies entirely on an attenction
+architecture eschews recurrence and instead relies entirely on an attention
 mechanism to draw global dependencies between input and output [2].
 
 This implementation is based on python

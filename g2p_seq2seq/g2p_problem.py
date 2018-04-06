@@ -126,23 +126,15 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
                                self.target_vocab)
     dev_gen = None
     if dev_path:
-      train_preprocess_path = os.path.join(
-          self._model_dir,
-          os.path.basename(train_path) + ".preprocessed")
-      dev_preprocess_path = os.path.join(
-          self._model_dir,
-          os.path.basename(dev_path) + ".preprocessed")
+      train_preprocess_path = train_path + ".preprocessed"
+      dev_preprocess_path = dev_path + ".preprocessed"
       train_gen = self.generator(train_path, self.source_vocab,
                                  self.target_vocab)
       dev_gen = self.generator(dev_path, self.source_vocab,
                                self.target_vocab)
     else:
-      train_preprocess_path = os.path.join(
-          self._model_dir,
-          os.path.basename(train_path) + ".train.preprocessed")
-      dev_preprocess_path = os.path.join(
-          self._model_dir,
-          os.path.basename(train_path) + ".dev.preprocessed")
+      train_preprocess_path = train_path + ".train.preprocessed"
+      dev_preprocess_path = dev_path + ".dev.preprocessed"
 
     generate_files(train_gen, dev_gen, train_preprocess_path,
                    dev_preprocess_path)
