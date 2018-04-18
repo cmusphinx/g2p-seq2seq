@@ -134,7 +134,7 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
                                self.target_vocab)
     else:
       train_preprocess_path = train_path + ".train.preprocessed"
-      dev_preprocess_path = dev_path + ".dev.preprocessed"
+      dev_preprocess_path = train_path + ".dev.preprocessed"
 
     generate_files(train_gen, dev_gen, train_preprocess_path,
                    dev_preprocess_path)

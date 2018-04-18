@@ -54,7 +54,7 @@ tf.flags.DEFINE_integer("min_length_bucket", 6,
                         "Set the size of the minimal bucket.")
 tf.flags.DEFINE_integer("max_length", 30,
                         "Set the size of the maximal bucket.")
-tf.flags.DEFINE_integer("length_bucket_step", 1.5,
+tf.flags.DEFINE_float("length_bucket_step", 1.5,
     """This flag controls the number of length buckets in the data reader.
     The buckets have maximum lengths from min_bucket_length to max_length,
     increasing (approximately) by factors
@@ -75,7 +75,7 @@ tf.flags.DEFINE_integer("eval_steps", 10, "Number of steps for evaluation.")
 tf.flags.DEFINE_boolean("return_beams", False,
                         "Set to true for beams decoding.")
 tf.flags.DEFINE_integer("beam_size", 4, "Number of decoding beams.")
-tf.flags.DEFINE_integer("alpha", 0.6,
+tf.flags.DEFINE_float("alpha", 0.6,
     """Float that controls the length penalty. Larger the alpha, stronger the
     preference for longer sequences.""")
 tf.flags.DEFINE_string("schedule", "train_and_evaluate",
