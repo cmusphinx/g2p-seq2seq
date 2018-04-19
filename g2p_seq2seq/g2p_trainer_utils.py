@@ -19,15 +19,15 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+
 import tensorflow as tf
 from tensorflow.contrib.learn.python.learn import learn_runner
 
 from tensor2tensor.utils import devices
-from tensor2tensor.utils import input_fn_builder
-from tensor2tensor.utils import model_builder
 from tensor2tensor.utils import registry
 from tensor2tensor.utils import decoding
-from tensor2tensor.utils import trainer_utils
+from tensor2tensor.utils import trainer_lib
 
 flags = tf.flags
 FLAGS = flags.FLAGS
@@ -47,173 +47,145 @@ def add_problem_hparams(hparams, problem_name, model_dir, problem_instance):
   hparams.problems.append(p_hparams)
 
 
-def create_experiment_components(params, hparams, run_config,
-                                 problem_instance,
-                                 train_preprocess_file_path=None,
-                                 dev_preprocess_file_path=None):
-  """Constructs and returns Estimator and train/eval input functions."""
-  tf.logging.info("Creating experiment, storing model files in %s",
-                  run_config.model_dir)
-
-  add_problem_hparams(hparams, params.problem_name, params.model_dir,
-                      problem_instance)
-
-  # hparams batch_size is used as minibatch size instead of tokens in batch
-  batch_size = (hparams.use_fixed_batch_size and hparams.batch_size) or None
-  num_datashards = 1
-  train_input_fn = input_fn_builder.build_input_fn(
-      mode=tf.estimator.ModeKeys.TRAIN,
-      hparams=hparams,
-      data_dir=params.data_dir,
-      num_datashards=num_datashards,
-      worker_replicas=FLAGS.worker_replicas,
-      worker_id=FLAGS.worker_id,
-      batch_size=batch_size,
-      dataset_split=train_preprocess_file_path)
-
-  eval_input_fn = input_fn_builder.build_input_fn(
-      mode=tf.estimator.ModeKeys.EVAL,
-      hparams=hparams,
-      data_dir=params.data_dir,
-      num_datashards=num_datashards,
-      worker_replicas=FLAGS.worker_replicas,
-      worker_id=FLAGS.worker_id,
-      dataset_split=dev_preprocess_file_path)
-
-  model_fn = model_builder.build_model_fn(
-      params.model_name,
-      problem_names=[params.problem_name],
-      train_steps=params.train_steps,
-      worker_id=FLAGS.worker_id,
-      worker_replicas=FLAGS.worker_replicas,
-      eval_run_autoregressive=FLAGS.eval_run_autoregressive,
-      decode_hparams=decoding.decode_hparams(params.decode_hparams))
-
-  estimator = tf.estimator.Estimator(
-      model_fn=model_fn,
-      model_dir=run_config.model_dir,
-      params=hparams,
-      config=run_config)
-
-  return estimator, {
-      tf.estimator.ModeKeys.TRAIN: train_input_fn,
-      tf.estimator.ModeKeys.EVAL: eval_input_fn}
+def create_experiment_fn(params, problem_instance):
+  use_validation_monitor = (params.schedule in
+                            ["train_and_evaluate", "continuous_train_and_eval"]
+                            and params.local_eval_frequency)
+  #return tpu_trainer_lib.create_experiment_fn(
+  return create_experiment_func(
+      model_name=params.model_name,
+      #problem_name=params.problem_name,#get_problem_name(),
+      params=params,
+      problem_instance=problem_instance,
+      data_dir=os.path.expanduser(params.data_dir_name),#FLAGS.data_dir),
+      train_steps=params.train_steps,#FLAGS.train_steps,
+      eval_steps=params.eval_steps,#FLAGS.eval_steps,
+      min_eval_frequency=params.local_eval_frequency,#FLAGS.local_eval_frequency,
+      schedule=params.schedule,#FLAGS.schedule,
+      export=params.export_saved_model,#FLAGS.export_saved_model,
+      decode_hparams=decoding.decode_hparams(params.decode_hparams),#FLAGS.decode_hparams),
+      use_tfdbg=params.tfdbg,#FLAGS.tfdbg,
+      use_dbgprofile=params.dbgprofile,#FLAGS.dbgprofile,
+      use_validation_monitor=use_validation_monitor,
+      eval_early_stopping_steps=params.eval_early_stopping_steps,#FLAGS.eval_early_stopping_steps,
+      eval_early_stopping_metric=params.eval_early_stopping_metric,#FLAGS.eval_early_stopping_metric,
+      eval_early_stopping_metric_minimize=params.eval_early_stopping_metric_minimize,#FLAGS.
+      #eval_early_stopping_metric_minimize,
+      use_tpu=params.use_tpu)#FLAGS.use_tpu)
 
 
-def make_experiment_fn(params, problem_instance, train_preprocess_file_path,
-                       dev_preprocess_file_path):
-  """Returns experiment_fn for learn_runner. Wraps create_experiment."""
+def create_experiment_func(*args, **kwargs):
+  """Wrapper for canonical experiment_fn. See create_experiment."""
 
   def experiment_fn(run_config, hparams):
-    """Function for running experiment creation."""
-    return create_experiment(
-        params,
-        hparams=hparams,
-        run_config=run_config,
-        problem_instance=problem_instance,
-        train_preprocess_file_path=train_preprocess_file_path,
-        dev_preprocess_file_path=dev_preprocess_file_path)
+    return create_experiment(run_config, hparams, *args, **kwargs)
 
   return experiment_fn
 
 
-def create_experiment(params, hparams, run_config, problem_instance,
-                      train_preprocess_file_path,
-                      dev_preprocess_file_path):
+def create_experiment(run_config,
+                      hparams,
+                      model_name,
+                      params,
+                      problem_instance,#problem_name,
+                      data_dir,
+                      train_steps,
+                      eval_steps,
+                      min_eval_frequency=2000,
+                      schedule="train_and_evaluate",
+                      export=False,
+                      decode_hparams=None,
+                      use_tfdbg=False,
+                      use_dbgprofile=False,
+                      use_validation_monitor=False,
+                      eval_early_stopping_steps=None,
+                      eval_early_stopping_metric=None,
+                      eval_early_stopping_metric_minimize=True,
+                      use_tpu=False):
   """Create Experiment."""
-  estimator, input_fns = create_experiment_components(
-      params=params,
-      hparams=hparams,
-      run_config=run_config,
-      problem_instance=problem_instance,
-      train_preprocess_file_path=train_preprocess_file_path,
-      dev_preprocess_file_path=dev_preprocess_file_path)
+  # HParams
+  hparams.add_hparam("data_dir", data_dir)
+  add_problem_hparams(hparams, params.problem_name, params.model_dir, problem_instance)
 
-  train_monitors = []
-  eval_hooks = []
-  if FLAGS.dbgprofile:
-    # Recorded traces can be visualized with chrome://tracing/
-    # The memory/tensor lifetime is also profiled
-    train_monitors.append(
-        tf.contrib.hooks.ProfilerHook(
-            save_steps=10,
-            output_dir=run_config.model_dir,
-            show_dataflow=True,
-            show_memory=True,
-        ))
-  if params.schedule == "train_and_evaluate":
-    if FLAGS.local_eval_frequency:
-      train_monitors.append(
-          tf.contrib.learn.monitors.ValidationMonitor(
-              input_fn=input_fns[tf.estimator.ModeKeys.EVAL],
-              eval_steps=params.eval_steps,
-              every_n_steps=FLAGS.local_eval_frequency,
-              hooks=eval_hooks,
-              early_stopping_rounds=FLAGS.eval_early_stopping_steps,
-              early_stopping_metric=FLAGS.eval_early_stopping_metric,
-              early_stopping_metric_minimize=FLAGS.
-              eval_early_stopping_metric_minimize))
+  # Estimator
+  #estimator = tpu_trainer_lib.create_estimator(
+  estimator = trainer_lib.create_estimator(
+      model_name,
+      hparams,
+      run_config,
+      schedule=schedule,
+      decode_hparams=decode_hparams,
+      use_tpu=use_tpu)
 
+  # Input fns from Problem
+  problem = hparams.problem_instances[0]
+  train_input_fn = problem.make_estimator_input_fn(
+      tf.estimator.ModeKeys.TRAIN, hparams)
+  eval_input_fn = problem.make_estimator_input_fn(
+      tf.estimator.ModeKeys.EVAL, hparams)
+
+  # Export
+  export_strategies = export and [create_export_strategy(problem, hparams)]
+
+  # Hooks
+  hooks_kwargs = {}
+  if not use_tpu:
+    dbgprofile_kwargs = {"output_dir": run_config.model_dir}
+    validation_monitor_kwargs = dict(
+        input_fn=eval_input_fn,
+        eval_steps=eval_steps,
+        every_n_steps=min_eval_frequency,
+        early_stopping_rounds=eval_early_stopping_steps,
+        early_stopping_metric=eval_early_stopping_metric,
+        early_stopping_metric_minimize=eval_early_stopping_metric_minimize)
+    #train_monitors, eval_hooks = tpu_trainer_lib.create_hooks(
+    train_monitors, eval_hooks = trainer_lib.create_hooks(
+        use_tfdbg=use_tfdbg,
+        use_dbgprofile=use_dbgprofile,
+        dbgprofile_kwargs=dbgprofile_kwargs,
+        use_validation_monitor=use_validation_monitor,
+        validation_monitor_kwargs=validation_monitor_kwargs)
+    hooks_kwargs = {"train_monitors": train_monitors, "eval_hooks": eval_hooks}
+
+  # Experiment
   return tf.contrib.learn.Experiment(
       estimator=estimator,
-      train_input_fn=input_fns[tf.estimator.ModeKeys.TRAIN],
-      eval_input_fn=input_fns[tf.estimator.ModeKeys.EVAL],
-      train_steps=params.train_steps,
-      eval_steps=params.eval_steps,
-      train_monitors=train_monitors,
-      eval_hooks=eval_hooks,
-      eval_delay_secs=0)
+      train_input_fn=train_input_fn,
+      eval_input_fn=eval_input_fn,
+      train_steps=train_steps,
+      eval_steps=eval_steps,
+      min_eval_frequency=min_eval_frequency,
+      train_steps_per_iteration=min(min_eval_frequency, train_steps),
+      export_strategies=export_strategies,
+      **hooks_kwargs)
 
 
-def create_run_config(output_dir):
-  """Create a RunConfig object."""
+def create_run_config(hp, params):
+  #return tpu_trainer_lib.create_run_config(
+  return trainer_lib.create_run_config(
+      model_dir=params.model_dir,#os.path.expanduser(FLAGS.output_dir),
+      master=params.master,#FLAGS.master,
+      iterations_per_loop=params.iterations_per_loop,#FLAGS.iterations_per_loop,
+      num_shards=params.tpu_num_shards,#FLAGS.tpu_num_shards,
+      log_device_placement=params.log_device_replacement,#FLAGS.log_device_placement,
+      save_checkpoints_steps=max(params.iterations_per_loop,#FLAGS.iterations_per_loop,
+                                 params.local_eval_frequency),#FLAGS.local_eval_frequency),
+      keep_checkpoint_max=params.keep_checkpoint_max,#FLAGS.keep_checkpoint_max,
+      keep_checkpoint_every_n_hours=params.keep_checkpoint_every_n_hours,#FLAGS.keep_checkpoint_every_n_hours,
+      num_gpus=params.worker_gpu,#FLAGS.worker_gpu,
+      gpu_order=params.gpu_order,#FLAGS.gpu_order,
+      shard_to_cpu=params.locally_shard_to_cpu,#FLAGS.locally_shard_to_cpu,
+      num_async_replicas=params.worker_replicas,#FLAGS.worker_replicas,
+      gpu_mem_fraction=params.worker_gpu_memory_fraction,#FLAGS.worker_gpu_memory_fraction,
+      enable_graph_rewriter=params.experimental_optimize_placement,#FLAGS.experimental_optimize_placement,
+      use_tpu=params.use_tpu,#FLAGS.use_tpu,
+      schedule=params.schedule,#FLAGS.schedule,
+      no_data_parallelism=params.no_data_parallelism,#hp.no_data_parallelism,
+      daisy_chain_variables=params.daisy_chain_variables,#hp.daisy_chain_variables,
+      ps_replicas=params.ps_replicas,#FLAGS.ps_replicas,
+      ps_job=params.ps_job,#FLAGS.ps_job,
+      ps_gpu=params.ps_gpu,#FLAGS.ps_gpu,
+      sync=params.sync,#FLAGS.sync,
+      worker_id=params.worker_id,#FLAGS.worker_id,
+      worker_job=params.worker_job)#FLAGS.worker_job)
 
-  FLAGS.keep_checkpoint_max = 1
-
-  run_config = tf.contrib.learn.RunConfig(
-      model_dir=output_dir,
-      master=FLAGS.master,
-      gpu_memory_fraction=FLAGS.worker_gpu_memory_fraction,
-      session_config=trainer_utils.session_config(),
-      keep_checkpoint_max=FLAGS.keep_checkpoint_max,
-      keep_checkpoint_every_n_hours=FLAGS.keep_checkpoint_every_n_hours,
-      save_checkpoints_steps=FLAGS.save_checkpoints_steps)
-
-  return run_config
-
-
-def run(params, problem_instance, train_preprocess_file_path,
-        dev_preprocess_file_path):
-  """Runs an Estimator locally or distributed.
-
-  Args:
-    data_dir: The directory the data can be found in.
-    model_name: The name of the model to use.
-    output_dir: The directory to store outputs in.
-    train_steps: The number of steps to run training for.
-    eval_steps: The number of steps to run evaluation for.
-    schedule: (str) The schedule to run. The value here must
-      be the name of one of Experiment's methods.
-  """
-  exp_fn = make_experiment_fn(
-      params,
-      problem_instance,
-      train_preprocess_file_path=train_preprocess_file_path,
-      dev_preprocess_file_path=dev_preprocess_file_path)
-
-  # Create hparams and run_config
-  #run_config = trainer_utils.create_run_config(params.model_dir)
-  run_config = create_run_config(params.model_dir)
-  hparams = trainer_utils.create_hparams(
-      params.hparams_set,
-      params.data_dir,
-      passed_hparams=params.hparams)
-
-  if trainer_utils.is_chief():
-    trainer_utils.save_metadata(params.model_dir, hparams)
-
-  learn_runner.run(
-      experiment_fn=exp_fn,
-      schedule=params.schedule,
-      run_config=run_config,
-      hparams=hparams)

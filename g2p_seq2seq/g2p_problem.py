@@ -29,13 +29,13 @@ from tensor2tensor.data_generators import problem
 from tensor2tensor.data_generators import text_encoder
 from tensor2tensor.utils import registry
 from tensor2tensor.data_generators import generator_utils
-from tensorflow.python.data.ops import dataset_ops as dataset_ops
+from tensor2tensor.data_generators import text_problems
 
 EOS = text_encoder.EOS_ID
 
 
 @registry.register_problem
-class GraphemeToPhonemeProblem(problem.Text2TextProblem):
+class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
   """Problem spec for cmudict PRONALSYL Grapheme-to-Phoneme translation."""
 
   def __init__(self, model_dir, file_path, is_training):
@@ -191,7 +191,9 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
               hparams=None,
               preprocess=True,
               dataset_split=None,
-              shard=None):
+              shard=None,
+              partition_id=0,
+              num_partitions=1):
     """Build a Dataset for this problem.
 
     Args:
@@ -243,8 +245,6 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
       if shuffle_files or shuffle_files is None and is_training:
         random.shuffle(data_files)
 
-      dataset = tf.contrib.data.TFRecordDataset(data_files)
-
     else:
       # In case when pathes to preprocessed files not pointed out, we create
       # dataset from generator object.
@@ -286,13 +286,13 @@ class GraphemeToPhonemeProblem(problem.Text2TextProblem):
       self.maybe_copy_features(example)
       return example
 
-    dataset = dataset.map(decode_record, num_parallel_calls=4)
+    dataset = (tf.data.Dataset.from_tensor_slices(data_files)
+               .interleave(lambda x:
+                   tf.data.TFRecordDataset(x).map(decode_record, num_parallel_calls=4),
+                   cycle_length=4, block_length=16))
 
     if preprocess:
-      dataset = dataset.map(
-          _preprocess,
-          num_threads=num_threads,
-          output_buffer_size=output_buffer_size)
+      dataset = dataset.map(_preprocess, num_parallel_calls=4)
 
     return dataset
 

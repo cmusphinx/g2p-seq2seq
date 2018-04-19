@@ -19,6 +19,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import contextlib
 import os
 import re
 import numpy as np
@@ -27,11 +28,15 @@ import tensorflow as tf
 from tensorflow.python.estimator import estimator as estimator_lib
 from tensorflow.python.framework import graph_util
 
+# Dependency imports
+
+from tensor2tensor import models # pylint: disable=unused-import
+
 from g2p_seq2seq import g2p_trainer_utils
 from tensor2tensor.utils import registry
-from tensor2tensor.utils import trainer_utils
 from tensor2tensor.utils import usr_dir
 from tensor2tensor.utils import decoding
+from tensor2tensor.utils import trainer_lib
 
 from tensor2tensor.data_generators import text_encoder
 from six.moves import input
@@ -54,7 +59,6 @@ class G2PModel(object):
     # Register g2p problem.
     self.problem = registry._PROBLEMS[self.params.problem_name](
         self.params.model_dir, file_path=file_path, is_training=is_training)
-    trainer_utils.log_registry()
 
     self.frozen_graph_filename = os.path.join(self.params.model_dir,
                                               "frozen_model.pb")
@@ -64,15 +68,18 @@ class G2PModel(object):
     if is_training:
       self.train_preprocess_file_path, self.dev_preprocess_file_path =\
           None, None
-      self.estimator, self.decode_hp = self.__prepare_decode_model()
+      self.estimator, self.decode_hp, self.hparams =\
+          self.__prepare_decode_model()
 
     elif os.path.exists(self.frozen_graph_filename):
-      self.estimator, self.decode_hp = self.__prepare_decode_model()
+      self.estimator, self.decode_hp, self.hparams =\
+          self.__prepare_decode_model()
       self.__load_graph()
       self.checkpoint_path = tf.train.latest_checkpoint(self.params.model_dir)
 
     else:
-      self.estimator, self.decode_hp = self.__prepare_decode_model()
+      self.estimator, self.decode_hp, self.hparams =\
+          self.__prepare_decode_model()
 
   def prepare_datafiles(self, train_path, dev_path):
     """Prepare preprocessed datafiles."""
@@ -81,19 +88,25 @@ class G2PModel(object):
 
   def __prepare_decode_model(self):
     """Prepare utilities for decoding."""
-    hparams = trainer_utils.create_hparams(
-        self.params.hparams_set,
-        self.params.data_dir,
-        passed_hparams=self.params.hparams)
-    estimator, _ = g2p_trainer_utils.create_experiment_components(
-        params=self.params,
-        hparams=hparams,
-        run_config=trainer_utils.create_run_config(self.params.model_dir),
-        problem_instance=self.problem)
+    hparams = trainer_lib.create_hparams(
+        hparams_set=self.params.hparams_set,
+        hparams_overrides_str=self.params.hparams)
+    trainer_run_config = g2p_trainer_utils.create_run_config(hparams,
+        self.params)
+    exp_fn = g2p_trainer_utils.create_experiment_fn(self.params, self.problem)
+    self.exp = exp_fn(trainer_run_config, hparams)
 
     decode_hp = decoding.decode_hparams(self.params.decode_hparams)
-    decode_hp.add_hparam("shards", 1)
-    return estimator, decode_hp
+    decode_hp.add_hparam("shards", self.params.decode_shards)
+    decode_hp.add_hparam("shard_id", self.params.worker_id)
+    estimator = trainer_lib.create_estimator(
+        self.params.model_name,
+        hparams,
+        trainer_run_config,
+        decode_hparams=decode_hp,
+        use_tpu=False)
+
+    return estimator, decode_hp, hparams
 
   def __prepare_interactive_model(self):
     """Create monitored session and generator that reads from the terminal and
@@ -223,11 +236,7 @@ class G2PModel(object):
 
   def train(self):
     """Run training."""
-    g2p_trainer_utils.run(
-        params=self.params,
-        problem_instance=self.problem,
-        train_preprocess_file_path=self.train_preprocess_file_path,
-        dev_preprocess_file_path=self.dev_preprocess_file_path)
+    execute_schedule(self.exp, self.params)
 
   def interactive(self):
     """Interactive decoding."""
@@ -377,12 +386,11 @@ class G2PModel(object):
       tf.logging.info("decode_hp.batch_size not specified; default=%d" %
                       self.decode_hp.batch_size)
 
-    hparams = self.estimator.params
     problem_id = self.decode_hp.problem_idx
     # Inputs vocabulary is set to targets if there are no inputs in the problem,
     # e.g., for language models where the inputs are just a prefix of targets.
-    inputs_vocab = hparams.problems[problem_id].vocabulary["inputs"]
-    targets_vocab = hparams.problems[problem_id].vocabulary["targets"]
+    inputs_vocab = self.hparams.problems[problem_id].vocabulary["inputs"]
+    targets_vocab = self.hparams.problems[problem_id].vocabulary["targets"]
     problem_name = "grapheme_to_phoneme_problem"
     tf.logging.info("Performing decoding from a file.")
     inputs = _get_inputs(filename)
@@ -395,7 +403,8 @@ class G2PModel(object):
           self.decode_hp.batch_size, self.decode_hp.max_input_size)
       gen_fn = decoding.make_input_fn_from_generator(input_gen)
       example = gen_fn()
-      return decoding._decode_input_tensor_to_features_dict(example, hparams)
+      return decoding._decode_input_tensor_to_features_dict(example,
+                                                            self.hparams)
 
     decodes = []
     result_iter = self.estimator.predict(input_fn)
@@ -406,7 +415,7 @@ class G2PModel(object):
                                 axis=0)
         for k, beam in enumerate(output_beams):
           tf.logging.info("BEAM %d:" % k)
-          decoded_outputs, _ = decoding.log_decode_results(
+          _, decoded_outputs, _ = decoding.log_decode_results(
               result["inputs"],
               beam,
               problem_name,
@@ -416,7 +425,7 @@ class G2PModel(object):
           beam_decodes.append(decoded_outputs)
         decodes.append(beam_decodes)
       else:
-        decoded_outputs, _ = decoding.log_decode_results(
+        _, decoded_outputs, _ = decoding.log_decode_results(
             result["inputs"],
             result["outputs"],
             problem_name,
@@ -557,3 +566,24 @@ def _decode_batch_input_fn(num_decode_batches, inputs,
         "inputs": np.array(final_batch_inputs).astype(np.int32),
         "problem_choice": np.array(0).astype(np.int32),
     }
+
+
+def execute_schedule(exp, params):
+  if not hasattr(exp, params.schedule):
+    raise ValueError(
+            "Experiment has no method %s, from --schedule" % params.schedule)
+  with profile_context(params):
+    getattr(exp, params.schedule)()
+
+
+@contextlib.contextmanager
+def profile_context(params):
+  if params.profile:
+    with tf.contrib.tfprof.ProfileContext("t2tprof",
+            trace_steps=range(100),
+            dump_steps=range(100)) as pctx:
+      opts = tf.profiler.ProfileOptionBuilder.time_and_memory()
+      pctx.add_auto_profiling("op", opts, range(100))
+      yield
+  else:
+    yield

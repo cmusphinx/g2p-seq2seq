@@ -31,8 +31,6 @@ import tensorflow as tf
 from g2p_seq2seq.g2p import G2PModel
 from g2p_seq2seq.params import Params
 
-from IPython.core.debugger import Tracer
-
 tf.flags.DEFINE_string("model_dir", None, "Training directory.")
 tf.flags.DEFINE_boolean("interactive", False,
                         "Set to True for interactive decoding.")
@@ -69,7 +67,6 @@ tf.flags.DEFINE_integer("num_heads", 4,
 tf.flags.DEFINE_integer("max_epochs", 0,
                         "How many training steps to do until stop training"
                         " (0: no limit).")
-tf.flags.DEFINE_integer("eval_steps", 10, "Number of steps for evaluation.")
 
 # Decoding parameters
 tf.flags.DEFINE_boolean("return_beams", False,
@@ -78,13 +75,6 @@ tf.flags.DEFINE_integer("beam_size", 4, "Number of decoding beams.")
 tf.flags.DEFINE_float("alpha", 0.6,
     """Float that controls the length penalty. Larger the alpha, stronger the
     preference for longer sequences.""")
-tf.flags.DEFINE_string("schedule", "train_and_evaluate",
-    """Set schedule. More info about training configurations you can read in
-    tensor2tensor docs: https://github.com/tensorflow/tensor2tensor/blob/master/
-docs/distributed_training.md""")
-tf.flags.DEFINE_string("master", "",
-                       "TensorFlow master. Defaults to empty string for local."
-                       "Specifies the configurations for distributed run.")
 
 FLAGS = tf.app.flags.FLAGS
 

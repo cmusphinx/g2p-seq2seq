@@ -24,7 +24,7 @@ class Params(object):
   """Class with training parameters."""
   def __init__(self, model_dir, data_path, flags=None):
     self.model_dir = os.path.expanduser(model_dir)
-    self.data_dir = os.path.dirname(data_path)
+    self.data_dir_name = os.path.dirname(data_path)
     # Set default parameters first. Then update the parameters that
     # pointed out in flags.
     self.hparams_set = "transformer_base"
@@ -37,15 +37,15 @@ class Params(object):
         "num_hidden_layers=1,hidden_size=4,filter_size=8,num_heads=1," +\
         "length_bucket_step=2.0,max_length=50,min_length_bucket=5"
     self.decode_hparams = "beam_size=1,alpha=0.6,return_beams=False"
+    self.master = ""
 
     if flags:
       self.batch_size = flags.batch_size
-      self.eval_steps = flags.eval_steps
       if flags.max_epochs > 0:
         self.train_steps = len(open(data_path).readlines()) * flags.max_epochs
       elif flags.train:
         self.train_steps = 1000000
-      self.hparams = "eval_drop_long_sequences=True" +\
+      self.hparams = "eval_drop_long_sequences=1" +\
           ",batch_size=" + str(flags.batch_size) +\
           ",num_hidden_layers=" + str(flags.num_layers) +\
           ",hidden_size=" + str(flags.size) +\
@@ -60,6 +60,35 @@ class Params(object):
           self.decode_hparams += ",return_beams=True"
       else:
           self.decode_hparams += ",return_beams=False"
+      self.iterations_per_loop = 1000
+      self.tpu_num_shards = 8
+      self.log_device_replacement = False
+      self.local_eval_frequency = 2000
+      self.keep_checkpoint_max = 1
+      self.keep_checkpoint_every_n_hours = 1
+      self.worker_gpu = 1
+      self.gpu_order = ""
+      self.locally_shard_to_cpu = False
+      self.worker_replicas = 1
+      self.worker_gpu_memory_fraction = 0.95
+      self.experimental_optimize_placement = False
+      self.use_tpu = False
+      self.no_data_parallelism = False
+      self.daisy_chain_variables = True
+      self.ps_replicas = 0
+      self.ps_job = "/job:ps"
+      self.ps_gpu = 0
+      self.sync = False
+      self.worker_id = 0
+      self.worker_job = "/job:localhost"
+      self.export_saved_model = False
+      self.tfdbg = False
+      self.dbgprofile = False
+      self.eval_early_stopping_steps = None
+      self.eval_early_stopping_metric = "loss"
+      self.eval_early_stopping_metric_minimize = True
+      self.profile = False
+      self.decode_shards = 1
 
     saved_hparams_path = os.path.join(self.model_dir, "hparams.json")
     if os.path.exists(saved_hparams_path):
