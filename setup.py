@@ -18,7 +18,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='g2p_seq2seq',
-    version='6.0.0a0',
+    version='6.1.0a0',
     packages=['g2p_seq2seq'],
     description='Grapheme to phoneme module based on Seq2Seq',
     long_description=long_description,
@@ -38,7 +38,7 @@ setup(
     ],
     keywords='g2p seq2seq tensor2tensor rnnlm',
 
-    install_requires=['tensorflow-gpu>=1.1.0', 'tensor2tensor>=1.2.0'],
+    install_requires=['tensorflow-gpu>=1.5.0', 'tensor2tensor>=1.5.0'],
 
     entry_points={
         'console_scripts': [

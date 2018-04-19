@@ -14,21 +14,10 @@ which allows an efficient training on both CPU and GPU.
 
 ## Installation
 
-The tool requires TensorFlow at least version 1.3.0 and Tensor2Tensor with version 1.4.0 or higher. Please see the installation
+The tool requires TensorFlow at least version 1.5.0 and Tensor2Tensor with version 1.5.0 or higher. Please see the installation
 [guide](https://www.tensorflow.org/install/)
-for TensorFlow installation details.
+for TensorFlow installation details, and details about the Tensor2Tensor installation see in [guide](https://github.com/tensorflow/tensor2tensor)
 
-You can install tensorflow with the following command:
-
-```
-sudo pip install tensorflow-gpu
-```
-
-And for installing Tensor2Tensor run:
-
-```
-sudo pip install tensor2tensor
-```
 
 The g2p_seq2seq package itself uses setuptools, so you can follow standard installation process:
 

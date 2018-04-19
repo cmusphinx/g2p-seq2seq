@@ -217,7 +217,7 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
     Returns:
       Dataset containing dict<feature name, Tensor>.
     """
-    if dataset_split or mode == "train":
+    if dataset_split or (mode in ["train", "eval"]):
       # In case when pathes to preprocessed files pointed out or if train mode
       # launched, we save preprocessed data first, and then create dataset from
       # that files.

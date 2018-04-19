@@ -47,31 +47,33 @@ def add_problem_hparams(hparams, problem_name, model_dir, problem_instance):
   hparams.problems.append(p_hparams)
 
 
-def create_experiment_fn(params, problem_instance):
+def create_experiment_fn(params, problem_instance,
+                         train_preprocess_file_name=None,
+                         dev_preprocess_file_name=None):
   use_validation_monitor = (params.schedule in
                             ["train_and_evaluate", "continuous_train_and_eval"]
                             and params.local_eval_frequency)
-  #return tpu_trainer_lib.create_experiment_fn(
   return create_experiment_func(
       model_name=params.model_name,
-      #problem_name=params.problem_name,#get_problem_name(),
+      train_preprocess_file_name=train_preprocess_file_name,
+      dev_preprocess_file_name=dev_preprocess_file_name,
       params=params,
       problem_instance=problem_instance,
-      data_dir=os.path.expanduser(params.data_dir_name),#FLAGS.data_dir),
-      train_steps=params.train_steps,#FLAGS.train_steps,
-      eval_steps=params.eval_steps,#FLAGS.eval_steps,
-      min_eval_frequency=params.local_eval_frequency,#FLAGS.local_eval_frequency,
-      schedule=params.schedule,#FLAGS.schedule,
-      export=params.export_saved_model,#FLAGS.export_saved_model,
-      decode_hparams=decoding.decode_hparams(params.decode_hparams),#FLAGS.decode_hparams),
-      use_tfdbg=params.tfdbg,#FLAGS.tfdbg,
-      use_dbgprofile=params.dbgprofile,#FLAGS.dbgprofile,
+      data_dir=os.path.expanduser(params.data_dir_name),
+      train_steps=params.train_steps,
+      eval_steps=params.eval_steps,
+      min_eval_frequency=params.local_eval_frequency,
+      schedule=params.schedule,
+      export=params.export_saved_model,
+      decode_hparams=decoding.decode_hparams(params.decode_hparams),
+      use_tfdbg=params.tfdbg,
+      use_dbgprofile=params.dbgprofile,
       use_validation_monitor=use_validation_monitor,
-      eval_early_stopping_steps=params.eval_early_stopping_steps,#FLAGS.eval_early_stopping_steps,
-      eval_early_stopping_metric=params.eval_early_stopping_metric,#FLAGS.eval_early_stopping_metric,
-      eval_early_stopping_metric_minimize=params.eval_early_stopping_metric_minimize,#FLAGS.
-      #eval_early_stopping_metric_minimize,
-      use_tpu=params.use_tpu)#FLAGS.use_tpu)
+      eval_early_stopping_steps=params.eval_early_stopping_steps,
+      eval_early_stopping_metric=params.eval_early_stopping_metric,
+      eval_early_stopping_metric_minimize=\
+        params.eval_early_stopping_metric_minimize,
+      use_tpu=params.use_tpu)
 
 
 def create_experiment_func(*args, **kwargs):
@@ -86,8 +88,10 @@ def create_experiment_func(*args, **kwargs):
 def create_experiment(run_config,
                       hparams,
                       model_name,
+                      train_preprocess_file_name,
+                      dev_preprocess_file_name,
                       params,
-                      problem_instance,#problem_name,
+                      problem_instance,
                       data_dir,
                       train_steps,
                       eval_steps,
@@ -108,7 +112,6 @@ def create_experiment(run_config,
   add_problem_hparams(hparams, params.problem_name, params.model_dir, problem_instance)
 
   # Estimator
-  #estimator = tpu_trainer_lib.create_estimator(
   estimator = trainer_lib.create_estimator(
       model_name,
       hparams,
@@ -117,12 +120,14 @@ def create_experiment(run_config,
       decode_hparams=decode_hparams,
       use_tpu=use_tpu)
 
+  train_dataset_kwargs = {"dataset_split":train_preprocess_file_name}
+  dev_dataset_kwargs = {"dataset_split":dev_preprocess_file_name}
   # Input fns from Problem
   problem = hparams.problem_instances[0]
   train_input_fn = problem.make_estimator_input_fn(
-      tf.estimator.ModeKeys.TRAIN, hparams)
+      tf.estimator.ModeKeys.TRAIN, hparams, dataset_kwargs=train_dataset_kwargs)
   eval_input_fn = problem.make_estimator_input_fn(
-      tf.estimator.ModeKeys.EVAL, hparams)
+      tf.estimator.ModeKeys.EVAL, hparams, dataset_kwargs=dev_dataset_kwargs)
 
   # Export
   export_strategies = export and [create_export_strategy(problem, hparams)]
@@ -138,7 +143,6 @@ def create_experiment(run_config,
         early_stopping_rounds=eval_early_stopping_steps,
         early_stopping_metric=eval_early_stopping_metric,
         early_stopping_metric_minimize=eval_early_stopping_metric_minimize)
-    #train_monitors, eval_hooks = tpu_trainer_lib.create_hooks(
     train_monitors, eval_hooks = trainer_lib.create_hooks(
         use_tfdbg=use_tfdbg,
         use_dbgprofile=use_dbgprofile,
@@ -161,31 +165,30 @@ def create_experiment(run_config,
 
 
 def create_run_config(hp, params):
-  #return tpu_trainer_lib.create_run_config(
   return trainer_lib.create_run_config(
-      model_dir=params.model_dir,#os.path.expanduser(FLAGS.output_dir),
-      master=params.master,#FLAGS.master,
-      iterations_per_loop=params.iterations_per_loop,#FLAGS.iterations_per_loop,
-      num_shards=params.tpu_num_shards,#FLAGS.tpu_num_shards,
-      log_device_placement=params.log_device_replacement,#FLAGS.log_device_placement,
-      save_checkpoints_steps=max(params.iterations_per_loop,#FLAGS.iterations_per_loop,
-                                 params.local_eval_frequency),#FLAGS.local_eval_frequency),
-      keep_checkpoint_max=params.keep_checkpoint_max,#FLAGS.keep_checkpoint_max,
-      keep_checkpoint_every_n_hours=params.keep_checkpoint_every_n_hours,#FLAGS.keep_checkpoint_every_n_hours,
-      num_gpus=params.worker_gpu,#FLAGS.worker_gpu,
-      gpu_order=params.gpu_order,#FLAGS.gpu_order,
-      shard_to_cpu=params.locally_shard_to_cpu,#FLAGS.locally_shard_to_cpu,
-      num_async_replicas=params.worker_replicas,#FLAGS.worker_replicas,
-      gpu_mem_fraction=params.worker_gpu_memory_fraction,#FLAGS.worker_gpu_memory_fraction,
-      enable_graph_rewriter=params.experimental_optimize_placement,#FLAGS.experimental_optimize_placement,
-      use_tpu=params.use_tpu,#FLAGS.use_tpu,
-      schedule=params.schedule,#FLAGS.schedule,
-      no_data_parallelism=params.no_data_parallelism,#hp.no_data_parallelism,
-      daisy_chain_variables=params.daisy_chain_variables,#hp.daisy_chain_variables,
-      ps_replicas=params.ps_replicas,#FLAGS.ps_replicas,
-      ps_job=params.ps_job,#FLAGS.ps_job,
-      ps_gpu=params.ps_gpu,#FLAGS.ps_gpu,
-      sync=params.sync,#FLAGS.sync,
-      worker_id=params.worker_id,#FLAGS.worker_id,
-      worker_job=params.worker_job)#FLAGS.worker_job)
+      model_dir=params.model_dir,
+      master=params.master,
+      iterations_per_loop=params.iterations_per_loop,
+      num_shards=params.tpu_num_shards,
+      log_device_placement=params.log_device_replacement,
+      save_checkpoints_steps=max(params.iterations_per_loop,
+                                 params.local_eval_frequency),
+      keep_checkpoint_max=params.keep_checkpoint_max,
+      keep_checkpoint_every_n_hours=params.keep_checkpoint_every_n_hours,
+      num_gpus=params.worker_gpu,
+      gpu_order=params.gpu_order,
+      shard_to_cpu=params.locally_shard_to_cpu,
+      num_async_replicas=params.worker_replicas,
+      gpu_mem_fraction=params.worker_gpu_memory_fraction,
+      enable_graph_rewriter=params.experimental_optimize_placement,
+      use_tpu=params.use_tpu,
+      schedule=params.schedule,
+      no_data_parallelism=params.no_data_parallelism,
+      daisy_chain_variables=params.daisy_chain_variables,
+      ps_replicas=params.ps_replicas,
+      ps_job=params.ps_job,
+      ps_gpu=params.ps_gpu,
+      sync=params.sync,
+      worker_id=params.worker_id,
+      worker_job=params.worker_job)
 

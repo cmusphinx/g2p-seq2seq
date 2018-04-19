@@ -93,7 +93,8 @@ class G2PModel(object):
         hparams_overrides_str=self.params.hparams)
     trainer_run_config = g2p_trainer_utils.create_run_config(hparams,
         self.params)
-    exp_fn = g2p_trainer_utils.create_experiment_fn(self.params, self.problem)
+    exp_fn = g2p_trainer_utils.create_experiment_fn(self.params, self.problem)#,
+        #self.train_preprocess_file_path, self.dev_preprocess_file_path)
     self.exp = exp_fn(trainer_run_config, hparams)
 
     decode_hp = decoding.decode_hparams(self.params.decode_hparams)
