@@ -18,7 +18,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='g2p_seq2seq',
-    version='6.1.0a0',
+    version='6.1.1a0',
     packages=['g2p_seq2seq'],
     description='Grapheme to phoneme module based on Seq2Seq',
     long_description=long_description,
