@@ -47,16 +47,12 @@ def add_problem_hparams(hparams, problem_name, model_dir, problem_instance):
   hparams.problems.append(p_hparams)
 
 
-def create_experiment_fn(params, problem_instance,
-                         train_preprocess_file_name=None,
-                         dev_preprocess_file_name=None):
+def create_experiment_fn(params, problem_instance):
   use_validation_monitor = (params.schedule in
                             ["train_and_evaluate", "continuous_train_and_eval"]
                             and params.local_eval_frequency)
   return create_experiment_func(
       model_name=params.model_name,
-      train_preprocess_file_name=train_preprocess_file_name,
-      dev_preprocess_file_name=dev_preprocess_file_name,
       params=params,
       problem_instance=problem_instance,
       data_dir=os.path.expanduser(params.data_dir_name),
@@ -88,8 +84,6 @@ def create_experiment_func(*args, **kwargs):
 def create_experiment(run_config,
                       hparams,
                       model_name,
-                      train_preprocess_file_name,
-                      dev_preprocess_file_name,
                       params,
                       problem_instance,
                       data_dir,
@@ -120,14 +114,12 @@ def create_experiment(run_config,
       decode_hparams=decode_hparams,
       use_tpu=use_tpu)
 
-  train_dataset_kwargs = {"dataset_split":train_preprocess_file_name}
-  dev_dataset_kwargs = {"dataset_split":dev_preprocess_file_name}
   # Input fns from Problem
   problem = hparams.problem_instances[0]
   train_input_fn = problem.make_estimator_input_fn(
-      tf.estimator.ModeKeys.TRAIN, hparams, dataset_kwargs=train_dataset_kwargs)
+      tf.estimator.ModeKeys.TRAIN, hparams)
   eval_input_fn = problem.make_estimator_input_fn(
-      tf.estimator.ModeKeys.EVAL, hparams, dataset_kwargs=dev_dataset_kwargs)
+      tf.estimator.ModeKeys.EVAL, hparams)
 
   # Export
   export_strategies = export and [create_export_strategy(problem, hparams)]

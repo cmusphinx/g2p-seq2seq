@@ -79,6 +79,8 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
     return self.tabbed_generator(data_path, source_vocab, target_vocab, EOS)
 
   def filepattern(self, data_dir, dataset_split, shard=None):
+    if not (".preprocessed" in dataset_split):
+      return os.path.join(self._model_dir, dataset_split + ".preprocessed")
     return os.path.join(data_dir, dataset_split)
 
   @property
@@ -109,36 +111,29 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
   def vocab_name(self):
     return None
 
-  def generate_preprocess_data(self, train_path, dev_path):
+  def generate_preprocess_data(self, train_path, eval_path):
     """Generate and save preprocessed data as TFRecord files.
 
     Args:
       train_path: the path to the train data file.
-      dev_path: the path to the development data file.
+      eval_path: the path to the evaluation data file.
 
     Returns:
       train_preprocess_path: the path where the preprocessed train data
           was saved.
-      dev_preprocess_path: the path where the preprocessed development data
+      eval_preprocess_path: the path where the preprocessed evaluation data
           was saved.
     """
-    train_gen = self.generator(train_path, self.source_vocab,
-                               self.target_vocab)
-    dev_gen = None
-    if dev_path:
-      train_preprocess_path = train_path + ".preprocessed"
-      dev_preprocess_path = dev_path + ".preprocessed"
-      train_gen = self.generator(train_path, self.source_vocab,
-                                 self.target_vocab)
-      dev_gen = self.generator(dev_path, self.source_vocab,
-                               self.target_vocab)
-    else:
-      train_preprocess_path = train_path + ".train.preprocessed"
-      dev_preprocess_path = train_path + ".dev.preprocessed"
+    train_preprocess_path = os.path.join(self._model_dir, "train.preprocessed")
+    eval_preprocess_path = os.path.join(self._model_dir, "eval.preprocessed")
+    train_gen = self.generator(train_path, self.source_vocab, self.target_vocab)
+    eval_gen = None
+    if eval_path:
+      eval_gen = self.generator(eval_path, self.source_vocab, self.target_vocab)
 
-    generate_files(train_gen, dev_gen, train_preprocess_path,
-                   dev_preprocess_path)
-    return train_preprocess_path, dev_preprocess_path
+    generate_files(train_gen, eval_gen, train_preprocess_path,
+                   eval_preprocess_path)
+    return train_preprocess_path, eval_preprocess_path
 
   def get_feature_encoders(self, data_dir=None):
     if self._encoders is None:

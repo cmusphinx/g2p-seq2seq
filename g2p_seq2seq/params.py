@@ -60,35 +60,36 @@ class Params(object):
           self.decode_hparams += ",return_beams=True"
       else:
           self.decode_hparams += ",return_beams=False"
-      self.iterations_per_loop = 1000
-      self.tpu_num_shards = 8
-      self.log_device_replacement = False
-      self.local_eval_frequency = 2000
-      self.keep_checkpoint_max = 1
-      self.keep_checkpoint_every_n_hours = 1
-      self.worker_gpu = 1
-      self.gpu_order = ""
-      self.locally_shard_to_cpu = False
-      self.worker_replicas = 1
-      self.worker_gpu_memory_fraction = 0.95
-      self.experimental_optimize_placement = False
-      self.use_tpu = False
-      self.no_data_parallelism = False
-      self.daisy_chain_variables = True
-      self.ps_replicas = 0
-      self.ps_job = "/job:ps"
-      self.ps_gpu = 0
-      self.sync = False
-      self.worker_id = 0
-      self.worker_job = "/job:localhost"
-      self.export_saved_model = False
-      self.tfdbg = False
-      self.dbgprofile = False
-      self.eval_early_stopping_steps = None
-      self.eval_early_stopping_metric = "loss"
-      self.eval_early_stopping_metric_minimize = True
-      self.profile = False
-      self.decode_shards = 1
+
+    self.iterations_per_loop = 1000
+    self.tpu_num_shards = 8
+    self.log_device_replacement = False
+    self.local_eval_frequency = 2000
+    self.keep_checkpoint_max = 1
+    self.keep_checkpoint_every_n_hours = 1
+    self.worker_gpu = 1
+    self.gpu_order = ""
+    self.locally_shard_to_cpu = False
+    self.worker_replicas = 1
+    self.worker_gpu_memory_fraction = 0.95
+    self.experimental_optimize_placement = False
+    self.use_tpu = False
+    self.no_data_parallelism = False
+    self.daisy_chain_variables = True
+    self.ps_replicas = 0
+    self.ps_job = "/job:ps"
+    self.ps_gpu = 0
+    self.sync = False
+    self.worker_id = 0
+    self.worker_job = "/job:localhost"
+    self.export_saved_model = False
+    self.tfdbg = False
+    self.dbgprofile = False
+    self.eval_early_stopping_steps = None
+    self.eval_early_stopping_metric = "loss"
+    self.eval_early_stopping_metric_minimize = True
+    self.profile = False
+    self.decode_shards = 1
 
     saved_hparams_path = os.path.join(self.model_dir, "hparams.json")
     if os.path.exists(saved_hparams_path):
