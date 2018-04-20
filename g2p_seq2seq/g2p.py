@@ -69,24 +69,24 @@ class G2PModel(object):
       self.train_preprocess_file_path, self.dev_preprocess_file_path =\
           None, None
       self.estimator, self.decode_hp, self.hparams =\
-          self.__prepare_decode_model()
+          self.__prepare_model()
 
     elif os.path.exists(self.frozen_graph_filename):
       self.estimator, self.decode_hp, self.hparams =\
-          self.__prepare_decode_model()
+          self.__prepare_model()
       self.__load_graph()
       self.checkpoint_path = tf.train.latest_checkpoint(self.params.model_dir)
 
     else:
       self.estimator, self.decode_hp, self.hparams =\
-          self.__prepare_decode_model()
+          self.__prepare_model()
 
   def prepare_datafiles(self, train_path, dev_path):
     """Prepare preprocessed datafiles."""
     self.train_preprocess_file_path, self.dev_preprocess_file_path =\
         self.problem.generate_preprocess_data(train_path, dev_path)
 
-  def __prepare_decode_model(self):
+  def __prepare_model(self):
     """Prepare utilities for decoding."""
     hparams = trainer_lib.create_hparams(
         hparams_set=self.params.hparams_set,
@@ -140,7 +140,7 @@ class G2PModel(object):
       gen_fn = make_input_fn(self.inputs, prob_choice)
       example = gen_fn()
       example = decoding._interactive_input_tensor_to_features_dict(
-          example, self.estimator.params)
+          example, self.hparams)#self.estimator.params)
       return example
 
     self.input_fn = input_fn
@@ -148,24 +148,29 @@ class G2PModel(object):
     if os.path.exists(self.frozen_graph_filename):
       return
 
+    # List of `SessionRunHook` subclass instances. Used for callbacks inside
+    # the prediction call.
+    hooks = estimator_lib._check_hooks_type(None)
+
+    # Check that model has been trained.
+    # Path of a specific checkpoint to predict. The latest checkpoint
+    # in `model_dir` is used
+    checkpoint_path = estimator_lib.saver.latest_checkpoint(
+        self.params.model_dir)
+    if not checkpoint_path:
+      raise ValueError('Could not find trained model in model_dir: {}.'
+                       .format(self.params.model_dir))
+
     with estimator_lib.ops.Graph().as_default() as graph:
-      self.features = self.estimator._get_features_from_input_fn(
-          input_fn, estimator_lib.model_fn_lib.ModeKeys.PREDICT)
-      # List of `SessionRunHook` subclass instances. Used for callbacks inside
-      # the prediction call.
-      hooks = estimator_lib._check_hooks_type(None)
-      # Check that model has been trained.
-      # Path of a specific checkpoint to predict. The latest checkpoint
-      # in `model_dir` is used
-      checkpoint_path = estimator_lib.saver.latest_checkpoint(
-          self.params.model_dir)
-      if not checkpoint_path:
-        raise ValueError('Could not find trained model in model_dir: {}.'
-                         .format(self.params.model_dir))
+      #self.features = self.estimator._get_features_from_input_fn(
+      #    input_fn, estimator_lib.model_fn_lib.ModeKeys.PREDICT)
 
       estimator_lib.random_seed.set_random_seed(
           self.estimator._config.tf_random_seed)
       self.estimator._create_and_assert_global_step(graph)
+
+      self.features, input_hooks = self.estimator._get_features_from_input_fn(
+          input_fn, estimator_lib.model_fn_lib.ModeKeys.PREDICT)
       self.estimator_spec = self.estimator._call_model_fn(
           self.features, None, estimator_lib.model_fn_lib.ModeKeys.PREDICT,
           self.estimator.config)
@@ -190,8 +195,7 @@ class G2PModel(object):
     """
     num_samples = 1
     decode_length = 100
-    p_hparams = self.estimator.params.problems[0]
-    vocabulary = p_hparams.vocabulary["inputs"]
+    vocabulary = self.problem.source_vocab
     # This should be longer than the longest input.
     const_array_size = 50
 
