@@ -169,10 +169,13 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
     """
     eos_list = [] if eos is None else [eos]
     with tf.gfile.GFile(source_path, mode="r") as source_file:
-      for line in source_file:
+      for line_idx, line in enumerate(source_file):
         if line:
           items = line.split()
-          assert len(items) > 1
+          if len(items) <= 1:
+            raise ValueError("Line {} in {} has unsuitable data format:\n"
+                    "{}\nGraphemes and phonemes should be separated by white "
+                    "space.".format(line_idx, source_path, line))
           source, target = items[0].strip(), " ".join(items[1:]).strip()
           source_ints = source_vocab.encode(source) + eos_list
           target_ints = target_vocab.encode(target) + eos_list
