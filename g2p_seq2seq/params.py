@@ -33,7 +33,7 @@ class Params(object):
     self.problem_name = "grapheme_to_phoneme_problem"
     self.train_steps = 10
     self.eval_steps = 1
-    self.hparams = "eval_drop_long_sequences=True,batch_size=1," +\
+    self.hparams = "eval_drop_long_sequences=1,batch_size=1," +\
         "num_hidden_layers=1,hidden_size=4,filter_size=8,num_heads=1," +\
         "length_bucket_step=2.0,max_length=50,min_length_bucket=5"
     self.decode_hparams = "beam_size=1,alpha=0.6,return_beams=False"

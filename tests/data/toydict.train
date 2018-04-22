@@ -1,9 +1,10 @@
-abcbacaacbbc	A B C B A C A A C B B C
+abcbaacbbc	A B C B A A C B B C
 cabc	C A B C
 ba	B A
 acbaabac	A C B A A B A C
-cbbcacbcaacbcb	C B B C A C B C A A C B C
+cbbcacbcc	C B B C A C B C C
 bcaacb	B C A A C B
 a	A
 b	B
 c	C
+ab	A B

@@ -312,7 +312,6 @@ class G2PModel(object):
     print("Errors: %d" % errors)
     print("WER: %.3f" % (float(errors)/(correct+errors)))
     print("Accuracy: %.3f" % float(1.-(float(errors)/(correct+errors))))
-    return self.g2p_gt_map
 
   def freeze(self):
     """Freeze pre-trained model."""
