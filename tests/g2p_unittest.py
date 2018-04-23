@@ -11,7 +11,7 @@ import inspect, os
 class TestG2P(unittest.TestCase):
 
   def test_train(self):
-    model_dir = os.path.abspath("tests/models/train-tmp")
+    model_dir = os.path.abspath("tests/models/train")
     if not os.path.exists(model_dir):
       os.makedirs(model_dir)
     train_path = os.path.abspath("tests/data/toydict.train")
@@ -21,7 +21,7 @@ class TestG2P(unittest.TestCase):
     g2p_model = G2PModel(params, file_path=train_path, is_training=True)
     g2p_model.prepare_datafiles(train_path=train_path, dev_path=dev_path)
     g2p_model.train()
-    #shutil.rmtree(model_dir)
+    shutil.rmtree(model_dir)
 
   def test_decode(self):
     model_dir = os.path.abspath("tests/models/decode")

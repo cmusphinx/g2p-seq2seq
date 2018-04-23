@@ -1,0 +1,1 @@
+{"num_hidden_layers": "1", "num_heads": "1", "batch_size": "1", "length_bucket_step": "2.0", "filter_size": "8", "max_length": "10", "eval_drop_long_sequences": "1", "hidden_size": "4", "min_length_bucket": "5"}

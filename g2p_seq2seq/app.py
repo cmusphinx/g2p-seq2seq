@@ -66,7 +66,7 @@ tf.flags.DEFINE_integer("filter_size", 512,
 tf.flags.DEFINE_integer("num_heads", 4,
                         "Number of applied heads in Multi-attention mechanism.")
 tf.flags.DEFINE_integer("max_epochs", 0,
-                        "How many training steps to do until stop training"
+                        "How many epochs to train the model."
                         " (0: no limit).")
 
 # Decoding parameters

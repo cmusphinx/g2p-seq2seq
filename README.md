@@ -35,7 +35,7 @@ The runnable script `g2p-seq2seq` is installed in  `/usr/local/bin` folder by de
 
 ## Running G2P
 
-A pretrained 2-layer transformer model with 512 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download).
+A pretrained 3-layer transformer model with 256 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download).
 Unpack the model after download. The model is trained on [CMU English dictionary](http://github.com/cmusphinx/cmudict)
 
 ```
@@ -94,26 +94,19 @@ See an [example dictionary](http://github.com/cmusphinx/cmudict)
 
 You can set up maximum training steps:
 ```
-  "--max_steps" - Maximum number of training steps (Default: 0).
+  "--max_epochs" - Maximum number of training epochs (Default: 0).
      If 0 train until no improvement is observed
 ```
 
 It is a good idea to play with the following parameters:
 ```
-  "--size" - Size of each model layer (Default: 64).
-     We observed much better results with 256 units, but the training becomes slower
+  "--size" - Size of each model layer (Default: 256).
 
-  "--num_layers" - Number of layers in the model (Default: 2). 
-     For example, you can try 1 if the train set is not large enough, 
-     or 3 to hopefully get better results
+  "--num_layers" - Number of layers in the model (Default: 3).
 
-  "--filter_size" - The size of the filter layer in a convolutional layer (Default: 256)
+  "--filter_size" - The size of the filter layer in a convolutional layer (Default: 512)
 
-  "--dropout" - The proportion of dropping out units in hidden layers (Default: 0.5)
-
-  "--attention_dropout" - The proportion of dropping out units in an attention layer (Default: 0.5)
-
-  "--num_heads" - Number of applied heads in Multi-attention mechanism (Default: 2)
+  "--num_heads" - Number of applied heads in Multi-attention mechanism (Default: 4)
 ```
 
 You can manually point out Development and Test datasets:
@@ -134,9 +127,9 @@ And, if you want to start training from scratch:
 
 The differences in pronunciations between short and long words can be significant. So, seq2seq models applies bucketing technique to take account of such problems. On the other hand, splitting initial data into too many buckets can worse the final results. Because in this case there will be not enough amount of examples in each particular bucket. To get a better results, you may tune following three parameters that change number and size of the buckets:
 ```
-  "--min_length_bucket" - the size of the minimal bucket (Default: 5)
-  "--max_length" - maximal possible length of words or maximal number of phonemes in pronunciations (Default: 40)
-  "--length_bucket_step" - multiplier that controls the number of length buckets in the data. The buckets have maximum lengths from min_bucket_length to max_length, increasing by factors of length_bucket_step (Default: 2.0)
+  "--min_length_bucket" - the size of the minimal bucket (Default: 6)
+  "--max_length" - maximal possible length of words or maximal number of phonemes in pronunciations (Default: 30)
+  "--length_bucket_step" - multiplier that controls the number of length buckets in the data. The buckets have maximum lengths from min_bucket_length to max_length, increasing by factors of length_bucket_step (Default: 1.5)
 ```
 
 After training the model, you may freeze it:
@@ -152,7 +145,7 @@ File "frozen_model.pb" will appeared in "model_folder_path" directory after laun
 System | WER ([CMUdict PRONALSYL 2007](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/phonetisaurus-cmudict-split.tar.gz)), % | WER ([CMUdict latest\*](https://github.com/cmusphinx/cmudict)), %
 --- | --- | ---
 Baseline WFST (Phonetisaurus) | 24.4 | 33.89
-Transformer num_layers=2, size=256   | 20.2 | ~31
+Transformer num_layers=3, size=256   | 20.9 | ~31
 \* These results pointed out for dictionary without stress.
 
 ## References
