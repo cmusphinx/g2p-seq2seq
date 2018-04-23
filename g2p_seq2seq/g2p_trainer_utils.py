@@ -20,6 +20,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import json
 
 import tensorflow as tf
 from tensorflow.contrib.learn.python.learn import learn_runner
@@ -184,3 +185,33 @@ def create_run_config(hp, params):
       worker_id=params.worker_id,
       worker_job=params.worker_job)
 
+
+def save_params(model_dir, hparams):
+  """Save customizable model parameters in 'model.params' file.
+  """
+  params_to_save = {}
+  for hp in hparams.split(","):
+    param_split = hp.split("=")
+    if len(param_split) == 2:
+      param_name, param_value = param_split[0], param_split[1]
+      params_to_save[param_name] = param_value
+    else:
+      raise ValueError("HParams line:{} can not be splitted\n"
+                       .format(param_split))
+  with open(os.path.join(model_dir, "model.params"), "w") as params_file:
+    json.dump(params_to_save, params_file)
+
+
+def load_params(model_dir):
+  """Load customizable parameters from 'model.params' file.
+  """
+  params_file_path = os.path.join(model_dir, "model.params")
+  if os.path.exists(params_file_path):
+    model_params = json.load(open(params_file_path))
+    hparams = ""
+    for hp, hp_value in model_params.items():
+      if hparams:
+        hparams += ","
+      hparams += hp + "=" + hp_value
+    return hparams
+  raise StandardError("File {} not exists.".format(params_file_path))

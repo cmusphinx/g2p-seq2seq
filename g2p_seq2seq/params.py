@@ -33,18 +33,29 @@ class Params(object):
     self.problem_name = "grapheme_to_phoneme_problem"
     self.train_steps = 10
     self.eval_steps = 1
+    self.iterations_per_loop = 2
+    self.local_eval_frequency = 5
     self.hparams = "eval_drop_long_sequences=1,batch_size=1," +\
         "num_hidden_layers=1,hidden_size=4,filter_size=8,num_heads=1," +\
-        "length_bucket_step=2.0,max_length=50,min_length_bucket=5"
+        "length_bucket_step=2.0,max_length=10,min_length_bucket=5"
     self.decode_hparams = "beam_size=1,alpha=0.6,return_beams=False"
     self.master = ""
 
     if flags:
       self.batch_size = flags.batch_size
+      self.iterations_per_loop = min(1000, max(10, int(self.batch_size/10)))
       if flags.max_epochs > 0:
-        self.train_steps = len(open(data_path).readlines()) * flags.max_epochs
+        self.train_steps = max(10000, 
+                               int(len(open(data_path).readlines()) /\
+                                   self.batch_size) *\
+                               self.iterations_per_loop *\
+                               flags.max_epochs)
       elif flags.train:
-        self.train_steps = 1000000
+        self.train_steps = 200000
+
+      self.eval_steps = min(200, int(self.train_steps/1000))
+      self.local_eval_frequency = min(2000, max(20, int(self.train_steps/100)))
+
       self.hparams = "eval_drop_long_sequences=1" +\
           ",batch_size=" + str(flags.batch_size) +\
           ",num_hidden_layers=" + str(flags.num_layers) +\
@@ -61,10 +72,8 @@ class Params(object):
       else:
           self.decode_hparams += ",return_beams=False"
 
-    self.iterations_per_loop = 1000
     self.tpu_num_shards = 8
     self.log_device_replacement = False
-    self.local_eval_frequency = 2000
     self.keep_checkpoint_max = 1
     self.keep_checkpoint_every_n_hours = 1
     self.worker_gpu = 1

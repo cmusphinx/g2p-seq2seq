@@ -28,6 +28,7 @@ import os
 import shutil
 import tensorflow as tf
 
+import g2p_seq2seq.g2p_trainer_utils as g2p_trainer_utils
 from g2p_seq2seq.g2p import G2PModel
 from g2p_seq2seq.params import Params
 
@@ -57,10 +58,10 @@ tf.flags.DEFINE_float("length_bucket_step", 1.5,
     The buckets have maximum lengths from min_bucket_length to max_length,
     increasing (approximately) by factors
     of length_bucket_step.""")
-tf.flags.DEFINE_integer("num_layers", 2, "Number of hidden layers.")
-tf.flags.DEFINE_integer("size", 64,
+tf.flags.DEFINE_integer("num_layers", 3, "Number of hidden layers.")
+tf.flags.DEFINE_integer("size", 256,
                         "The number of neurons in the hidden layer.")
-tf.flags.DEFINE_integer("filter_size", 256,
+tf.flags.DEFINE_integer("filter_size", 512,
                         "The size of the filter in a convolutional layer.")
 tf.flags.DEFINE_integer("num_heads", 4,
                         "Number of applied heads in Multi-attention mechanism.")
@@ -97,11 +98,13 @@ def main(_=[]):
   params = Params(FLAGS.model_dir, file_path, flags=FLAGS)
 
   if FLAGS.train:
+    g2p_trainer_utils.save_params(FLAGS.model_dir, params.hparams)
     g2p_model = G2PModel(params, file_path, is_training=True)
     g2p_model.prepare_datafiles(train_path=FLAGS.train, dev_path=FLAGS.valid)
     g2p_model.train()
 
   else:
+    params.hparams = g2p_trainer_utils.load_params(FLAGS.model_dir)
     g2p_model = G2PModel(params, file_path, is_training=False)
 
     if FLAGS.freeze:
