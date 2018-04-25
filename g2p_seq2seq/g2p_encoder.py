@@ -29,6 +29,8 @@ import tensorflow as tf
 import six
 from tensor2tensor.data_generators import text_encoder
 
+from IPython.core.debugger import Tracer
+
 PAD = text_encoder.PAD
 EOS = text_encoder.EOS
 
@@ -71,7 +73,14 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
       symbols_list = symbols_line.strip().split(self._separator)
     else:
       symbols_list = list(symbols_line.strip())
-    return [self._sym_to_id[sym] for sym in symbols_list]
+    ids_list = []
+    for sym in symbols_list:
+      if sym in self._sym_to_id:
+        ids_list.append(self._sym_to_id[sym])
+      else:
+        tf.logging.warning("Symbol:{} did not occur in the training data."
+                           .format(sym))
+    return ids_list
 
   def decode(self, ids):
     return self._separator.join(self.decode_list(ids))

@@ -72,7 +72,7 @@ tf.flags.DEFINE_integer("max_epochs", 0,
 # Decoding parameters
 tf.flags.DEFINE_boolean("return_beams", False,
                         "Set to true for beams decoding.")
-tf.flags.DEFINE_integer("beam_size", 4, "Number of decoding beams.")
+tf.flags.DEFINE_integer("beam_size", 1, "Number of decoding beams.")
 tf.flags.DEFINE_float("alpha", 0.6,
     """Float that controls the length penalty. Larger the alpha, stronger the
     preference for longer sequences.""")
