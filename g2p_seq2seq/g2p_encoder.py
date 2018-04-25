@@ -29,8 +29,6 @@ import tensorflow as tf
 import six
 from tensor2tensor.data_generators import text_encoder
 
-from IPython.core.debugger import Tracer
-
 PAD = text_encoder.PAD
 EOS = text_encoder.EOS
 

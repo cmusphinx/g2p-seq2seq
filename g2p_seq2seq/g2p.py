@@ -42,8 +42,6 @@ from tensor2tensor.data_generators import text_encoder
 from six.moves import input
 from six import text_type
 
-from IPython.core.debugger import Tracer
-
 EOS = text_encoder.EOS
 
 
