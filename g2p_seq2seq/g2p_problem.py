@@ -173,7 +173,7 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
         if line:
           items = line.split()
           if len(items) <= 1:
-              tf.logging.warning("Invalid data format in line {} in {}:\n"
+            tf.logging.warning("Invalid data format in line {} in {}:\n"
                 "{}\nGraphemes and phonemes should be separated by white space."
                 .format(line_idx, source_path, line))
             continue
