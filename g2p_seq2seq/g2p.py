@@ -42,6 +42,8 @@ from tensor2tensor.data_generators import text_encoder
 from six.moves import input
 from six import text_type
 
+from IPython.core.debugger import Tracer
+
 EOS = text_encoder.EOS
 
 
@@ -162,8 +164,6 @@ class G2PModel(object):
                        .format(self.params.model_dir))
 
     with estimator_lib.ops.Graph().as_default() as graph:
-      #self.features = self.estimator._get_features_from_input_fn(
-      #    input_fn, estimator_lib.model_fn_lib.ModeKeys.PREDICT)
 
       estimator_lib.random_seed.set_random_seed(
           self.estimator._config.tf_random_seed)
@@ -327,17 +327,32 @@ class G2PModel(object):
     # This is how TF decides what part of the Graph he has to keep and what
     # part it can dump
     # NOTE: this variable is plural, because you can have multiple output nodes
-    output_node_names = ["transformer/body/model/parallel_0/body/decoder/"
+    output_node_names = ["transformer/parallel_0_5/transformer/body/decoder/"
         "layer_0/self_attention/multihead_attention/dot_product_attention/"
         "Softmax",
-                         "transformer/body/model/parallel_0/body/decoder/"
-        "layer_0/encdec_attention/multihead_attention/dot_product_attention/"
+                         "transformer/parallel_0_5/transformer/body/encoder/"
+        "layer_0/self_attention/multihead_attention/dot_product_attention/"
         "Softmax",
-                         "transformer/body/model/parallel_0/body/decoder/"
+                         "transformer/parallel_0_5/transformer/body/encoder/"
         "layer_1/self_attention/multihead_attention/dot_product_attention/"
         "Softmax",
-                         "transformer/body/model/parallel_0/body/decoder/"
+                         "transformer/parallel_0_5/transformer/body/encoder/"
+        "layer_2/self_attention/multihead_attention/dot_product_attention/"
+        "Softmax",
+                         "transformer/parallel_0_5/transformer/body/decoder/"
+        "layer_0/encdec_attention/multihead_attention/dot_product_attention/"
+        "Softmax",
+                         "transformer/parallel_0_5/transformer/body/decoder/"
+        "layer_1/self_attention/multihead_attention/dot_product_attention/"
+        "Softmax",
+                         "transformer/parallel_0_5/transformer/body/decoder/"
         "layer_1/encdec_attention/multihead_attention/dot_product_attention/"
+        "Softmax",
+                         "transformer/parallel_0_5/transformer/body/decoder/"
+        "layer_2/self_attention/multihead_attention/dot_product_attention/"
+        "Softmax",
+                         "transformer/parallel_0_5/transformer/body/decoder/"
+        "layer_2/encdec_attention/multihead_attention/dot_product_attention/"
         "Softmax"]
 
     # We clear devices to allow TensorFlow to control on which device it will

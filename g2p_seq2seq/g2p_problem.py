@@ -173,9 +173,10 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
         if line:
           items = line.split()
           if len(items) <= 1:
-            raise ValueError("Line {} in {} has unsuitable data format:\n"
+            raise Warning("Line {} in {} has unsuitable data format:\n"
                     "{}\nGraphemes and phonemes should be separated by white "
                     "space.".format(line_idx, source_path, line))
+            continue
           source, target = items[0].strip(), " ".join(items[1:]).strip()
           source_ints = source_vocab.encode(source) + eos_list
           target_ints = target_vocab.encode(target) + eos_list
