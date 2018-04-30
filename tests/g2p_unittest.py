@@ -1,7 +1,9 @@
 
 import unittest
 import shutil
-import g2p_seq2seq.g2p as g2p
+import sys
+sys.path.insert(0, '/Users/zhanwenchen/projects/g2p-seq2seq')
+from g2p_seq2seq import g2p
 import g2p_seq2seq.g2p_trainer_utils as g2p_trainer_utils
 from g2p_seq2seq.g2p import G2PModel
 from g2p_seq2seq.params import Params

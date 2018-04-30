@@ -147,7 +147,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
       filename: Full path of the file to store the vocab to.
     """
     with tf.gfile.Open(filename, "w") as vocab_file:
-      for i in xrange(len(self._id_to_sym)):
+      for i in range(len(self._id_to_sym)):
         vocab_file.write(self._id_to_sym[i] + "\n")
 
 

@@ -214,4 +214,4 @@ def load_params(model_dir):
         hparams += ","
       hparams += hp + "=" + hp_value
     return hparams
-  raise StandardError("File {} not exists.".format(params_file_path))
+  raise Exception("File {} not exists.".format(params_file_path))
