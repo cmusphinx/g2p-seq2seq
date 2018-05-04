@@ -32,6 +32,7 @@ from tensorflow.python.framework import graph_util
 
 from tensor2tensor import models # pylint: disable=unused-import
 
+from g2p_seq2seq import g2p_problem
 from g2p_seq2seq import g2p_trainer_utils
 from tensor2tensor.utils import registry
 from tensor2tensor.utils import usr_dir
@@ -48,28 +49,32 @@ EOS = text_encoder.EOS
 class G2PModel(object):
   """Grapheme-to-Phoneme translation model class.
   """
-  def __init__(self, params, file_path="", is_training=False):
+  def __init__(self, params, train_path="", dev_path="", test_path="",
+               cleanup=False):
     # Point out the current directory with t2t problem specified for g2p task.
     usr_dir.import_usr_dir(os.path.dirname(os.path.abspath(__file__)))
     self.params = params
-    self.file_path = file_path
+    self.test_path = test_path
     if not os.path.exists(self.params.model_dir):
       os.makedirs(self.params.model_dir)
 
     # Register g2p problem.
     self.problem = registry._PROBLEMS[self.params.problem_name](
-        self.params.model_dir, file_path=file_path, is_training=is_training)
+        self.params.model_dir, train_path=train_path, dev_path=dev_path,
+        test_path=test_path, cleanup=cleanup)
 
     self.frozen_graph_filename = os.path.join(self.params.model_dir,
                                               "frozen_model.pb")
     self.inputs, self.features, self.input_fn = None, None, None
     self.mon_sess, self.estimator_spec, self.g2p_gt_map = None, None, None
     self.first_ex = False
-    if is_training:
+    if train_path:
       self.train_preprocess_file_path, self.dev_preprocess_file_path =\
           None, None
       self.estimator, self.decode_hp, self.hparams =\
           self.__prepare_model()
+      self.train_preprocess_file_path, self.dev_preprocess_file_path =\
+          self.problem.generate_preprocess_data()
 
     elif os.path.exists(self.frozen_graph_filename):
       self.estimator, self.decode_hp, self.hparams =\
@@ -81,11 +86,6 @@ class G2PModel(object):
       self.estimator, self.decode_hp, self.hparams =\
           self.__prepare_model()
 
-  def prepare_datafiles(self, train_path, dev_path):
-    """Prepare preprocessed datafiles."""
-    self.train_preprocess_file_path, self.dev_preprocess_file_path =\
-        self.problem.generate_preprocess_data(train_path, dev_path)
-
   def __prepare_model(self):
     """Prepare utilities for decoding."""
     hparams = trainer_lib.create_hparams(
@@ -93,8 +93,7 @@ class G2PModel(object):
         hparams_overrides_str=self.params.hparams)
     trainer_run_config = g2p_trainer_utils.create_run_config(hparams,
         self.params)
-    exp_fn = g2p_trainer_utils.create_experiment_fn(self.params, self.problem)#,
-        #self.train_preprocess_file_path, self.dev_preprocess_file_path)
+    exp_fn = g2p_trainer_utils.create_experiment_fn(self.params, self.problem)
     self.exp = exp_fn(trainer_run_config, hparams)
 
     decode_hp = decoding.decode_hparams(self.params.decode_hparams)
@@ -140,7 +139,7 @@ class G2PModel(object):
       gen_fn = make_input_fn(self.inputs, prob_choice)
       example = gen_fn()
       example = decoding._interactive_input_tensor_to_features_dict(
-          example, self.hparams)#self.estimator.params)
+          example, self.hparams)
       return example
 
     self.input_fn = input_fn
@@ -266,9 +265,9 @@ class G2PModel(object):
         inp = tf.placeholder(tf.string, name="inp_decode")[0]
         decode_op = tf.py_func(self.__decode_from_file, [inp],
                                [tf.string, tf.string])
-        [inputs, decodes] = self.__run_op(sess, decode_op, self.file_path)
+        [inputs, decodes] = self.__run_op(sess, decode_op, self.test_path)
     else:
-      inputs, decodes = self.__decode_from_file(self.file_path)
+      inputs, decodes = self.__decode_from_file(self.test_path)
 
     # If path to the output file pointed out, dump decoding results to the file
     if output_file_path:
@@ -285,7 +284,7 @@ class G2PModel(object):
   def evaluate(self):
     """Run evaluation mode."""
     words, pronunciations = [], []
-    for case in self.problem.generator(self.file_path,
+    for case in self.problem.generator(self.test_path,
                                        self.problem.source_vocab,
                                        self.problem.target_vocab):
       word = self.problem.source_vocab.decode(case["inputs"]).replace(
@@ -301,10 +300,10 @@ class G2PModel(object):
       with tf.Session(graph=self.graph) as sess:
         inp = tf.placeholder(tf.string, name="inp_decode")[0]
         decode_op = tf.py_func(self.calc_errors, [inp], [tf.int64, tf.int64])
-        [correct, errors] = self.__run_op(sess, decode_op, self.file_path)
+        [correct, errors] = self.__run_op(sess, decode_op, self.test_path)
 
     else:
-      correct, errors = self.calc_errors(self.file_path)
+      correct, errors = self.calc_errors(self.test_path)
 
     print("Words: %d" % (correct+errors))
     print("Errors: %d" % errors)

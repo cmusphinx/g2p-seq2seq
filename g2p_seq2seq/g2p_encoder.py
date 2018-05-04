@@ -151,7 +151,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
         vocab_file.write(self._id_to_sym[i] + "\n")
 
 
-def build_vocab_list(data_path):
+def build_vocab_list(data_path, init_vocab_list=[]):
   """Reads a file to build a vocabulary with letters and phonemes.
 
     Args:
@@ -159,7 +159,7 @@ def build_vocab_list(data_path):
 
     Returns:
       vocab_list: vocabulary list with both graphemes and phonemes."""
-  vocab = {}
+  vocab = {item:1 for item in init_vocab_list}
   with tf.gfile.GFile(data_path, "r") as data_file:
     for line in data_file:
       items = line.strip().split()
@@ -171,7 +171,8 @@ def build_vocab_list(data_path):
   return vocab_list
 
 
-def load_create_vocabs(vocab_filename, data_path=None):
+def load_create_vocabs(vocab_filename, train_path=None, dev_path=None,
+                       test_path=None):
   """Load/create vocabularies."""
   vocab = None
   if os.path.exists(vocab_filename):
@@ -179,7 +180,9 @@ def load_create_vocabs(vocab_filename, data_path=None):
     target_vocab = GraphemePhonemeEncoder(vocab_filename=vocab_filename,
         separator=" ")
   else:
-    vocab_list = build_vocab_list(data_path)
+    vocab_list = []
+    for data_path in [train_path, dev_path, test_path]:
+      vocab_list = build_vocab_list(data_path, vocab_list)
     source_vocab = GraphemePhonemeEncoder(vocab_list=vocab_list)
     target_vocab = GraphemePhonemeEncoder(vocab_list=vocab_list,
         separator=" ")
