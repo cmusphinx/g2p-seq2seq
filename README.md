@@ -115,6 +115,13 @@ You can manually point out Development and Test datasets:
   "--test" - Test dictionary (Default: created from train_dictionary.dic)
 ```
 
+Otherwise, program will split the dataset that you feed to it in the training mode itself. In the directory with the training data you will find three data files with the following extensions: ".train", ".dev" and ".test".
+
+In the case when you have raw dictionary with stress (for example, like in [CMU English dictionary](http://github.com/cmusphinx/cmudict)), you may set the following parameter while launching the train mode:
+```
+  "--cleanup" - Set to True for cleanup dictionary from stress and comments.
+```
+
 If you need to continue train a saved model just point out the directory with the existing model:
 ```
   g2p-seq2seq --train train_dictionary.dic --model_dir model_folder_path
