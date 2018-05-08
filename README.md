@@ -152,7 +152,7 @@ File "frozen_model.pb" will appeared in "model_folder_path" directory after laun
 System | WER ([CMUdict PRONALSYL 2007](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/phonetisaurus-cmudict-split.tar.gz)), % | WER ([CMUdict latest\*](https://github.com/cmusphinx/cmudict)), %
 --- | --- | ---
 Baseline WFST (Phonetisaurus) | 24.4 | 33.89
-Transformer num_layers=3, size=256   | 20.9 | 29.8
+Transformer num_layers=3, size=256   | 20.9 | 30.4
 \* These results pointed out for dictionary without stress.
 
 ## References

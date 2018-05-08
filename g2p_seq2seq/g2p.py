@@ -23,7 +23,9 @@ import contextlib
 import os
 import re
 import numpy as np
+import six
 
+from tensor2tensor.data_generators.problem import problem_hparams_to_features
 import tensorflow as tf
 from tensorflow.python.estimator import estimator as estimator_lib
 from tensorflow.python.framework import graph_util
@@ -123,12 +125,6 @@ class G2PModel(object):
       ValueError: Could not find a trained model in model_dir.
       ValueError: if batch length of predictions are not same.
     """
-    word = get_word()
-
-    self.first_ex = True
-    self.decode_word(word)
-    self.first_ex = False
-    prob_choice = np.array(0).astype(np.int32)
 
     def input_fn():
       """Input function returning features which is a dictionary of
@@ -136,13 +132,14 @@ class G2PModel(object):
         tuple, first item is extracted as features. Prediction continues until
         `input_fn` raises an end-of-input exception (`OutOfRangeError` or
         `StopIteration`)."""
-      gen_fn = make_input_fn(self.inputs, prob_choice)
+      gen_fn = decoding.make_input_fn_from_generator(
+          self.__interactive_input_fn())
       example = gen_fn()
       example = decoding._interactive_input_tensor_to_features_dict(
           example, self.hparams)
       return example
 
-    self.input_fn = input_fn
+    self.res_iter = self.estimator.predict(input_fn)
 
     if os.path.exists(self.frozen_graph_filename):
       return
@@ -178,9 +175,6 @@ class G2PModel(object):
               config=self.estimator._session_config),
           hooks=hooks)
 
-      pronunciations = self.decode_word(word)
-      print("Pronunciations: {}".format(pronunciations))
-
   def decode_word(self, word):
     """Decode word.
 
@@ -202,11 +196,7 @@ class G2PModel(object):
     assert len(self.inputs) < const_array_size
     self.inputs += [0] * (const_array_size - len(self.inputs))
 
-    if self.first_ex:
-      return
-
-    res_iter = self.estimator.predict(self.input_fn)
-    result = res_iter.next()
+    result = self.res_iter.next()
     pronunciations = []
     if self.decode_hp.return_beams:
       beams = np.split(result["outputs"], self.decode_hp.beam_size, axis=0)
@@ -227,11 +217,32 @@ class G2PModel(object):
         pronunciations.append(self.problem.target_vocab.decode(res))
     return pronunciations
 
+  def __interactive_input_fn(self):
+    num_samples = self.decode_hp.num_samples if self.decode_hp.num_samples > 0\
+        else 1
+    decode_length = self.decode_hp.extra_length
+    input_type = "text"
+    problem_id = 0
+    p_hparams = self.hparams.problems[problem_id]
+    has_input = "inputs" in p_hparams.input_modality
+    vocabulary = p_hparams.vocabulary["inputs" if has_input else "targets"]
+    # This should be longer than the longest input.
+    const_array_size = 10000
+    # Import readline if available for command line editing and recall.
+    try:
+      import readline  # pylint: disable=g-import-not-at-top,unused-variable
+    except ImportError:
+      pass
+    while True:
+      features = {
+          "inputs": np.array(self.inputs).astype(np.int32),
+      }
+      for k, v in six.iteritems(problem_hparams_to_features(p_hparams)):
+        features[k] = np.array(v).astype(np.int32)
+      yield features
+
   def __run_op(self, sess, decode_op, feed_input):
     """Run tensorflow operation for decoding."""
-    saver = tf.train.import_meta_graph(self.checkpoint_path + ".meta",
-                                       import_scope=None, clear_devices=True)
-    saver.restore(sess, self.checkpoint_path)
     results = sess.run(decode_op,
                        feed_dict={"inp_decode:0" : [feed_input]})
     return results
@@ -242,10 +253,15 @@ class G2PModel(object):
 
   def interactive(self):
     """Interactive decoding."""
+    self.inputs = []
     self.__prepare_interactive_model()
 
     if os.path.exists(self.frozen_graph_filename):
       with tf.Session(graph=self.graph) as sess:
+        saver = tf.train.import_meta_graph(self.checkpoint_path + ".meta",
+                                           import_scope=None,
+                                           clear_devices=True)
+        saver.restore(sess, self.checkpoint_path)
         inp = tf.placeholder(tf.string, name="inp_decode")[0]
         decode_op = tf.py_func(self.decode_word, [inp], tf.string)
         while True:
@@ -475,33 +491,6 @@ class G2PModel(object):
           errors += 1
 
     return correct, errors
-
-
-def make_input_fn(x_out, prob_choice):
-  """Use py_func to yield elements from the given generator."""
-  inp = {"inputs": np.array(x_out).astype(np.int32),
-         "problem_choice": prob_choice}
-  flattened = tf.contrib.framework.nest.flatten(inp)
-  types = [t.dtype for t in flattened]
-  shapes = [[None] * len(t.shape) for t in flattened]
-  first_ex_list = [inp]
-
-  def py_func():
-    """Flatten example."""
-    if first_ex_list:
-      example = first_ex_list.pop()
-    else:
-      example = inp
-    return tf.contrib.framework.nest.flatten(example)
-
-  def input_fn():
-    """Input function"""
-    flat_example = tf.py_func(py_func, [], types)
-    _ = [t.set_shape(shape) for t, shape in zip(flat_example, shapes)]
-    example = tf.contrib.framework.nest.pack_sequence_as(inp, flat_example)
-    return example
-
-  return input_fn
 
 
 def get_word():
