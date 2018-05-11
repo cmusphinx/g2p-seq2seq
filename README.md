@@ -35,11 +35,11 @@ The runnable script `g2p-seq2seq` is installed in  `/usr/local/bin` folder by de
 
 ## Running G2P
 
-A pretrained 3-layer transformer model with 256 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download).
+A pretrained 3-layer transformer model with 256 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-model-6.2-cmudict-nostress.tar.gz/download).
 Unpack the model after download. The model is trained on [CMU English dictionary](http://github.com/cmusphinx/cmudict)
 
 ```
-wget -O g2p-seq2seq-cmudict.tar.gz https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download 
+wget -O g2p-seq2seq-cmudict.tar.gz https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-model-6.2-cmudict-nostress.tar.gz/download
 tar xf g2p-seq2seq-cmudict.tar.gz
 ```
 
