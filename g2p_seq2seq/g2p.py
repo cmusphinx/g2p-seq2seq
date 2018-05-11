@@ -168,12 +168,15 @@ class G2PModel(object):
       self.estimator_spec = self.estimator._call_model_fn(
           self.features, None, estimator_lib.model_fn_lib.ModeKeys.PREDICT,
           self.estimator.config)
-      self.mon_sess = estimator_lib.training.MonitoredSession(
-          session_creator=estimator_lib.training.ChiefSessionCreator(
-              checkpoint_filename_with_path=checkpoint_path,
-              scaffold=self.estimator_spec.scaffold,
-              config=self.estimator._session_config),
-          hooks=hooks)
+      try:
+        self.mon_sess = estimator_lib.training.MonitoredSession(
+            session_creator=estimator_lib.training.ChiefSessionCreator(
+                checkpoint_filename_with_path=checkpoint_path,
+                scaffold=self.estimator_spec.scaffold,
+                config=self.estimator._session_config),
+            hooks=hooks)
+      except:
+        raise StandardError("Invalid model in {}".format(self.params.model_dir))
 
   def decode_word(self, word):
     """Decode word.
@@ -440,31 +443,34 @@ class G2PModel(object):
 
     decodes = []
     result_iter = self.estimator.predict(input_fn)
-    for result in result_iter:
-      if self.decode_hp.return_beams:
-        beam_decodes = []
-        output_beams = np.split(result["outputs"], self.decode_hp.beam_size,
-                                axis=0)
-        for k, beam in enumerate(output_beams):
-          tf.logging.info("BEAM %d:" % k)
+    try:
+      for result in result_iter:
+        if self.decode_hp.return_beams:
+          beam_decodes = []
+          output_beams = np.split(result["outputs"], self.decode_hp.beam_size,
+                                  axis=0)
+          for k, beam in enumerate(output_beams):
+            tf.logging.info("BEAM %d:" % k)
+            _, decoded_outputs, _ = decoding.log_decode_results(
+                result["inputs"],
+                beam,
+                problem_name,
+                None,
+                inputs_vocab,
+                targets_vocab)
+            beam_decodes.append(decoded_outputs)
+          decodes.append(beam_decodes)
+        else:
           _, decoded_outputs, _ = decoding.log_decode_results(
               result["inputs"],
-              beam,
+              result["outputs"],
               problem_name,
               None,
               inputs_vocab,
               targets_vocab)
-          beam_decodes.append(decoded_outputs)
-        decodes.append(beam_decodes)
-      else:
-        _, decoded_outputs, _ = decoding.log_decode_results(
-            result["inputs"],
-            result["outputs"],
-            problem_name,
-            None,
-            inputs_vocab,
-            targets_vocab)
-        decodes.append(decoded_outputs)
+          decodes.append(decoded_outputs)
+    except:
+      raise StandardError("Invalid model in {}".format(self.params.model_dir))
 
     return [inputs, decodes]
 

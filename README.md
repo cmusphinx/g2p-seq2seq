@@ -48,9 +48,9 @@ The easiest way to check how the tool works is to run it the interactive mode an
 ```
 $ g2p-seq2seq --interactive --model_dir model_folder_path
 ...
-> HELLO
+> hello
 ...
-INFO:tensorflow:HH EH L OW
+Pronunciations: [HH EH L OW]
 ...
 >
 ```
@@ -77,8 +77,8 @@ To evaluate Word Error Rate of the trained model, run
 
 The test dictionary should be a dictionary in standard format:
 ```
-HELLO HH EH L OW
-BYE B AY
+hello HH EH L OW
+bye B AY
 ```
 
 You may also calculate Word Error Rate considering all top N best decoded results. In this case we consider word decoding as error only if none of the decoded pronunciations will match with the ground true pronunciation of the word.
@@ -149,10 +149,10 @@ File "frozen_model.pb" will appeared in "model_folder_path" directory after laun
 
 #### Word error rate on CMU dictionary data sets
 
-System | WER ([CMUdict PRONALSYL 2007](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/phonetisaurus-cmudict-split.tar.gz)), % | WER ([CMUdict latest\*](https://github.com/cmusphinx/cmudict)), %
+System | WER ([CMUdict PRONASYL 2007](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/phonetisaurus-cmudict-split.tar.gz)), % | WER ([CMUdict latest\*](https://github.com/cmusphinx/cmudict)), %
 --- | --- | ---
 Baseline WFST (Phonetisaurus) | 24.4 | 33.89
-Transformer num_layers=3, size=256   | 20.9 | 30.4
+Transformer num_layers=3, size=256   | 20.6 | 30.2
 \* These results pointed out for dictionary without stress.
 
 ## References

@@ -67,6 +67,9 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
           test_path=self.test_path)
     elif not os.path.exists(os.path.join(self._model_dir, "checkpoint")):
       raise StandardError("Model not found in {}".format(self._model_dir))
+    elif not os.path.exists(vocab_filename):
+      raise StandardError("Vocabulary file {} not found."
+                          .format(vocab_filename))
     else:
       self.source_vocab, self.target_vocab = g2p_encoder.load_create_vocabs(
           vocab_filename)
