@@ -21,6 +21,8 @@ from __future__ import print_function
 
 import os
 import random
+import re
+from collections import OrderedDict
 import tensorflow as tf
 
 from tensorflow.python.data.ops import dataset_ops as dataset_ops
@@ -38,7 +40,8 @@ EOS = text_encoder.EOS_ID
 class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
   """Problem spec for cmudict PRONALSYL Grapheme-to-Phoneme translation."""
 
-  def __init__(self, model_dir, file_path, is_training):
+  def __init__(self, model_dir, train_path=None, dev_path=None, test_path=None,
+               cleanup=False):
     """Create a Problem.
 
     Args:
@@ -52,11 +55,16 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
     self._hparams = None
     self._feature_info = None
     self._model_dir = model_dir
-    self.file_path = file_path
+    self.train_path, self.dev_path, self.test_path = train_path, dev_path,\
+        test_path
     vocab_filename = os.path.join(self._model_dir, "vocab.g2p")
-    if is_training:
+    if train_path:
+      self.train_path, self.dev_path, self.test_path = create_data_files(
+          init_train_path=train_path, init_dev_path=dev_path,
+          init_test_path=test_path,cleanup=cleanup)
       self.source_vocab, self.target_vocab = g2p_encoder.load_create_vocabs(
-          vocab_filename, data_path=file_path)
+          vocab_filename, train_path=self.train_path, dev_path=self.dev_path,
+          test_path=self.test_path)
     elif not os.path.exists(os.path.join(self._model_dir, "checkpoint")):
       raise Exception("Model not found in {}".format(self._model_dir))
     else:
@@ -113,7 +121,7 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
   def vocab_name(self):
     return None
 
-  def generate_preprocess_data(self, train_path, eval_path):
+  def generate_preprocess_data(self):
     """Generate and save preprocessed data as TFRecord files.
 
     Args:
@@ -128,13 +136,13 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
     """
     train_preprocess_path = os.path.join(self._model_dir, "train.preprocessed")
     eval_preprocess_path = os.path.join(self._model_dir, "eval.preprocessed")
-    train_gen = self.generator(train_path, self.source_vocab, self.target_vocab)
-    eval_gen = None
-    if eval_path:
-      eval_gen = self.generator(eval_path, self.source_vocab, self.target_vocab)
+    train_gen = self.generator(self.train_path, self.source_vocab,
+                               self.target_vocab)
+    eval_gen = self.generator(self.dev_path, self.source_vocab,
+                              self.target_vocab)
 
-    generate_files(train_gen, eval_gen, train_preprocess_path,
-                   eval_preprocess_path)
+    generate_preprocess_files(train_gen, eval_gen, train_preprocess_path,
+                              eval_preprocess_path)
     return train_preprocess_path, eval_preprocess_path
 
   def get_feature_encoders(self, data_dir=None):
@@ -171,13 +179,12 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
     with tf.gfile.GFile(source_path, mode="r") as source_file:
       for line_idx, line in enumerate(source_file):
         if line:
-          items = line.split()
-          if len(items) <= 1:
+          source, target = split_graphemes_phonemes(line)
+          if not (source and target):
             tf.logging.warning("Invalid data format in line {} in {}:\n"
                 "{}\nGraphemes and phonemes should be separated by white space."
                 .format(line_idx, source_path, line))
             continue
-          source, target = items[0].strip(), " ".join(items[1:]).strip()
           source_ints = source_vocab.encode(source) + eos_list
           target_ints = target_vocab.encode(target) + eos_list
           yield {"inputs": source_ints, "targets": target_ints}
@@ -251,7 +258,7 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
       # dataset from generator object.
       eos_list = [] if EOS is None else [EOS]
       data_list = []
-      with tf.gfile.GFile(self.file_path, mode="r") as source_file:
+      with tf.gfile.GFile(self.test_path, mode="r") as source_file:
         for line in source_file:
           if line:
             if "\t" in line:
@@ -265,7 +272,7 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
               data_list.append(generator_utils.to_example(
                   {"inputs":source_ints}))
 
-      gen = Gen(self.generator(self.file_path, self.source_vocab,
+      gen = Gen(self.generator(self.test_path, self.source_vocab,
                                self.target_vocab))
       dataset = dataset_ops.Dataset.from_generator(gen, tf.string)
 
@@ -289,7 +296,8 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
 
     dataset = (tf.data.Dataset.from_tensor_slices(data_files)
                .interleave(lambda x:
-                   tf.data.TFRecordDataset(x).map(decode_record, num_parallel_calls=4),
+                   tf.data.TFRecordDataset(x).map(decode_record,
+                                                  num_parallel_calls=4),
                    cycle_length=4, block_length=16))
 
     if preprocess:
@@ -315,8 +323,8 @@ class Gen:
                                         "targets":target_ints})
 
 
-def generate_files(train_gen, dev_gen, train_preprocess_path,
-                   dev_preprocess_path):
+def generate_preprocess_files(train_gen, dev_gen, train_preprocess_path,
+                              dev_preprocess_path):
   """Generate cases from a generators and save as TFRecord files.
 
   Generated cases are transformed to tf.Example protos and saved as TFRecords
@@ -362,3 +370,142 @@ def gen_file(generator, output_file_path):
     sequence_example = generator_utils.to_example(case)
     writer.write(sequence_example.SerializeToString())
   writer.close()
+
+
+def create_data_files(init_train_path, init_dev_path, init_test_path,
+                      cleanup=False):
+  """Create train, development and test data files from initial data files
+  in case when not provided development or test data files or active cleanup
+  flag.
+
+  Args:
+    init_train_path: path to the train data file.
+    init_dev_path: path to the development data file.
+    init_test_path: path to the test data file.
+    cleanup: flag indicating whether to cleanup datasets from stress and
+             comments.
+
+  Returns:
+    train_path: path to the new train data file generated from initially
+      provided data.
+    dev_path: path to the new development data file generated from initially
+      provided data.
+    test_path: path to the new test data file generated from initially
+      provided data.
+  """
+  train_path, dev_path, test_path = init_train_path, init_dev_path,\
+      init_test_path
+
+  if (init_dev_path and init_test_path and os.path.exists(init_dev_path) and
+      os.path.exists(init_test_path)):
+    if not cleanup:
+      return init_train_path, init_dev_path, init_test_path
+
+  else:
+    train_path = init_train_path + ".part.train"
+    if init_dev_path:
+      if not os.path.exists(init_dev_path):
+        raise IOError("File {} not found.".format(init_dev_path))
+    else:
+      dev_path = init_train_path + ".part.dev"
+
+    if init_test_path:
+      if not os.path.exists(init_test_path):
+        raise IOError("File {} not found.".format(init_test_path))
+    else:
+      test_path = init_train_path + ".part.test"
+
+  if cleanup:
+    train_path += ".cleanup"
+    dev_path += ".cleanup"
+    test_path += ".cleanup"
+
+  train_dic, dev_dic, test_dic = OrderedDict(), OrderedDict(), OrderedDict()
+
+  source_dic = collect_pronunciations(source_path=init_train_path,
+                                      cleanup=cleanup)
+  if init_dev_path:
+    dev_dic = collect_pronunciations(source_path=init_dev_path,
+                                     cleanup=cleanup)
+  if init_test_path:
+    test_dic = collect_pronunciations(source_path=init_test_path,
+                                      cleanup=cleanup)
+
+  #Split dictionary to train, validation and test (if not assigned).
+  for word_counter, (word, pronunciations) in enumerate(source_dic.items()):
+    if word_counter % 20 == 19 and not init_dev_path:
+      dev_dic[word] = pronunciations
+    elif ((word_counter % 20 == 18 or word_counter % 20 == 17) and
+          not init_test_path):
+      test_dic[word] = pronunciations
+    else:
+      train_dic[word] = pronunciations
+
+  save_dic(train_dic, train_path)
+  if not init_dev_path or cleanup:
+    save_dic(dev_dic, dev_path)
+  if not init_test_path or cleanup:
+    save_dic(test_dic, test_path)
+  return train_path, dev_path, test_path
+
+
+def collect_pronunciations(source_path, cleanup=False):
+  """Create dictionary mapping word to its different pronounciations.
+
+  Args:
+    source_path: path to the data file;
+    cleanup: flag indicating whether to cleanup datasets from stress and
+             comments.
+
+  Returns:
+    dic: dictionary mapping word to its pronunciations.
+  """
+  dic = OrderedDict()
+  with tf.gfile.GFile(source_path, mode="r") as source_file:
+    word_counter = 0
+    for line in source_file:
+      if line:
+        source, target = split_graphemes_phonemes(line, cleanup=cleanup)
+        if not (source, target):
+          tf.logging.warning("Invalid data format in line {} in {}:\n"
+              "{}\nGraphemes and phonemes should be separated by white space."
+              .format(line_idx, source_path, line))
+          continue
+        if source in dic:
+          dic[source].append(target)
+        else:
+          dic[source] = [target]
+  return dic
+
+
+def split_graphemes_phonemes(input_line, cleanup=False):
+  """Split line into graphemes and phonemes.
+
+  Args:
+    input_line: raw input line;
+    cleanup: flag indicating whether to cleanup datasets from stress and
+             comments.
+
+  Returns:
+    graphemes: graphemes string;
+    phonemes: phonemes string.
+  """
+  line = input_line
+  if cleanup:
+    clean_pattern = re.compile(r"(\[.*\]|\{.*\}|\(.*\)|#.*)")
+    stress_pattern = re.compile(r"(?<=[a-zA-Z])\d+")
+    line = re.sub(clean_pattern, r"", line)
+    line = re.sub(stress_pattern, r"", line)
+
+  items = line.split()
+  graphemes, phonemes = None, None
+  if len(items) > 1:
+    graphemes, phonemes = items[0].strip(), " ".join(items[1:]).strip()
+  return graphemes, phonemes
+
+
+def save_dic(dic, save_path):
+  with tf.gfile.GFile(save_path, mode="w") as save_file:
+    for word, pronunciations in dic.items():
+      for pron in pronunciations:
+        save_file.write(word + " " + pron + "\n")

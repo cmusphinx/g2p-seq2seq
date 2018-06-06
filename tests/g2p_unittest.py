@@ -20,8 +20,8 @@ class TestG2P(unittest.TestCase):
     dev_path = os.path.abspath("tests/data/toydict.test")
     params = Params(model_dir, train_path)
     g2p_trainer_utils.save_params(model_dir, params.hparams)
-    g2p_model = G2PModel(params, file_path=train_path, is_training=True)
-    g2p_model.prepare_datafiles(train_path=train_path, dev_path=dev_path)
+    g2p_model = G2PModel(params, train_path=train_path, dev_path=dev_path,
+                         test_path=dev_path)
     g2p_model.train()
     shutil.rmtree(model_dir)
 
@@ -31,19 +31,20 @@ class TestG2P(unittest.TestCase):
     output_file_path = os.path.abspath("tests/models/decode/decode_output.txt")
     params = Params(model_dir, decode_file_path)
     params.hparams = g2p_trainer_utils.load_params(model_dir)
-    g2p_model = G2PModel(params, file_path=decode_file_path, is_training=False)
+    g2p_model = G2PModel(params, test_path=decode_file_path)
     g2p_model.decode(output_file_path=output_file_path)
     out_lines = open(output_file_path).readlines()
     self.assertEqual(out_lines[0].strip(), u"")
     self.assertEqual(out_lines[1].strip(), u"")
     self.assertEqual(out_lines[2].strip(), u"")
+    os.remove(output_file_path)
 
   def test_evaluate(self):
     model_dir = os.path.abspath("tests/models/decode")
     gt_path = os.path.abspath("tests/data/toydict.test")
     params = Params(model_dir, gt_path)
     params.hparams = g2p_trainer_utils.load_params(model_dir)
-    g2p_model = G2PModel(params, file_path=gt_path, is_training=False)
+    g2p_model = G2PModel(params, test_path=gt_path)
     g2p_model.evaluate()
     correct, errors = g2p_model.calc_errors(gt_path)
     self.assertAlmostEqual(float(errors)/(correct+errors), 1.000, places=3)

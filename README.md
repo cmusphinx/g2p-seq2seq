@@ -16,7 +16,7 @@ which allows an efficient training on both CPU and GPU.
 
 The tool requires TensorFlow at least version 1.5.0 and Tensor2Tensor with version 1.5.0 or higher. Please see the installation
 [guide](https://www.tensorflow.org/install/)
-for TensorFlow installation details, and details about the Tensor2Tensor installation see in [guide](https://github.com/tensorflow/tensor2tensor)
+for TensorFlow installation details, and details about the Tensor2Tensor installation see [guide](https://github.com/tensorflow/tensor2tensor)
 
 
 The g2p_seq2seq package itself uses setuptools, so you can follow standard installation process:
@@ -35,11 +35,11 @@ The runnable script `g2p-seq2seq` is installed in  `/usr/local/bin` folder by de
 
 ## Running G2P
 
-A pretrained 3-layer transformer model with 256 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download).
+A pretrained 3-layer transformer model with 256 hidden units is [available for download on cmusphinx website](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-model-6.2-cmudict-nostress.tar.gz/download).
 Unpack the model after download. The model is trained on [CMU English dictionary](http://github.com/cmusphinx/cmudict)
 
 ```
-wget -O g2p-seq2seq-cmudict.tar.gz https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-cmudict.tar.gz/download 
+wget -O g2p-seq2seq-cmudict.tar.gz https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/g2p-seq2seq-model-6.2-cmudict-nostress.tar.gz/download
 tar xf g2p-seq2seq-cmudict.tar.gz
 ```
 
@@ -48,9 +48,9 @@ The easiest way to check how the tool works is to run it the interactive mode an
 ```
 $ g2p-seq2seq --interactive --model_dir model_folder_path
 ...
-> HELLO
+> hello
 ...
-INFO:tensorflow:HH EH L OW
+Pronunciations: [HH EH L OW]
 ...
 >
 ```
@@ -77,8 +77,8 @@ To evaluate Word Error Rate of the trained model, run
 
 The test dictionary should be a dictionary in standard format:
 ```
-HELLO HH EH L OW
-BYE B AY
+hello HH EH L OW
+bye B AY
 ```
 
 You may also calculate Word Error Rate considering all top N best decoded results. In this case we consider word decoding as error only if none of the decoded pronunciations will match with the ground true pronunciation of the word.
@@ -115,7 +115,14 @@ You can manually point out Development and Test datasets:
   "--test" - Test dictionary (Default: created from train_dictionary.dic)
 ```
 
-If you need to continue train a saved model just point out the directory with the existing model:
+Otherwise, The program will split the dataset that you feed to it in the training mode itself. In the directory with the training data you will find three data files with the following extensions: ".train", ".dev" and ".test".
+
+In the case where you have raw dictionary with stress (for example, like in [CMU English dictionary](http://github.com/cmusphinx/cmudict)), you may set the following parameter while launching the train mode:
+```
+  "--cleanup" - Set to True to cleanup dictionary from stress and comments.
+```
+
+If you need to continue training a saved model just point out the directory with the existing model:
 ```
   g2p-seq2seq --train train_dictionary.dic --model_dir model_folder_path
 ```
@@ -125,7 +132,7 @@ And, if you want to start training from scratch:
   "--reinit" - Rewrite model in model_folder_path
 ```
 
-The differences in pronunciations between short and long words can be significant. So, seq2seq models applies bucketing technique to take account of such problems. On the other hand, splitting initial data into too many buckets can worse the final results. Because in this case there will be not enough amount of examples in each particular bucket. To get a better results, you may tune following three parameters that change number and size of the buckets:
+The differences in pronunciations between short and long words can be significant. So, seq2seq models apply bucketing technique to take account of such problems. On the other hand, splitting initial data into too many buckets can worsen the final results. Because in this case there will not be sufficient amount of examples in each particular bucket. To get better results, you may tune the following three parameters that change the number and size of the buckets:
 ```
   "--min_length_bucket" - the size of the minimal bucket (Default: 6)
   "--max_length" - maximal possible length of words or maximal number of phonemes in pronunciations (Default: 30)
@@ -137,15 +144,15 @@ After training the model, you may freeze it:
   g2p_seq2seq --model_dir model_folder_path --freeze
 ```
 
-File "frozen_model.pb" will appeared in "model_folder_path" directory after launching previous command. And now, if you run one of the decoding modes, program will load and use this frozen graph.
+File "frozen_model.pb" will appear in "model_folder_path" directory after launching previous command. And now, if you run one of the decoding modes, The program will load and use this frozen graph.
 
 
 #### Word error rate on CMU dictionary data sets
 
-System | WER ([CMUdict PRONALSYL 2007](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/phonetisaurus-cmudict-split.tar.gz)), % | WER ([CMUdict latest\*](https://github.com/cmusphinx/cmudict)), %
+System | WER ([CMUdict PRONASYL 2007](https://sourceforge.net/projects/cmusphinx/files/G2P%20Models/phonetisaurus-cmudict-split.tar.gz)), % | WER ([CMUdict latest\*](https://github.com/cmusphinx/cmudict)), %
 --- | --- | ---
 Baseline WFST (Phonetisaurus) | 24.4 | 33.89
-Transformer num_layers=3, size=256   | 20.9 | 29.8
+Transformer num_layers=3, size=256   | 20.6 | 30.2
 \* These results pointed out for dictionary without stress.
 
 ## References

@@ -68,6 +68,9 @@ tf.flags.DEFINE_integer("num_heads", 4,
 tf.flags.DEFINE_integer("max_epochs", 0,
                         "How many epochs to train the model."
                         " (0: no limit).")
+tf.flags.DEFINE_boolean("cleanup", False,
+                        "Set to True for cleanup dictionary from stress and "
+                        "comments (after hash or inside braces).")
 
 # Decoding parameters
 tf.flags.DEFINE_boolean("return_beams", False,
@@ -85,6 +88,7 @@ def main(_=[]):
   """
   tf.logging.set_verbosity(tf.logging.INFO)
   file_path = FLAGS.train or FLAGS.decode or FLAGS.evaluate
+  test_path = FLAGS.decode or FLAGS.evaluate or FLAGS.test
 
   if not FLAGS.model_dir:
     raise RuntimeError("Model directory not specified.")
@@ -99,13 +103,13 @@ def main(_=[]):
 
   if FLAGS.train:
     g2p_trainer_utils.save_params(FLAGS.model_dir, params.hparams)
-    g2p_model = G2PModel(params, file_path, is_training=True)
-    g2p_model.prepare_datafiles(train_path=FLAGS.train, dev_path=FLAGS.valid)
+    g2p_model = G2PModel(params, train_path=FLAGS.train, dev_path=FLAGS.valid,
+                         test_path=test_path, cleanup=FLAGS.cleanup)
     g2p_model.train()
 
   else:
     params.hparams = g2p_trainer_utils.load_params(FLAGS.model_dir)
-    g2p_model = G2PModel(params, file_path, is_training=False)
+    g2p_model = G2PModel(params, test_path=test_path)
 
     if FLAGS.freeze:
       g2p_model.freeze()
