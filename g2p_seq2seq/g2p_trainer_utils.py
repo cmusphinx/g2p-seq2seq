@@ -207,14 +207,11 @@ def load_params(model_dir):
   """
   params_file_path = os.path.join(model_dir, "model.params")
   if os.path.exists(params_file_path):
-    try:
-      model_params = json.load(open(params_file_path))
-      hparams = ""
-      for hp, hp_value in model_params.items():
-        if hparams:
-          hparams += ","
-        hparams += hp + "=" + hp_value
-      return hparams
-    except:
-      raise StandardError("Invalid model files in {}".format(model_dir))
-  raise StandardError("File {} not exists.".format(params_file_path))
+    model_params = json.load(open(params_file_path))
+    hparams = ""
+    for hp, hp_value in model_params.items():
+      if hparams:
+        hparams += ","
+      hparams += hp + "=" + hp_value
+    return hparams
+  raise Exception("File {} not exists.".format(params_file_path))

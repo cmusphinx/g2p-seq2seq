@@ -65,10 +65,10 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
     self._separator = separator
 
   def encode(self, symbols_line):
-    if isinstance(symbols_line, unicode):
-      symbols_line = symbols_line.encode("utf-8")
+    # if isinstance(symbols_line, str): # CHANGED for Python 3
+    #   symbols_line = symbols_line.encode("utf-8")
     if self._separator:
-      symbols_list = symbols_line.strip().split(self._separator)
+      symbols_list = symbols_line.strip().split(self._separator) # BUG TypeError: a bytes-like object is required, not 'str'
     else:
       symbols_list = list(symbols_line.strip())
     ids_list = []
@@ -147,7 +147,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
       filename: Full path of the file to store the vocab to.
     """
     with tf.gfile.Open(filename, "w") as vocab_file:
-      for i in xrange(len(self._id_to_sym)):
+      for i in range(len(self._id_to_sym)):
         vocab_file.write(self._id_to_sym[i] + "\n")
 
 
