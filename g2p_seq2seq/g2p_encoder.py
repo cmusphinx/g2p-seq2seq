@@ -65,10 +65,8 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
     self._separator = separator
 
   def encode(self, symbols_line):
-    # if isinstance(symbols_line, str): # CHANGED for Python 3
-    #   symbols_line = symbols_line.encode("utf-8")
     if self._separator:
-      symbols_list = symbols_line.strip().split(self._separator) # BUG TypeError: a bytes-like object is required, not 'str'
+      symbols_list = symbols_line.strip().split(self._separator)
     else:
       symbols_list = list(symbols_line.strip())
     ids_list = []
@@ -76,7 +74,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
       if sym in self._sym_to_id:
         ids_list.append(self._sym_to_id[sym])
       else:
-        tf.logging.warning("Invalid symbol:{}".format(sym))
+        tf.logging.warning("Invalid symbol:{}".format(sym.encode('utf-8')))
     return ids_list
 
   def decode(self, ids):
@@ -99,7 +97,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
       """Symbols generator for vocab initializer from file."""
       with tf.gfile.Open(filename) as vocab_file:
         for line in vocab_file:
-          sym = line.strip()
+          sym = line.decode("utf-8").strip()
           yield sym
 
     self._init_vocab(sym_gen(), add_reserved_symbols=False)
@@ -162,7 +160,7 @@ def build_vocab_list(data_path, init_vocab_list=[]):
   vocab = {item:1 for item in init_vocab_list}
   with tf.gfile.GFile(data_path, "r") as data_file:
     for line in data_file:
-      items = line.strip().split()
+      items = line.decode("utf-8").strip().split()
       vocab.update({char:1 for char in list(items[0])})
       vocab.update({phoneme:1 for phoneme in items[1:]})
     vocab_list = [PAD, EOS]
