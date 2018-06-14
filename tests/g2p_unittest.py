@@ -2,13 +2,12 @@
 import unittest
 import shutil
 import sys
+import os
 sys.path.insert(0, '/Users/zhanwenchen/projects/g2p-seq2seq')
 from g2p_seq2seq import g2p
 import g2p_seq2seq.g2p_trainer_utils as g2p_trainer_utils
 from g2p_seq2seq.g2p import G2PModel
 from g2p_seq2seq.params import Params
-import inspect, os
-
 
 class TestG2P(unittest.TestCase):
 
@@ -23,7 +22,8 @@ class TestG2P(unittest.TestCase):
     g2p_model = G2PModel(params, train_path=train_path, dev_path=dev_path,
                          test_path=dev_path)
     g2p_model.train()
-    shutil.rmtree(model_dir)
+
+    shutil.rmtree(model_dir, ignore_errors=True)
 
   def test_decode(self):
     model_dir = os.path.abspath("tests/models/decode")

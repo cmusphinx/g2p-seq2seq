@@ -199,7 +199,7 @@ class G2PModel(object):
     assert len(self.inputs) < const_array_size
     self.inputs += [0] * (const_array_size - len(self.inputs))
 
-    result = self.res_iter.next()
+    result = next(self.res_iter)
     pronunciations = []
     if self.decode_hp.return_beams:
       beams = np.split(result["outputs"], self.decode_hp.beam_size, axis=0)
