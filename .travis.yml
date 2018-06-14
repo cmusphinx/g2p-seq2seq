@@ -6,7 +6,8 @@ python:
 install:
  - pip install --upgrade pip
  - pip --version
- - pip install tensorflow==1.0.0
+ - pip install tensorflow==1.5.0
+ - pip install tensor2tensor==1.5.7
  - python setup.py build
 script:
  - python setup.py test
