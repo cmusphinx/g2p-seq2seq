@@ -294,13 +294,13 @@ class G2PModel(object):
       outfile = tf.gfile.Open(output_file_path, "w")
       if self.decode_hp.return_beams:
         for index in range(len(inputs)):
-          outfile.write("%s\t%s%s" % (
+          outfile.write("%s %s%s" % (
               inputs[index],
               "\t".join(decodes[index]),
               self.decode_hp.delimiter))
       else:
         for index in range(len(inputs)):
-          outfile.write("%s\t%s%s" % (inputs[index], decodes[index], self.decode_hp.delimiter))
+          outfile.write("%s %s%s" % (inputs[index], decodes[index], self.decode_hp.delimiter))
 
   def evaluate(self):
     """Run evaluation mode."""
