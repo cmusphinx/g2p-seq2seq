@@ -45,6 +45,8 @@ from tensor2tensor.data_generators import text_encoder
 from six.moves import input
 from six import text_type
 
+from IPython.core.debugger import Tracer
+
 EOS = text_encoder.EOS
 
 
@@ -286,21 +288,13 @@ class G2PModel(object):
                                [tf.string, tf.string])
         [inputs, decodes] = self.__run_op(sess, decode_op, self.test_path)
     else:
-      inputs, decodes = self.__decode_from_file(self.test_path)
+      outfile = None
+      # If path to the output file pointed out, dump decoding results to the file
+      if output_file_path:
+        tf.logging.info("Writing decodes into %s" % output_file_path)
+        outfile = tf.gfile.Open(output_file_path, "w")
 
-    # If path to the output file pointed out, dump decoding results to the file
-    if output_file_path:
-      tf.logging.info("Writing decodes into %s" % output_file_path)
-      outfile = tf.gfile.Open(output_file_path, "w")
-      if self.decode_hp.return_beams:
-        for index in range(len(inputs)):
-          outfile.write("%s %s%s" % (
-              inputs[index],
-              "\t".join(decodes[index]),
-              self.decode_hp.delimiter))
-      else:
-        for index in range(len(inputs)):
-          outfile.write("%s %s%s" % (inputs[index], decodes[index], self.decode_hp.delimiter))
+      inputs, decodes = self.__decode_from_file(self.test_path, outfile)
 
   def evaluate(self):
     """Run evaluation mode."""
@@ -415,7 +409,7 @@ class G2PModel(object):
       # Since we load everything in a new graph, this is not needed
       tf.import_graph_def(graph_def, name="import")
 
-  def __decode_from_file(self, filename):
+  def __decode_from_file(self, filename, outfile=None):
     """Compute predictions on entries in filename and write them out."""
 
     if not self.decode_hp.batch_size:
@@ -448,28 +442,35 @@ class G2PModel(object):
     try:
       for result in result_iter:
         if self.decode_hp.return_beams:
+          decoded_inputs = inputs_vocab.decode(
+              decoding._save_until_eos(result["inputs"], False))
           beam_decodes = []
           output_beams = np.split(result["outputs"], self.decode_hp.beam_size,
                                   axis=0)
           for k, beam in enumerate(output_beams):
-            tf.logging.info("BEAM %d:" % k)
-            _, decoded_outputs, _ = decoding.log_decode_results(
-                result["inputs"],
-                beam,
-                problem_name,
-                None,
-                inputs_vocab,
-                targets_vocab)
+            decoded_outputs = targets_vocab.decode(
+                decoding._save_until_eos(beam, False))
             beam_decodes.append(decoded_outputs)
+            if outfile:
+              outfile.write("%s %s%s" % (decoded_inputs, decoded_outputs,
+                  self.decode_hp.delimiter))
+            else:
+              print("%s %s%s" % (decoded_inputs, decoded_outputs,
+                  self.decode_hp.delimiter))
           decodes.append(beam_decodes)
         else:
-          _, decoded_outputs, _ = decoding.log_decode_results(
-              result["inputs"],
-              result["outputs"],
-              problem_name,
-              None,
-              inputs_vocab,
-              targets_vocab)
+          decoded_inputs = inputs_vocab.decode(
+              decoding._save_until_eos(result["inputs"], False))
+          decoded_outputs = targets_vocab.decode(
+              decoding._save_until_eos(result["outputs"], False))
+
+          if outfile:
+            outfile.write("%s %s%s" % (decoded_inputs, decoded_outputs,
+                self.decode_hp.delimiter))
+          else:
+            print("%s %s%s" % (decoded_inputs, decoded_outputs,
+                self.decode_hp.delimiter))
+
           decodes.append(decoded_outputs)
     except:
       raise StandardError("Invalid model in {}".format(self.params.model_dir))
@@ -555,9 +556,8 @@ def _get_inputs(filename, delimiters="\t "):
 def _decode_batch_input_fn(num_decode_batches, inputs,
                            vocabulary, batch_size, max_input_size):
   """Decode batch"""
-  tf.logging.info(" batch %d" % num_decode_batches)
   for batch_idx in range(num_decode_batches):
-    tf.logging.info("Decoding batch %d" % batch_idx)
+    tf.logging.info("Decoding batch %d out of %d" % (batch_idx, num_decode_batches))
     batch_length = 0
     batch_inputs = []
     for _inputs in inputs[batch_idx * batch_size:(batch_idx + 1) * batch_size]:
