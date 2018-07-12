@@ -56,8 +56,11 @@ class Params(object):
       self.eval_steps = min(200, int(self.train_steps/1000))
       self.local_eval_frequency = min(2000, max(20, int(self.train_steps/100)))
 
-      self.hparams = flags.hparams +\
-          ",eval_drop_long_sequences=1" +\
+      if flags.hparams:
+          self.hparams = flags.hparams + ","
+      else:
+          self.hparams = ""
+      self.hparams += "eval_drop_long_sequences=1" +\
           ",batch_size=" + str(flags.batch_size) +\
           ",num_hidden_layers=" + str(flags.num_layers) +\
           ",hidden_size=" + str(flags.size) +\

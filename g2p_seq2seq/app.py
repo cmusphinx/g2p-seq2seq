@@ -47,7 +47,7 @@ tf.flags.DEFINE_boolean("freeze", False,
                         "Set to True for freeze the graph.")
 
 # Training parameters
-tf.flags.DEFINE_string("hparams", None,
+tf.flags.DEFINE_string("hparams", "",
     "Customize hyper parameters for transformer model.")
 tf.flags.DEFINE_integer("batch_size", 4096,
                         "Batch size to use during training.")

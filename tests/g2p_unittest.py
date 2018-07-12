@@ -34,9 +34,9 @@ class TestG2P(unittest.TestCase):
     g2p_model = G2PModel(params, test_path=decode_file_path)
     g2p_model.decode(output_file_path=output_file_path)
     out_lines = open(output_file_path).readlines()
-    self.assertEqual(out_lines[0].strip(), u"")
-    self.assertEqual(out_lines[1].strip(), u"")
-    self.assertEqual(out_lines[2].strip(), u"")
+    self.assertEqual(out_lines[0].strip(), "cb")
+    self.assertEqual(out_lines[1].strip(), "abcabac")
+    self.assertEqual(out_lines[2].strip(), "a")
     os.remove(output_file_path)
 
   def test_evaluate(self):

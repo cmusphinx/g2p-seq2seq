@@ -90,17 +90,20 @@ class G2PModel(object):
 
   def __prepare_model(self):
     """Prepare utilities for decoding."""
-    hparams = trainer_lib.create_hparams(
-        hparams_set=self.params.hparams_set,
-        hparams_overrides_str=self.params.hparams)
+    hparams = registry.hparams(self.params.hparams_set)
+    hparams.problem = self.problem
+    hparams.problem_hparams = self.problem.get_hparams(hparams)
+    if self.params.hparams:
+      tf.logging.info("Overriding hparams in %s with %s",
+                      self.params.hparams_set,
+                      self.params.hparams)
+      hparams = hparams.parse(self.params.hparams)
     trainer_run_config = g2p_trainer_utils.create_run_config(hparams,
         self.params)
     exp_fn = g2p_trainer_utils.create_experiment_fn(self.params, self.problem)
     self.exp = exp_fn(trainer_run_config, hparams)
 
     decode_hp = decoding.decode_hparams(self.params.decode_hparams)
-    decode_hp.add_hparam("shards", self.params.decode_shards)
-    decode_hp.add_hparam("shard_id", self.params.worker_id)
     estimator = trainer_lib.create_estimator(
         self.params.model_name,
         hparams,
@@ -415,11 +418,14 @@ class G2PModel(object):
       tf.logging.info("decode_hp.batch_size not specified; default=%d" %
                       self.decode_hp.batch_size)
 
-    problem_id = self.decode_hp.problem_idx
+    #problem_id = self.decode_hp.problem_idx
     # Inputs vocabulary is set to targets if there are no inputs in the problem,
     # e.g., for language models where the inputs are just a prefix of targets.
-    inputs_vocab = self.hparams.problems[problem_id].vocabulary["inputs"]
-    targets_vocab = self.hparams.problems[problem_id].vocabulary["targets"]
+    p_hp = self.hparams.problem_hparams
+    #inputs_vocab = self.hparams.problems[problem_id].vocabulary["inputs"]
+    #targets_vocab = self.hparams.problems[problem_id].vocabulary["targets"]
+    inputs_vocab = p_hp.vocabulary["inputs"]
+    targets_vocab = p_hp.vocabulary["targets"]
     problem_name = "grapheme_to_phoneme_problem"
     tf.logging.info("Performing decoding from a file.")
     inputs = _get_inputs(filename)
