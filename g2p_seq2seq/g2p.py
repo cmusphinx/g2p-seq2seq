@@ -74,7 +74,7 @@ class G2PModel(object):
       self.train_preprocess_file_path, self.dev_preprocess_file_path =\
           None, None
       self.estimator, self.decode_hp, self.hparams =\
-          self.__prepare_model()
+          self.__prepare_model(train_mode=True)
       self.train_preprocess_file_path, self.dev_preprocess_file_path =\
           self.problem.generate_preprocess_data()
 
@@ -88,7 +88,7 @@ class G2PModel(object):
       self.estimator, self.decode_hp, self.hparams =\
           self.__prepare_model()
 
-  def __prepare_model(self):
+  def __prepare_model(self, train_mode=False):
     """Prepare utilities for decoding."""
     hparams = registry.hparams(self.params.hparams_set)
     hparams.problem = self.problem
@@ -100,8 +100,9 @@ class G2PModel(object):
       hparams = hparams.parse(self.params.hparams)
     trainer_run_config = g2p_trainer_utils.create_run_config(hparams,
         self.params)
-    exp_fn = g2p_trainer_utils.create_experiment_fn(self.params, self.problem)
-    self.exp = exp_fn(trainer_run_config, hparams)
+    if train_mode:
+      exp_fn = g2p_trainer_utils.create_experiment_fn(self.params, self.problem)
+      self.exp = exp_fn(trainer_run_config, hparams)
 
     decode_hp = decoding.decode_hparams(self.params.decode_hparams)
     estimator = trainer_lib.create_estimator(
@@ -255,6 +256,7 @@ class G2PModel(object):
 
   def train(self):
     """Run training."""
+    print('Training started.')
     execute_schedule(self.exp, self.params)
 
   def interactive(self):
@@ -422,8 +424,6 @@ class G2PModel(object):
     # Inputs vocabulary is set to targets if there are no inputs in the problem,
     # e.g., for language models where the inputs are just a prefix of targets.
     p_hp = self.hparams.problem_hparams
-    #inputs_vocab = self.hparams.problems[problem_id].vocabulary["inputs"]
-    #targets_vocab = self.hparams.problems[problem_id].vocabulary["targets"]
     inputs_vocab = p_hp.vocabulary["inputs"]
     targets_vocab = p_hp.vocabulary["targets"]
     problem_name = "grapheme_to_phoneme_problem"

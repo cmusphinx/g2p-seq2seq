@@ -28,7 +28,7 @@ class Params(object):
     # Set default parameters first. Then update the parameters that
     # pointed out in flags.
     self.hparams_set = "transformer_base"
-    self.schedule = "train_and_evaluate"
+    self.schedule = "continuous_train_and_eval"
     self.model_name = "transformer"
     self.problem_name = "grapheme_to_phoneme_problem"
     self.train_steps = 10

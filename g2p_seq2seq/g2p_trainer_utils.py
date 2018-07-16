@@ -29,6 +29,7 @@ from tensor2tensor.utils import devices
 from tensor2tensor.utils import registry
 from tensor2tensor.utils import decoding
 from tensor2tensor.utils import trainer_lib
+from tensor2tensor.utils import t2t_model
 
 flags = tf.flags
 FLAGS = flags.FLAGS
@@ -39,13 +40,11 @@ flags.DEFINE_integer("save_checkpoints_steps", None,
     every 600 seconds.""")
 
 
-def add_problem_hparams(hparams, problem_name, model_dir, problem_instance):
+def add_problem_hparams(hparams, problem):
   """Add problem hparams for the problems."""
-  hparams.problems = []
-  hparams.problem_instances = []
-  p_hparams = problem_instance.get_hparams(hparams)
-  hparams.problem_instances.append(problem_instance)
-  hparams.problems.append(p_hparams)
+  p_hparams = problem.get_hparams(hparams)
+  hparams.problem = problem
+  hparams.problem_hparams = p_hparams
 
 
 def create_experiment_fn(params, problem_instance):
@@ -91,6 +90,7 @@ def create_experiment(run_config,
                       train_steps,
                       eval_steps,
                       min_eval_frequency=2000,
+                      eval_throttle_seconds=600,
                       schedule="train_and_evaluate",
                       export=False,
                       decode_hparams=None,
@@ -99,12 +99,18 @@ def create_experiment(run_config,
                       use_validation_monitor=False,
                       eval_early_stopping_steps=None,
                       eval_early_stopping_metric=None,
+                      eval_early_stopping_metric_delta=None,
                       eval_early_stopping_metric_minimize=True,
+                      autotune=False,
                       use_tpu=False):
   """Create Experiment."""
   # HParams
+  hparams.add_hparam('model_dir', params.model_dir)
   hparams.add_hparam("data_dir", data_dir)
-  add_problem_hparams(hparams, params.problem_name, params.model_dir, problem_instance)
+  hparams.add_hparam("train_steps", train_steps)
+  hparams.add_hparam("eval_steps", eval_steps)
+  hparams.add_hparam("schedule", schedule)
+  add_problem_hparams(hparams, problem_instance)
 
   # Estimator
   estimator = trainer_lib.create_estimator(
@@ -116,51 +122,90 @@ def create_experiment(run_config,
       use_tpu=use_tpu)
 
   # Input fns from Problem
-  problem = hparams.problem_instances[0]
+  problem = hparams.problem
   train_input_fn = problem.make_estimator_input_fn(
       tf.estimator.ModeKeys.TRAIN, hparams)
   eval_input_fn = problem.make_estimator_input_fn(
       tf.estimator.ModeKeys.EVAL, hparams)
 
   # Export
-  export_strategies = export and [create_export_strategy(problem, hparams)]
+  if export:
+    tf.logging.warn("Exporting from the trainer is deprecated. "
+                    "See serving/export.py.")
 
   # Hooks
-  hooks_kwargs = {}
-  if not use_tpu:
-    dbgprofile_kwargs = {"output_dir": run_config.model_dir}
-    validation_monitor_kwargs = dict(
-        input_fn=eval_input_fn,
-        eval_steps=eval_steps,
-        every_n_steps=min_eval_frequency,
-        early_stopping_rounds=eval_early_stopping_steps,
-        early_stopping_metric=eval_early_stopping_metric,
-        early_stopping_metric_minimize=eval_early_stopping_metric_minimize)
-    train_monitors, eval_hooks = trainer_lib.create_hooks(
-        use_tfdbg=use_tfdbg,
-        use_dbgprofile=use_dbgprofile,
-        dbgprofile_kwargs=dbgprofile_kwargs,
-        use_validation_monitor=use_validation_monitor,
-        validation_monitor_kwargs=validation_monitor_kwargs)
-    hooks_kwargs = {"train_monitors": train_monitors, "eval_hooks": eval_hooks}
-
-  # Experiment
-  return tf.contrib.learn.Experiment(
-      estimator=estimator,
-      train_input_fn=train_input_fn,
-      eval_input_fn=eval_input_fn,
-      train_steps=train_steps,
+  validation_monitor_kwargs = dict(
+      input_fn=eval_input_fn,
       eval_steps=eval_steps,
-      min_eval_frequency=min_eval_frequency,
-      train_steps_per_iteration=min(min_eval_frequency, train_steps),
-      export_strategies=export_strategies,
-      **hooks_kwargs)
+      every_n_steps=min_eval_frequency,
+      early_stopping_rounds=eval_early_stopping_steps,
+      early_stopping_metric=eval_early_stopping_metric,
+      early_stopping_metric_minimize=eval_early_stopping_metric_minimize)
+  dbgprofile_kwargs = {"output_dir": run_config.model_dir}
+  early_stopping_kwargs = dict(
+      events_dir=os.path.join(run_config.model_dir, "eval_continuous"),
+      tag=eval_early_stopping_metric,
+      num_plateau_steps=eval_early_stopping_steps,
+      plateau_decrease=eval_early_stopping_metric_minimize,
+      plateau_delta=eval_early_stopping_metric_delta,
+      every_n_steps=min_eval_frequency)
+
+  # In-process eval (and possible early stopping)
+  if schedule == "continuous_train_and_eval" and min_eval_frequency:
+    tf.logging.warn("ValidationMonitor only works with "
+                    "--schedule=train_and_evaluate")
+  use_validation_monitor = (
+      schedule == "train_and_evaluate" and min_eval_frequency)
+  # Distributed early stopping
+  local_schedules = ["train_and_evaluate", "continuous_train_and_eval"]
+  use_early_stopping = (
+      schedule not in local_schedules and eval_early_stopping_steps)
+  train_hooks, eval_hooks = trainer_lib.create_hooks(
+      use_tfdbg=use_tfdbg,
+      use_dbgprofile=use_dbgprofile,
+      dbgprofile_kwargs=dbgprofile_kwargs,
+      use_validation_monitor=use_validation_monitor,
+      validation_monitor_kwargs=validation_monitor_kwargs,
+      use_early_stopping=use_early_stopping,
+      early_stopping_kwargs=early_stopping_kwargs)
+  train_hooks += t2t_model.T2TModel.get_train_hooks(model_name)
+  eval_hooks += t2t_model.T2TModel.get_eval_hooks(model_name)
+
+  train_hooks = tf.contrib.learn.monitors.replace_monitors_with_hooks(
+      train_hooks, estimator)
+  eval_hooks = tf.contrib.learn.monitors.replace_monitors_with_hooks(
+      eval_hooks, estimator)
+
+  train_spec = tf.estimator.TrainSpec(
+      train_input_fn, max_steps=train_steps, hooks=train_hooks)
+  eval_spec = tf.estimator.EvalSpec(
+      eval_input_fn,
+      steps=eval_steps,
+      hooks=eval_hooks,
+      start_delay_secs=0 if hparams.schedule == "evaluate" else 120,
+      throttle_secs=eval_throttle_seconds)
+
+  if autotune:
+    hooks_kwargs = {"train_monitors": train_hooks, "eval_hooks": eval_hooks}
+    return tf.contrib.learn.Experiment(
+        estimator=estimator,
+        train_input_fn=train_input_fn,
+        eval_input_fn=eval_input_fn,
+        train_steps=train_steps,
+        eval_steps=eval_steps,
+        min_eval_frequency=min_eval_frequency,
+        train_steps_per_iteration=min(min_eval_frequency, train_steps),
+        eval_delay_secs=0 if schedule == "evaluate" else 120,
+        **hooks_kwargs if not use_tpu else {})
+  return trainer_lib.T2TExperiment(estimator, hparams, train_spec, eval_spec,
+                                   use_validation_monitor, decode_hparams)
 
 
 def create_run_config(hp, params):
+  """Create RunConfig"""
   return trainer_lib.create_run_config(
-      model_dir=params.model_dir,
       master=params.master,
+      model_dir=params.model_dir,
       iterations_per_loop=params.iterations_per_loop,
       num_shards=params.tpu_num_shards,
       log_device_placement=params.log_device_replacement,
@@ -172,19 +217,67 @@ def create_run_config(hp, params):
       gpu_order=params.gpu_order,
       shard_to_cpu=params.locally_shard_to_cpu,
       num_async_replicas=params.worker_replicas,
-      gpu_mem_fraction=params.worker_gpu_memory_fraction,
       enable_graph_rewriter=params.experimental_optimize_placement,
-      use_tpu=params.use_tpu,
-      schedule=params.schedule,
+      gpu_mem_fraction=params.worker_gpu_memory_fraction,
       no_data_parallelism=params.no_data_parallelism,
       daisy_chain_variables=params.daisy_chain_variables,
+      schedule=params.schedule,
+      worker_id=params.worker_id,
+      worker_job=params.worker_job,
       ps_replicas=params.ps_replicas,
       ps_job=params.ps_job,
       ps_gpu=params.ps_gpu,
       sync=params.sync,
-      worker_id=params.worker_id,
-      worker_job=params.worker_job)
+      use_tpu=params.use_tpu)
+  #"""Create RunConfig, TPUConfig, and Parallelism object."""
+  #session_config = trainer_lib.create_session_config(
+  #      log_device_placement=params.log_device_replacement,
+  #      enable_graph_rewriter=params.experimental_optimize_placement,
+  #      gpu_mem_fraction=params.worker_gpu_memory_fraction,
+  #      use_tpu=params.use_tpu,
+  #      inter_op_parallelism_threads=0,
+  #      intra_op_parallelism_threads=0)
+  #run_config_args = {
+  #      #"master": params.master,
+  #      #"evaluation_master": params.master,
+  #      "model_dir": params.model_dir,
+  #      "session_config": session_config,
+  #      "save_summary_steps": 100,
+  #      "save_checkpoints_steps": max(params.iterations_per_loop,
+  #                                    params.local_eval_frequency),
+  #      "keep_checkpoint_max": params.keep_checkpoint_max,
+  #      "keep_checkpoint_every_n_hours": params.keep_checkpoint_every_n_hours,
+  #      "tf_random_seed": None,
+  #      "log_step_count_steps": 100}
+  ##if params.save_checkpoints_secs:
+  ##  del run_config_args["save_checkpoints_steps"]
+  ##  run_config_args["save_checkpoints_secs"] = params.save_checkpoints_secs
+  ##run_config_cls = tf.estimator.RunConfig#tf.contrib.learn.RunConfig
 
+  #config = tf.estimator.RunConfig(**run_config_args)
+  ##config = run_config_cls()#(**run_config_args)
+
+  ## If not using TPU, add device info for data_parallelism
+  #config.use_tpu = params.use_tpu
+  #if not params.use_tpu:
+  #  config.t2t_device_info = {
+  #      "num_async_replicas": params.worker_replicas,}
+  #  config.data_parallelism = devices.data_parallelism(
+  #      daisy_chain_variables=params.daisy_chain_variables,
+  #      ps_replicas=params.ps_replicas,
+  #      ps_job=params.ps_job,
+  #      ps_gpu=params.ps_gpu,
+  #      schedule=params.schedule,
+  #      sync=params.sync,
+  #      worker_gpu=params.worker_gpu,
+  #      worker_replicas=params.worker_replicas,
+  #      worker_id=params.worker_id,
+  #      gpu_order=params.gpu_order,
+  #      locally_shard_to_cpu=params.locally_shard_to_cpu,
+  #      worker_job=params.worker_job,
+  #      no_data_parallelism=params.no_data_parallelism)
+
+  #return config
 
 def save_params(model_dir, hparams):
   """Save customizable model parameters in 'model.params' file.
