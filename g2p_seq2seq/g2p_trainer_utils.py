@@ -200,7 +200,6 @@ def create_experiment(run_config,
   return trainer_lib.T2TExperiment(estimator, hparams, train_spec, eval_spec,
                                    use_validation_monitor, decode_hparams)
 
-
 def create_run_config(hp, params):
   """Create RunConfig"""
   return trainer_lib.create_run_config(
@@ -229,55 +228,6 @@ def create_run_config(hp, params):
       ps_gpu=params.ps_gpu,
       sync=params.sync,
       use_tpu=params.use_tpu)
-  #"""Create RunConfig, TPUConfig, and Parallelism object."""
-  #session_config = trainer_lib.create_session_config(
-  #      log_device_placement=params.log_device_replacement,
-  #      enable_graph_rewriter=params.experimental_optimize_placement,
-  #      gpu_mem_fraction=params.worker_gpu_memory_fraction,
-  #      use_tpu=params.use_tpu,
-  #      inter_op_parallelism_threads=0,
-  #      intra_op_parallelism_threads=0)
-  #run_config_args = {
-  #      #"master": params.master,
-  #      #"evaluation_master": params.master,
-  #      "model_dir": params.model_dir,
-  #      "session_config": session_config,
-  #      "save_summary_steps": 100,
-  #      "save_checkpoints_steps": max(params.iterations_per_loop,
-  #                                    params.local_eval_frequency),
-  #      "keep_checkpoint_max": params.keep_checkpoint_max,
-  #      "keep_checkpoint_every_n_hours": params.keep_checkpoint_every_n_hours,
-  #      "tf_random_seed": None,
-  #      "log_step_count_steps": 100}
-  ##if params.save_checkpoints_secs:
-  ##  del run_config_args["save_checkpoints_steps"]
-  ##  run_config_args["save_checkpoints_secs"] = params.save_checkpoints_secs
-  ##run_config_cls = tf.estimator.RunConfig#tf.contrib.learn.RunConfig
-
-  #config = tf.estimator.RunConfig(**run_config_args)
-  ##config = run_config_cls()#(**run_config_args)
-
-  ## If not using TPU, add device info for data_parallelism
-  #config.use_tpu = params.use_tpu
-  #if not params.use_tpu:
-  #  config.t2t_device_info = {
-  #      "num_async_replicas": params.worker_replicas,}
-  #  config.data_parallelism = devices.data_parallelism(
-  #      daisy_chain_variables=params.daisy_chain_variables,
-  #      ps_replicas=params.ps_replicas,
-  #      ps_job=params.ps_job,
-  #      ps_gpu=params.ps_gpu,
-  #      schedule=params.schedule,
-  #      sync=params.sync,
-  #      worker_gpu=params.worker_gpu,
-  #      worker_replicas=params.worker_replicas,
-  #      worker_id=params.worker_id,
-  #      gpu_order=params.gpu_order,
-  #      locally_shard_to_cpu=params.locally_shard_to_cpu,
-  #      worker_job=params.worker_job,
-  #      no_data_parallelism=params.no_data_parallelism)
-
-  #return config
 
 def save_params(model_dir, hparams):
   """Save customizable model parameters in 'model.params' file.

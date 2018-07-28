@@ -229,8 +229,7 @@ class G2PModel(object):
         else 1
     decode_length = self.decode_hp.extra_length
     input_type = "text"
-    problem_id = 0
-    p_hparams = self.hparams.problems[problem_id]
+    p_hparams = self.hparams.problem_hparams
     has_input = "inputs" in p_hparams.input_modality
     vocabulary = p_hparams.vocabulary["inputs" if has_input else "targets"]
     # This should be longer than the longest input.
@@ -274,13 +273,13 @@ class G2PModel(object):
         decode_op = tf.py_func(self.decode_word, [inp], tf.string)
         while True:
           word = get_word()
-          result = self.__run_op(sess, decode_op, word)
-          print ("output: " + result)
+          pronunciations = self.__run_op(sess, decode_op, word)
+          print (" ".join(pronunciations))
     else:
       while not self.mon_sess.should_stop():
         word = get_word()
         pronunciations = self.decode_word(word)
-        print("Pronunciations: {}".format(pronunciations))
+        print(" ".join(pronunciations))
 
   def decode(self, output_file_path):
     """Run decoding mode."""
@@ -420,12 +419,9 @@ class G2PModel(object):
       tf.logging.info("decode_hp.batch_size not specified; default=%d" %
                       self.decode_hp.batch_size)
 
-    #problem_id = self.decode_hp.problem_idx
-    # Inputs vocabulary is set to targets if there are no inputs in the problem,
-    # e.g., for language models where the inputs are just a prefix of targets.
-    p_hp = self.hparams.problem_hparams
-    inputs_vocab = p_hp.vocabulary["inputs"]
-    targets_vocab = p_hp.vocabulary["targets"]
+    p_hparams = self.hparams.problem_hparams
+    inputs_vocab = p_hparams.vocabulary["inputs"]
+    targets_vocab = p_hparams.vocabulary["targets"]
     problem_name = "grapheme_to_phoneme_problem"
     tf.logging.info("Performing decoding from a file.")
     inputs = _get_inputs(filename)
