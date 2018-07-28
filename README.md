@@ -14,7 +14,7 @@ which allows an efficient training on both CPU and GPU.
 
 ## Installation
 
-The tool requires TensorFlow at least version 1.5.0 and Tensor2Tensor version 1.6.6 or higher. Please see the installation
+The tool requires TensorFlow at least version 1.8.0 and Tensor2Tensor version 1.6.6 or higher. Please see the installation
 [guide](https://www.tensorflow.org/install/)
 for TensorFlow installation details, and details about the Tensor2Tensor installation see [guide](https://github.com/tensorflow/tensor2tensor)
 
