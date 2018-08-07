@@ -132,6 +132,11 @@ And, if you want to start training from scratch:
   "--reinit" - Rewrite model in model_folder_path
 ```
 
+Also, in case of solving inverse problem:
+```
+  "--p2g" - Run the program in a phoneme-to-grapheme conversion mode.
+```
+
 The differences in pronunciations between short and long words can be significant. So, seq2seq models apply bucketing technique to take account of such problems. On the other hand, splitting initial data into too many buckets can worsen the final results. Because in this case there will not be sufficient amount of examples in each particular bucket. To get better results, you may tune the following three parameters that change the number and size of the buckets:
 ```
   "--min_length_bucket" - the size of the minimal bucket (Default: 6)

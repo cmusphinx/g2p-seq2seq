@@ -149,7 +149,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
         vocab_file.write(self._id_to_sym[i] + "\n")
 
 
-def build_vocab_list(data_path, init_vocab_list=[]):
+def build_vocab_list(data_path, init_vocab_list=[], p2g_mode=False):
   """Reads a file to build a vocabulary with letters and phonemes.
 
     Args:
@@ -161,8 +161,12 @@ def build_vocab_list(data_path, init_vocab_list=[]):
   with tf.gfile.GFile(data_path, "r") as data_file:
     for line in data_file:
       items = line.strip().split()
-      vocab.update({char:1 for char in list(items[0])})
-      vocab.update({phoneme:1 for phoneme in items[1:]})
+      if not p2g_mode:
+        vocab.update({char:1 for char in list(items[0])})
+        vocab.update({phoneme:1 for phoneme in items[1:]})
+      else:
+        vocab.update({phoneme:1 for phoneme in items[:-1]})
+        vocab.update({char:1 for char in list(items[-1])})
     vocab_list = [PAD, EOS]
     for key in sorted(vocab.keys()):
       vocab_list.append(key)
@@ -170,20 +174,27 @@ def build_vocab_list(data_path, init_vocab_list=[]):
 
 
 def load_create_vocabs(vocab_filename, train_path=None, dev_path=None,
-                       test_path=None):
+                       test_path=None, p2g_mode=False):
   """Load/create vocabularies."""
   vocab = None
+  if not p2g_mode:
+    src_separator, tgt_separator = "", " "
+  else:
+    src_separator, tgt_separator = " ", ""
+
   if os.path.exists(vocab_filename):
-    source_vocab = GraphemePhonemeEncoder(vocab_filename=vocab_filename)
+    source_vocab = GraphemePhonemeEncoder(vocab_filename=vocab_filename,
+        separator=src_separator)
     target_vocab = GraphemePhonemeEncoder(vocab_filename=vocab_filename,
-        separator=" ")
+        separator=tgt_separator)
   else:
     vocab_list = []
     for data_path in [train_path, dev_path, test_path]:
-      vocab_list = build_vocab_list(data_path, vocab_list)
-    source_vocab = GraphemePhonemeEncoder(vocab_list=vocab_list)
+      vocab_list = build_vocab_list(data_path, vocab_list, p2g_mode)
+    source_vocab = GraphemePhonemeEncoder(vocab_list=vocab_list,
+        separator=src_separator)
     target_vocab = GraphemePhonemeEncoder(vocab_list=vocab_list,
-        separator=" ")
+        separator=tgt_separator)
     source_vocab.store_to_file(vocab_filename)
 
   return source_vocab, target_vocab

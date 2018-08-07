@@ -40,8 +40,10 @@ class Params(object):
         "length_bucket_step=2.0,max_length=10,min_length_bucket=5"
     self.decode_hparams = "beam_size=1,alpha=0.6,return_beams=False"
     self.master = ""
+    self.p2g = False
 
     if flags:
+      self.p2g = flags.p2g
       self.batch_size = flags.batch_size
       self.iterations_per_loop = min(1000, max(10, int(self.batch_size/10)))
       if flags.max_epochs > 0:

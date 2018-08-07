@@ -45,6 +45,8 @@ tf.flags.DEFINE_boolean("reinit", False,
                         "Set to True for training from scratch.")
 tf.flags.DEFINE_boolean("freeze", False,
                         "Set to True for freeze the graph.")
+tf.flags.DEFINE_boolean("p2g", False,
+    "Set to True for switching to the phoneme-to-grapheme mode.")
 
 # Training parameters
 tf.flags.DEFINE_string("hparams", "",
@@ -106,12 +108,13 @@ def main(_=[]):
   if FLAGS.train:
     g2p_trainer_utils.save_params(FLAGS.model_dir, params.hparams)
     g2p_model = G2PModel(params, train_path=FLAGS.train, dev_path=FLAGS.valid,
-                         test_path=test_path, cleanup=FLAGS.cleanup)
+                         test_path=test_path, cleanup=FLAGS.cleanup,
+                         p2g_mode=FLAGS.p2g)
     g2p_model.train()
 
   else:
     params.hparams = g2p_trainer_utils.load_params(FLAGS.model_dir)
-    g2p_model = G2PModel(params, test_path=test_path)
+    g2p_model = G2PModel(params, test_path=test_path, p2g_mode=FLAGS.p2g)
 
     if FLAGS.freeze:
       g2p_model.freeze()

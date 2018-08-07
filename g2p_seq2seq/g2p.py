@@ -52,7 +52,7 @@ class G2PModel(object):
   """Grapheme-to-Phoneme translation model class.
   """
   def __init__(self, params, train_path="", dev_path="", test_path="",
-               cleanup=False):
+               cleanup=False, p2g_mode=False):
     # Point out the current directory with t2t problem specified for g2p task.
     usr_dir.import_usr_dir(os.path.dirname(os.path.abspath(__file__)))
     self.params = params
@@ -63,7 +63,7 @@ class G2PModel(object):
     # Register g2p problem.
     self.problem = registry._PROBLEMS[self.params.problem_name](
         self.params.model_dir, train_path=train_path, dev_path=dev_path,
-        test_path=test_path, cleanup=cleanup)
+        test_path=test_path, cleanup=cleanup, p2g_mode=p2g_mode)
 
     self.frozen_graph_filename = os.path.join(self.params.model_dir,
                                               "frozen_model.pb")

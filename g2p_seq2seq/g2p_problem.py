@@ -41,7 +41,7 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
   """Problem spec for cmudict PRONALSYL Grapheme-to-Phoneme translation."""
 
   def __init__(self, model_dir, train_path=None, dev_path=None, test_path=None,
-               cleanup=False):
+               cleanup=False, p2g_mode=False):
     """Create a Problem.
 
     Args:
@@ -57,19 +57,22 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
     self._model_dir = model_dir
     self.train_path, self.dev_path, self.test_path = train_path, dev_path,\
         test_path
+    self.cleanup = cleanup
+    self.p2g_mode = p2g_mode
     vocab_filename = os.path.join(self._model_dir, "vocab.g2p")
     if train_path:
       self.train_path, self.dev_path, self.test_path = create_data_files(
           init_train_path=train_path, init_dev_path=dev_path,
-          init_test_path=test_path,cleanup=cleanup)
+          init_test_path=test_path, cleanup=self.cleanup,
+          p2g_mode=self.p2g_mode)
       self.source_vocab, self.target_vocab = g2p_encoder.load_create_vocabs(
           vocab_filename, train_path=self.train_path, dev_path=self.dev_path,
-          test_path=self.test_path)
+          test_path=self.test_path, p2g_mode=self.p2g_mode)
     elif not os.path.exists(os.path.join(self._model_dir, "checkpoint")):
       raise Exception("Model not found in {}".format(self._model_dir))
     else:
       self.source_vocab, self.target_vocab = g2p_encoder.load_create_vocabs(
-          vocab_filename)
+          vocab_filename, p2g_mode=self.p2g_mode)
 
   def generator(self, data_path, source_vocab, target_vocab):
     """Generator for the training and evaluation data.
@@ -179,7 +182,9 @@ class GraphemeToPhonemeProblem(text_problems.Text2TextProblem):
     with tf.gfile.GFile(source_path, mode="r") as source_file:
       for line_idx, line in enumerate(source_file):
         if line:
-          source, target = split_graphemes_phonemes(line)
+          source, target = split_graphemes_phonemes(line,
+                                                    cleanup=self.cleanup,
+                                                    p2g_mode=self.p2g_mode)
           if not (source and target):
             tf.logging.warning("Invalid data format in line {} in {}:\n"
                 "{}\nGraphemes and phonemes should be separated by white space."
@@ -373,7 +378,7 @@ def gen_file(generator, output_file_path):
 
 
 def create_data_files(init_train_path, init_dev_path, init_test_path,
-                      cleanup=False):
+                      cleanup=False, p2g_mode=False):
   """Create train, development and test data files from initial data files
   in case when not provided development or test data files or active cleanup
   flag.
@@ -423,13 +428,13 @@ def create_data_files(init_train_path, init_dev_path, init_test_path,
   train_dic, dev_dic, test_dic = OrderedDict(), OrderedDict(), OrderedDict()
 
   source_dic = collect_pronunciations(source_path=init_train_path,
-                                      cleanup=cleanup)
+                                      cleanup=cleanup, p2g_mode=p2g_mode)
   if init_dev_path:
     dev_dic = collect_pronunciations(source_path=init_dev_path,
-                                     cleanup=cleanup)
+                                     cleanup=cleanup, p2g_mode=p2g_mode)
   if init_test_path:
     test_dic = collect_pronunciations(source_path=init_test_path,
-                                      cleanup=cleanup)
+                                      cleanup=cleanup, p2g_mode=p2g_mode)
 
   #Split dictionary to train, validation and test (if not assigned).
   for word_counter, (word, pronunciations) in enumerate(source_dic.items()):
@@ -449,7 +454,7 @@ def create_data_files(init_train_path, init_dev_path, init_test_path,
   return train_path, dev_path, test_path
 
 
-def collect_pronunciations(source_path, cleanup=False):
+def collect_pronunciations(source_path, cleanup=False, p2g_mode=False):
   """Create dictionary mapping word to its different pronounciations.
 
   Args:
@@ -465,7 +470,8 @@ def collect_pronunciations(source_path, cleanup=False):
     word_counter = 0
     for line in source_file:
       if line:
-        source, target = split_graphemes_phonemes(line, cleanup=cleanup)
+        source, target = split_graphemes_phonemes(line, cleanup=cleanup,
+                                                  p2g_mode=p2g_mode)
         if not (source, target):
           tf.logging.warning("Invalid data format in line {} in {}:\n"
               "{}\nGraphemes and phonemes should be separated by white space."
@@ -478,7 +484,7 @@ def collect_pronunciations(source_path, cleanup=False):
   return dic
 
 
-def split_graphemes_phonemes(input_line, cleanup=False):
+def split_graphemes_phonemes(input_line, cleanup=False, p2g_mode=False):
   """Split line into graphemes and phonemes.
 
   Args:
@@ -498,10 +504,13 @@ def split_graphemes_phonemes(input_line, cleanup=False):
     line = re.sub(stress_pattern, r"", line)
 
   items = line.split()
-  graphemes, phonemes = None, None
+  source, target = None, None
   if len(items) > 1:
-    graphemes, phonemes = items[0].strip(), " ".join(items[1:]).strip()
-  return graphemes, phonemes
+    if not p2g_mode:
+      source, target = items[0].strip(), " ".join(items[1:]).strip()
+    else:
+      source, target = " ".join(items[:-1]).strip(), items[-1].strip()
+  return source, target
 
 
 def save_dic(dic, save_path):
