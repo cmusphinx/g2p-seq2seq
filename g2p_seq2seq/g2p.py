@@ -294,7 +294,7 @@ class G2PModel(object):
       # If path to the output file pointed out, dump decoding results to the file
       if output_file_path:
         tf.logging.info("Writing decodes into %s" % output_file_path)
-        outfile = tf.gfile.Open(output_file_path, "w")
+        outfile = tf.gfile.Open(output_file_path, "wb")
 
       inputs, decodes = self.__decode_from_file(self.test_path, outfile)
 
@@ -542,7 +542,7 @@ def _get_inputs(filename, delimiters="\t "):
   delimiters_regex = re.compile("[" + delimiters + "]+")
 
   inputs = []
-  with tf.gfile.Open(filename) as input_file:
+  with tf.gfile.Open(filename, "rb") as input_file:
     lines = input_file.readlines()
     for line in lines:
       if set("[" + delimiters + "]+$").intersection(line):

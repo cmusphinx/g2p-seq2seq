@@ -95,7 +95,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
     """
     def sym_gen():
       """Symbols generator for vocab initializer from file."""
-      with tf.gfile.Open(filename) as vocab_file:
+      with tf.gfile.Open(filename, "rb") as vocab_file:
         for line in vocab_file:
           sym = line.strip()
           yield sym
@@ -144,7 +144,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
     Args:
       filename: Full path of the file to store the vocab to.
     """
-    with tf.gfile.Open(filename, "w") as vocab_file:
+    with tf.gfile.Open(filename, "wb") as vocab_file:
       for i in range(len(self._id_to_sym)):
         vocab_file.write(self._id_to_sym[i] + "\n")
 
