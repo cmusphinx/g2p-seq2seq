@@ -38,7 +38,7 @@ setup(
     ],
     keywords='g2p seq2seq tensor2tensor rnnlm',
 
-    install_requires=['tensor2tensor>=1.6.6'],
+    install_requires=['tensor2tensor>=1.6.6,<=1.7.0'],
 
     extras_require={
         'tensorflow': ['tensorflow>=1.8.0'],
