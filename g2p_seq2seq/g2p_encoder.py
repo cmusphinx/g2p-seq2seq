@@ -74,7 +74,7 @@ class GraphemePhonemeEncoder(text_encoder.TextEncoder):
       if sym in self._sym_to_id:
         ids_list.append(self._sym_to_id[sym])
       else:
-        tf.logging.warning("Invalid symbol:{}".format(sym.encode('utf-8')))
+        tf.logging.warning("Invalid symbol:{}".format(sym))
     return ids_list
 
   def decode(self, ids):

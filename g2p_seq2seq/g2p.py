@@ -24,6 +24,7 @@ import os
 import re
 import numpy as np
 import six
+import sys
 
 from tensor2tensor.data_generators.problem import problem_hparams_to_features
 import tensorflow as tf
@@ -195,7 +196,7 @@ class G2PModel(object):
     decode_length = 100
     vocabulary = self.problem.source_vocab
     # This should be longer than the longest input.
-    const_array_size = 50
+    const_array_size = 10000
 
     input_ids = vocabulary.encode(word)
     input_ids.append(text_encoder.EOS_ID)
@@ -232,8 +233,6 @@ class G2PModel(object):
     p_hparams = self.hparams.problem_hparams
     has_input = "inputs" in p_hparams.input_modality
     vocabulary = p_hparams.vocabulary["inputs" if has_input else "targets"]
-    # This should be longer than the longest input.
-    const_array_size = 10000
     # Import readline if available for command line editing and recall.
     try:
       import readline  # pylint: disable=g-import-not-at-top,unused-variable
@@ -280,6 +279,8 @@ class G2PModel(object):
         word = get_word()
         pronunciations = self.decode_word(word)
         print(" ".join(pronunciations))
+        # To make sure the output buffer always flush at this level
+        sys.stdout.flush()
 
   def decode(self, output_file_path):
     """Run decoding mode."""
@@ -507,8 +508,8 @@ def get_word():
   word = ""
   try:
     word = input("> ")
-    if not issubclass(type(word), text_type):
-      word = text_type(word, encoding="utf-8", errors="replace")
+    #if not issubclass(type(word), text_type):
+    #  word = text_type(word, encoding="utf-8", errors="replace")
   except EOFError:
     pass
   if not word:
