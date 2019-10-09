@@ -19,7 +19,7 @@ The tool requires TensorFlow at least version 1.8.0 and Tensor2Tensor version 1.
 for TensorFlow installation details, and details about the Tensor2Tensor installation see [guide](https://github.com/tensorflow/tensor2tensor)
 
 
-The g2p_seq2seq package itself uses setuptools, so you can follow standard installation process:
+The g2p-seq2seq package itself uses setuptools, so you can follow standard installation process:
 
 ```
 sudo python setup.py install
@@ -146,7 +146,7 @@ The differences in pronunciations between short and long words can be significan
 
 After training the model, you may freeze it:
 ```
-  g2p_seq2seq --model_dir model_folder_path --freeze
+  g2p-seq2seq --model_dir model_folder_path --freeze
 ```
 
 File "frozen_model.pb" will appear in "model_folder_path" directory after launching previous command. And now, if you run one of the decoding modes, The program will load and use this frozen graph.
