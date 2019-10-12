@@ -214,7 +214,6 @@ def create_run_config(hp, params):
       keep_checkpoint_every_n_hours=params.keep_checkpoint_every_n_hours,
       num_gpus=params.worker_gpu,
       gpu_order=params.gpu_order,
-      shard_to_cpu=params.locally_shard_to_cpu,
       num_async_replicas=params.worker_replicas,
       enable_graph_rewriter=params.experimental_optimize_placement,
       gpu_mem_fraction=params.worker_gpu_memory_fraction,
