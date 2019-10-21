@@ -48,7 +48,7 @@ class Params(object):
       self.iterations_per_loop = min(1000, max(10, int(self.batch_size/10)))
       if flags.max_epochs > 0:
         self.train_steps = max(10000, 
-                               int(len(open(data_path).readlines()) /\
+                               int(len(open(data_path, encoding="utf-8").readlines()) /\
                                    self.batch_size) *\
                                self.iterations_per_loop *\
                                flags.max_epochs)
